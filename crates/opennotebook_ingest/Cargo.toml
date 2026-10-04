@@ -1,0 +1,21 @@
+[package]
+name = "opennotebook_ingest"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "The one ingest path for a opennotebook session: resources in, indexed, Q&A extracted, and proven retrievable."
+
+[dependencies]
+opennotebook_memory = { path = "../opennotebook_memory" }
+opennotebook_convert = { path = "../opennotebook_convert" }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+
+[dev-dependencies]
+opennotebook_ai = { path = "../opennotebook_ai" }
+opennotebook_session = { path = "../opennotebook_session" }
+axum = { workspace = true }
+serde_json = { workspace = true }
+tempfile = { workspace = true }

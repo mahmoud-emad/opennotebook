@@ -1,0 +1,2342 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>OpenNotebook</title>
+<meta name="color-scheme" content="dark light">
+<script>__THEME_BOOT__</script>
+<style>__THEME_CSS__</style>
+<style>
+  /* The play page, shaped like the players people already know.
+     - The slide leads. It fills the stage with no black letterbox around it,
+       and before anything plays it wears a poster with one big play button, the
+       way a video does.
+     - The controls are a video player's: one play/pause, previous and next
+       slide, a scrubber cut into one segment per slide (YouTube's chapters),
+       elapsed and total time, captions and full screen.
+     - The panel beside it is an interactive transcript (Coursera, Loom): it
+       follows the voice, a line can be clicked to jump there, and questions and
+       answers sit where they happened. A second tab lists the slides.
+     - Asking is the one primary action, like NotebookLM's "Join": always in
+       the same place, one press, and Space does the same.
+     Everything is one viewport tall on a desktop; on a phone the stage and the
+     controls come first and the panel follows.
+     The palette is the studio's own tokens (opennotebook_sdk/assets/theme.css,
+     put in the page above by the server), light or dark as the viewer chose
+     in the gallery, so going from the gallery into a session does not change
+     world. The names below are this page's shorthand for those tokens.
+     Colours drawn over the slide itself (captions, the poster's veil, the
+     speaker tag) stay dark in both themes, the way a video player keeps them. */
+  :root {
+    --bg:var(--bs-body-bg); --panel:var(--bs-tertiary-bg); --raise:var(--bs-secondary-bg);
+    --line:var(--bs-border-color); --soft:var(--st-hover-bg);
+    --fg:var(--bs-body-color); --em:var(--bs-emphasis-color); --dim:var(--bs-secondary-color);
+    --faint:var(--bs-tertiary-color);
+    --accent:var(--bs-primary); --link:var(--bs-primary-text-emphasis);
+    --live:var(--bs-danger); --live-t:var(--bs-danger-text-emphasis);
+    --ok:var(--bs-success); --ok-t:var(--bs-success-text-emphasis);
+    --r:var(--bs-border-radius); --r-lg:var(--bs-border-radius-lg); --r-xl:var(--bs-border-radius-xl);
+    --r-pill:var(--bs-border-radius-pill);
+    --sh:var(--bs-box-shadow); --sh-lg:var(--bs-box-shadow-lg);
+  }
+  * { box-sizing:border-box; }
+  html, body { height:100%; }
+  body { margin:0; background:var(--bg); color:var(--fg); overflow:hidden;
+         font:15px/1.55 var(--bs-font-sans-serif); -webkit-font-smoothing:antialiased; }
+  button { background:var(--raise); color:var(--fg); border:1px solid var(--line);
+           border-radius:var(--r); padding:7px 14px; font:inherit; cursor:pointer;
+           transition:background .15s, border-color .15s, color .15s; }
+  button:hover:not(:disabled) { background:var(--soft); }
+  button:disabled { opacity:.4; cursor:default; }
+  button:focus-visible, [tabindex]:focus-visible { outline:2px solid var(--st-focus); outline-offset:2px; }
+  .dim { color:var(--dim); }
+  /* A control's own display rule must never beat the hidden attribute. */
+  [hidden] { display:none !important; }
+  .vh { position:absolute !important; width:1px; height:1px; overflow:hidden;
+        clip:rect(0 0 0 0); white-space:nowrap; }
+  /* Icons: the studio's own set, from the sprite the server puts in the page. */
+  .ic { width:1em; height:1em; fill:currentColor; flex:0 0 auto; display:inline-block; vertical-align:-.125em; }
+
+  /* ── shell ─────────────────────────────────────────────────────────────── */
+  #app { display:grid; grid-template-columns:minmax(0,1fr) 380px;
+         grid-template-rows:auto minmax(0,1fr); height:100vh; height:100dvh; }
+  #app.no-rail { grid-template-columns:minmax(0,1fr) 0; }
+  #app.no-rail #rail { display:none; }
+  #top { grid-column:1 / -1; display:flex; align-items:center; gap:14px;
+         padding:8px 16px; min-height:56px; border-bottom:1px solid var(--bs-border-color-translucent); background:var(--panel); }
+  /* The stage is a backdrop, the way a media stage is, so the slide leads. */
+  #left { display:flex; flex-direction:column; min-width:0; min-height:0; padding:16px 18px 12px; gap:12px;
+          background:var(--st-backdrop); }
+  #rail { display:flex; flex-direction:column; min-height:0; background:var(--panel);
+          border-left:1px solid var(--bs-border-color-translucent); }
+
+  /* ── top bar ───────────────────────────────────────────────────────────── */
+  .brand { display:inline-flex; align-items:center; gap:9px; background:none; border:0;
+           padding:4px 6px; margin-left:-6px; color:var(--em); font-weight:700; font-size:15px; }
+  .brand:hover:not(:disabled) { background:var(--soft); }
+  .brand .mark { width:24px; height:24px; border-radius:7px; display:grid; place-items:center;
+                 background:var(--accent); color:var(--st-on-primary); font-size:14px; }
+  .ghost { background:transparent; border-color:transparent; color:var(--dim);
+           display:inline-flex; align-items:center; gap:7px; padding:6px 10px; }
+  .ghost:hover:not(:disabled) { background:var(--raise); color:var(--fg); }
+  #titlebox { flex:1; min-width:0; }
+  #title { font-weight:650; font-size:16px; color:var(--em); overflow:hidden;
+           text-overflow:ellipsis; white-space:nowrap; }
+  #sub { font-size:12.5px; color:var(--dim); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  #onair { display:inline-flex; align-items:center; gap:7px; font-size:11px; font-weight:750;
+           letter-spacing:.08em; color:var(--dim); padding:4px 10px; border-radius:var(--r-pill);
+           border:1px solid var(--line); white-space:nowrap; }
+  #onair .dot { width:7px; height:7px; border-radius:50%; background:var(--faint); }
+  #onair.live { color:var(--live-t); border-color:var(--live); background:var(--bs-danger-bg-subtle); }
+  #onair.live .dot { background:var(--live); animation:pulse 1.6s ease-out infinite; }
+  @keyframes pulse { 0%{box-shadow:0 0 0 0 rgba(220,53,69,.7)} 70%{box-shadow:0 0 0 8px rgba(220,53,69,0)} 100%{box-shadow:0 0 0 0 rgba(220,53,69,0)} }
+
+  /* ── stage ─────────────────────────────────────────────────────────────── */
+  #stage { flex:1; min-height:0; position:relative; display:flex; align-items:center;
+           justify-content:center; }
+  #box { position:relative; background:#fff; border-radius:var(--r-lg); overflow:hidden;
+         box-shadow:var(--sh-lg); }
+  #box iframe { position:absolute; inset:0; width:100%; height:100%; border:0; transform-origin:0 0; }
+  #box img { position:absolute; inset:0; width:100%; height:100%; object-fit:contain; background:#000; }
+  #stage:fullscreen { background:#000; }
+  #stage:fullscreen #box { border-radius:0; box-shadow:none; }
+
+  /* The speaker, over the picture: a broadcast lower-third. */
+  #now { position:absolute; left:14px; top:14px; display:none; align-items:center; gap:9px;
+         padding:5px 12px; background:rgba(20,23,26,.82); backdrop-filter:blur(8px);
+         border:1px solid rgba(255,255,255,.12); border-radius:var(--r-pill); z-index:6; color:#fff; }
+  #now.show { display:flex; }
+  #now .nm { font-size:12.5px; font-weight:650; }
+  #now .eq { display:inline-flex; gap:2px; align-items:flex-end; height:12px; }
+  #now .eq i { width:2px; background:var(--ok-t); border-radius:1px; animation:eq .9s ease-in-out infinite; }
+  #now .eq i:nth-child(2){animation-delay:.15s} #now .eq i:nth-child(3){animation-delay:.3s}
+  @keyframes eq { 0%,100%{height:3px} 50%{height:12px} }
+  #now.paused .eq { visibility:hidden; }
+
+  /* Captions: the line being spoken, over the bottom of the slide, the way
+     every video player shows them. On by default, because the voice is the
+     content and a room is not always quiet. C toggles them. */
+  #cap { position:absolute; left:50%; bottom:18px; transform:translateX(-50%);
+         max-width:min(78%, 900px); padding:7px 14px; border-radius:var(--r);
+         background:rgba(0,0,0,.78); color:#fff; font-size:clamp(13px,1.35vw,18px);
+         line-height:1.45; text-align:center; z-index:6; pointer-events:none;
+         display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
+  #cap[hidden], #app.no-cap #cap { display:none; }
+
+  /* Poster and end card: over the slide, not instead of it. */
+  /* Strong enough to read over any slide: the slide's own text sits under the
+     poster's, so the veil blurs it as well as darkening it. */
+  .veil { position:absolute; inset:0; z-index:8; display:flex; align-items:center; justify-content:center;
+          background:radial-gradient(ellipse at center, rgba(12,14,18,.66), rgba(12,14,18,.9));
+          backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px); }
+  .veil[hidden] { display:none; }
+  .veil-card { display:flex; flex-direction:column; align-items:center; gap:12px; text-align:center;
+               padding:24px 30px; max-width:min(520px,90%); color:#fff; }
+  .veil-card h2 { margin:0; font-size:clamp(18px,2vw,24px); line-height:1.3; }
+  .veil-card p { margin:0; color:rgba(255,255,255,.78); font-size:14px; }
+  #start { width:76px; height:76px; border-radius:50%; padding:0; border:0;
+           background:var(--accent); color:#fff; font-size:34px; display:grid; place-items:center;
+           box-shadow:0 10px 30px rgba(var(--bs-primary-rgb),.45); transition:transform .15s, background .15s; }
+  #start:hover:not(:disabled) { background:var(--st-primary-hover); transform:scale(1.05); }
+  #start .ic { margin-left:4px; }
+  .veil-row { display:flex; gap:10px; flex-wrap:wrap; justify-content:center; }
+  .primary { background:var(--accent); border-color:var(--accent); color:#fff; font-weight:600; }
+  .primary:hover:not(:disabled) { background:var(--st-primary-hover); border-color:var(--st-primary-hover); }
+  .kbd { display:inline-block; padding:0 6px; border:1px solid rgba(255,255,255,.35); border-bottom-width:2px;
+         border-radius:4px; font-size:12px; line-height:1.5; }
+
+  /* ── prep ──────────────────────────────────────────────────────────────── */
+  #prep { position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+          background:rgba(20,23,26,.8); backdrop-filter:blur(3px); z-index:9; border-radius:var(--r-lg); }
+  #prep-card { display:flex; flex-direction:column; gap:10px; align-items:center; padding:20px 26px;
+               border-radius:var(--r-xl); background:var(--st-overlay-bg); border:1px solid var(--line);
+               min-width:min(340px,80%); }
+  #stage-name { color:var(--fg); font-weight:600; font-size:14px; }
+  #prep-sub { color:var(--dim); font-size:12px; font-variant-numeric:tabular-nums; }
+  #bar { width:100%; height:5px; background:var(--raise); border-radius:3px; overflow:hidden; }
+  #fill { height:100%; width:0%; background:var(--accent); transition:width .3s; }
+  #bar.idle #fill { width:35%; animation:sweep 1.3s ease-in-out infinite; }
+  @keyframes sweep { 0%{margin-left:-35%} 100%{margin-left:100%} }
+  #prep[hidden] { display:none; }
+
+  /* ── controls ──────────────────────────────────────────────────────────── */
+  #controls { display:flex; flex-direction:column; gap:6px; }
+  /* One segment per slide, sized by its narration, like YouTube's chapters.
+     Hovering a segment names its slide; clicking seeks. */
+  #timeline { display:flex; gap:3px; height:18px; align-items:center; cursor:pointer; }
+  #timeline.off { cursor:default; }
+  .seg { position:relative; flex:1 1 0; height:5px; border-radius:3px; background:var(--st-pressed-bg);
+         overflow:hidden; transition:height .12s; }
+  #timeline:not(.off):hover .seg { height:8px; }
+  .seg .f { position:absolute; inset:0 auto 0 0; width:0; background:var(--accent); }
+  .seg.on .f { background:var(--link); }
+  #ctl-row { display:flex; align-items:center; gap:6px; }
+  .icon { width:38px; height:38px; padding:0; display:inline-grid; place-items:center;
+          background:transparent; border-color:transparent; color:var(--fg); font-size:18px; border-radius:50%; }
+  .icon:hover:not(:disabled) { background:var(--raise); }
+  .icon.on { color:var(--link); }
+  #playpause { width:44px; height:44px; font-size:22px; background:var(--em); color:var(--bg); }
+  #playpause:hover:not(:disabled) { background:var(--em); opacity:.88; }
+  #clock { font-variant-numeric:tabular-nums; color:var(--dim); font-size:13px; margin-left:6px; white-space:nowrap; }
+  #slidepos { flex:1; min-width:0; text-align:center; font-size:13px; color:var(--dim);
+              overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  #slidepos b { color:var(--fg); font-weight:600; }
+  #state { display:none; }
+
+  /* ── rail ──────────────────────────────────────────────────────────────── */
+  #tabs { display:flex; gap:4px; padding:10px 12px 0; border-bottom:1px solid var(--bs-border-color-translucent); }
+  .tab { background:transparent; border:0; border-bottom:2px solid transparent; border-radius:0;
+         color:var(--dim); padding:8px 10px 9px; font-weight:600; font-size:13.5px; }
+  .tab:hover:not(:disabled) { background:transparent; color:var(--fg); }
+  .tab.on { color:var(--em); border-bottom-color:var(--link); }
+  #panes { position:relative; flex:1; min-height:0; display:flex; flex-direction:column; }
+  #lines, #toc { flex:1; min-height:0; overflow-y:auto; padding:12px 14px 16px; }
+  #lines { display:flex; flex-direction:column; gap:10px; }
+  #lines[hidden], #toc[hidden] { display:none; }
+  #lines::-webkit-scrollbar, #toc::-webkit-scrollbar { width:8px; }
+  #lines::-webkit-scrollbar-thumb, #toc::-webkit-scrollbar-thumb { background:var(--line); border-radius:4px; }
+
+  /* A slide heading in the transcript, so the text has the deck's shape. */
+  .chap { font-size:11px; font-weight:750; letter-spacing:.07em; text-transform:uppercase;
+          color:var(--faint); margin:8px 2px -2px; }
+  .chap:first-child { margin-top:0; }
+
+  .msg { display:flex; flex-direction:column; gap:2px; padding:7px 10px; border-radius:var(--r-lg);
+         border:1px solid transparent; color:var(--faint); transition:color .25s, background .25s, border-color .25s; }
+  .msg.line { cursor:pointer; }
+  .msg.line:hover { background:var(--soft); }
+  /* A rule in the speaker's own colour, so two voices read apart at a glance. */
+  .msg.line { border-left:3px solid transparent; border-radius:2px var(--r-lg) var(--r-lg) 2px; }
+  .msg.line.v0 { border-left-color:var(--st-voice-a); }
+  .msg.line.v1 { border-left-color:var(--st-voice-b); }
+  .msg.line:not(.on):not(.seen) { border-left-color:transparent; }
+  .msg.line.on.v0 { border-left-color:var(--st-voice-a); }
+  .msg.line.on.v1 { border-left-color:var(--st-voice-b); }
+  .msg.seen { color:var(--dim); }
+  .msg.on { color:var(--em); background:var(--bs-primary-bg-subtle); border-color:var(--bs-primary-border-subtle); }
+  .msg .nm { font-size:11.5px; font-weight:700; color:var(--dim); }
+  .msg.on .nm { color:var(--link); }
+  .msg .tx { word-wrap:break-word; overflow-wrap:anywhere; }
+  /* Questions and answers are the conversation, so they read as bubbles. */
+  .msg.you, .msg.ans, .msg.err { color:var(--fg); }
+  .msg.you { align-self:flex-end; max-width:88%; background:var(--bs-primary-bg-subtle);
+             border-color:var(--bs-primary-border-subtle); border-radius:var(--r-xl) var(--r-xl) 4px var(--r-xl); }
+  .msg.you .nm { text-align:right; color:var(--link); }
+  .msg:not(.line):not(.you):not(.err) { background:var(--raise); border-color:var(--line);
+             border-radius:4px var(--r-xl) var(--r-xl) var(--r-xl); color:var(--fg); max-width:92%; }
+  .msg.live .tx { opacity:.85; }
+  .msg.err { background:var(--bs-danger-bg-subtle); border-color:var(--live); color:var(--live-t); }
+  .caret { display:inline-block; width:7px; height:1em; vertical-align:-2px; background:var(--link);
+           animation:blink 1s steps(2) infinite; }
+  @keyframes blink { 50% { opacity:0; } }
+
+  #follow { position:absolute; left:50%; bottom:12px; transform:translateX(-50%); z-index:3;
+            border-radius:var(--r-pill); font-size:12.5px; padding:5px 12px; box-shadow:var(--sh);
+            display:inline-flex; gap:6px; align-items:center; }
+  #follow[hidden] { display:none; }
+
+  .toc-item { display:flex; gap:10px; align-items:center; width:100%; text-align:left; padding:8px;
+              border:1px solid transparent; background:transparent; border-radius:var(--r-lg); margin-bottom:4px; }
+  .toc-item:hover:not(:disabled) { background:var(--soft); }
+  .toc-item.on { border-color:var(--bs-primary-border-subtle); background:var(--bs-primary-bg-subtle); }
+  .toc-n { flex:0 0 26px; height:26px; border-radius:50%; display:grid; place-items:center;
+           background:var(--raise); font-size:12px; font-weight:700; color:var(--dim); }
+  .toc-item.on .toc-n { background:var(--accent); color:var(--st-on-primary); }
+  .toc-t { flex:1; min-width:0; }
+  .toc-t b { display:block; font-weight:600; color:var(--fg); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .toc-t span { font-size:12px; color:var(--dim); }
+
+  /* ── composer ──────────────────────────────────────────────────────────── */
+  #mic { border-top:1px solid var(--bs-border-color-translucent); padding:12px 14px 14px; display:flex; flex-direction:column; gap:7px;
+         background:var(--panel); }
+  #composer { display:flex; align-items:center; gap:8px; min-height:44px; }
+  #ask { flex:1; min-height:44px; display:inline-flex; align-items:center; justify-content:center; gap:9px;
+         background:var(--accent); border-color:var(--accent); color:#fff; font-weight:650;
+         border-radius:var(--r-pill); font-size:15px; }
+  #ask:hover:not(:disabled) { background:var(--st-primary-hover); border-color:var(--st-primary-hover); }
+  #ask:disabled { background:var(--raise); border-color:var(--line); color:var(--dim); }
+  #ask .kbd { border-color:rgba(255,255,255,.45); margin-left:2px; }
+  #ctext { flex:1; min-width:0; font-size:14px; color:var(--fg); overflow:hidden;
+           text-overflow:ellipsis; white-space:nowrap; }
+  #ctext:empty::before { content:"Listening\2026"; color:var(--dim); }
+  #composer .icon { width:40px; height:40px; border:1px solid var(--line); }
+  #send { color:#fff; background:var(--ok); border-color:var(--ok) !important; }
+  #send:hover:not(:disabled) { background:var(--ok); filter:brightness(.9); }
+  #meter { display:inline-flex; gap:3px; align-items:flex-end; height:22px; padding:0 2px; }
+  #meter i { width:3px; height:3px; background:var(--live); border-radius:2px; transition:height .07s linear; }
+  #mic-state { font-size:12px; color:var(--dim); min-height:1.2em; text-align:center; }
+  #err { margin:0 14px 10px; padding:9px 12px; border-radius:var(--r-lg); color:var(--live-t);
+         background:var(--bs-danger-bg-subtle); border:1px solid var(--live); font-size:13px; }
+  #err[hidden], #now[hidden] { display:none; }
+
+  /* ── leave confirm ─────────────────────────────────────────────────────── */
+  #confirm { position:fixed; inset:0; z-index:50; display:none; align-items:center; justify-content:center;
+             background:var(--st-scrim); backdrop-filter:blur(4px); }
+  #confirm.show { display:flex; }
+  #confirm-card { width:min(420px,90vw); padding:22px; border-radius:var(--r-xl); background:var(--st-overlay-bg);
+                  border:1px solid var(--line); box-shadow:var(--sh-lg); }
+  #confirm-card h3 { margin:0 0 8px; font-size:16px; color:var(--em); }
+  #confirm-card p { margin:0 0 18px; color:var(--dim); font-size:14px; }
+  #confirm-row { display:flex; gap:9px; justify-content:flex-end; }
+  #do-leave { background:var(--live); border-color:var(--live); color:#fff; font-weight:600; }
+
+  @media (prefers-reduced-motion: reduce) {
+    #onair.live .dot, #now .eq i, .caret { animation:none; }
+  }
+
+  /* ── phone and narrow windows ──────────────────────────────────────────── */
+  @media (max-width:900px) {
+    body { overflow:auto; }
+    #app, #app.no-rail { display:flex; flex-direction:column; height:auto; min-height:100dvh; }
+    #app.no-rail #rail { display:flex; }
+    #left { padding:12px 12px 8px; }
+    #stage { flex:none; height:min(60vw, 56dvh); width:100%; }
+    #rail { border-left:0; border-top:1px solid var(--line); height:62dvh; }
+    #mic { position:sticky; bottom:0; }
+    #railbtn, #fs { display:none; }
+    #clock { font-size:12px; }
+    #slidepos { display:none; }
+    #ctl-row { justify-content:space-between; }
+  }
+  @media (max-width:520px) {
+    #top { padding:8px 10px; gap:8px; }
+    /* The stage is small here: the poster keeps the button and the title. */
+    #poster-meta, #poster .veil-card p:last-child { display:none; }
+    .veil-card { padding:10px; gap:8px; }
+    .veil-card h2 { font-size:16px; }
+    #start { width:58px; height:58px; font-size:26px; }
+    #now { top:8px; left:8px; }
+    #leave span:not(.mark) { display:none; }
+    #sub { display:none; }
+  }
+
+  /* ── an audio overview ────────────────────────────────────────────────────
+     Nothing to look at but who is talking. The stage holds the episode's
+     title and format, the chapter, and the hosts, the speaking one lit, with
+     a level meter that moves only while a voice does. Everything else — the
+     chapters scrubber, the transcript, Ask — is the player's own. */
+  #astage { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;
+            gap:14px; padding:6%; text-align:center; border-radius:inherit;
+            background:radial-gradient(120% 90% at 50% 0%, color-mix(in srgb, var(--accent) 26%, var(--panel)), var(--panel)); }
+  #as-fmt { font-size:12px; font-weight:650; letter-spacing:.08em; text-transform:uppercase; color:var(--link); }
+  #as-title { margin:0; font-size:clamp(18px, 3vw, 30px); line-height:1.2; color:var(--em); max-width:28ch; }
+  #as-chap { font-size:14px; color:var(--dim); }
+  #as-hosts { display:flex; gap:28px; margin-top:6px; }
+  .as-host { display:flex; flex-direction:column; align-items:center; gap:7px; opacity:.55; transition:opacity .2s; }
+  .as-host.on { opacity:1; }
+  .as-av { width:64px; height:64px; border-radius:50%; display:grid; place-items:center; font-weight:700; font-size:22px;
+           color:var(--em); background:var(--raise); border:2px solid var(--line); transition:border-color .2s, box-shadow .2s; }
+  .as-host.on .as-av { border-color:var(--accent); box-shadow:0 0 0 6px color-mix(in srgb, var(--accent) 22%, transparent); }
+  .as-nm { font-size:13px; font-weight:600; }
+  .as-wave { display:flex; align-items:center; gap:4px; height:34px; }
+  .as-wave i { width:4px; height:20%; border-radius:2px; background:var(--accent); opacity:.8; }
+  #astage.moving .as-wave i { animation:as-bar .9s ease-in-out infinite alternate; }
+  #astage.moving .as-wave i:nth-child(3n) { animation-duration:.7s; }
+  #astage.moving .as-wave i:nth-child(4n+1) { animation-duration:1.1s; }
+  #astage.moving .as-wave i:nth-child(5n+2) { animation-duration:.6s; }
+  @keyframes as-bar { from { height:15%; } to { height:100%; } }
+  @media (prefers-reduced-motion: reduce) { #astage.moving .as-wave i { animation:none; height:60%; } }
+  #speed { min-width:46px; font-size:13px; font-weight:650; font-variant-numeric:tabular-nums; }
+  a#dl { display:inline-grid; place-items:center; color:inherit; text-decoration:none; }
+  body.audio #fs { display:none; }
+</style>
+
+__ICONS__
+<div id="app">
+  <header id="top">
+    <!-- The same mark as the studio's own header, and the same way home. Here
+         it asks first, because leaving drops the place in the session. -->
+    <button id="leave" class="brand" title="Back to the collection"><span class="mark"><svg class="ic" aria-hidden="true"><use href="#bi-collection-play"/></svg></span><span>Studio</span></button>
+    <div id="titlebox"><div id="title"></div><div id="sub"></div></div>
+    <span id="onair" role="status"><span class="dot"></span><span id="onair-t">OFF AIR</span></span>
+  </header>
+
+  <main id="left">
+    <div id="stage">
+      <div id="box">
+        <iframe id="slide" sandbox="allow-same-origin" title="Slide"></iframe>
+        <!-- An audio overview's stage, in place of the slide. -->
+        <div id="astage" hidden>
+          <div id="as-fmt"></div>
+          <h2 id="as-title"></h2>
+          <div id="as-chap"></div>
+          <div id="as-hosts"></div>
+          <div class="as-wave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+        </div>
+        <img id="slideimg" alt="Slide" hidden>
+        <!-- Inside the slide's own box, so they cover exactly the slide and
+             take its rounded corners, instead of spilling over the stage. -->
+        <div id="poster" class="veil" hidden>
+          <div class="veil-card">
+            <button id="start" title="Start (K)" aria-label="Start the session"><svg class="ic" aria-hidden="true"><use href="#bi-play-fill"/></svg></button>
+            <h2 id="poster-title"></h2>
+            <p id="poster-meta"></p>
+            <p>Ask a question out loud at any moment: press <span class="kbd">Space</span> or the Ask button.</p>
+          </div>
+        </div>
+        <div id="endcard" class="veil" hidden>
+          <div class="veil-card">
+            <h2>That's the session</h2>
+            <p>Ask a follow-up question below, watch it again, or go back to your studio.</p>
+            <div class="veil-row">
+              <button id="replay" class="primary"><svg class="ic" aria-hidden="true"><use href="#bi-arrow-counterclockwise"/></svg> Watch again</button>
+              <button id="home"><svg class="ic" aria-hidden="true"><use href="#bi-grid"/></svg> Back to collection</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div id="now"><span class="eq"><i></i><i></i><i></i></span><span class="nm"></span></div>
+      <div id="cap" hidden aria-live="off"></div>
+
+      <div id="prep">
+        <div id="prep-card">
+          <div id="stage-name">waiting for the prep job…</div>
+          <div id="bar" class="idle"><div id="fill"></div></div>
+          <div id="prep-sub"></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="controls">
+      <div id="timeline" class="off" role="slider" aria-label="Session progress" tabindex="-1"></div>
+      <div id="ctl-row">
+        <button id="prev" class="icon" disabled title="Previous slide (←)" aria-label="Previous slide"><svg class="ic" aria-hidden="true"><use href="#bi-skip-start-fill"/></svg></button>
+        <button id="playpause" class="icon" disabled title="Play (K)" aria-label="Play"><svg class="ic" aria-hidden="true"><use href="#bi-play-fill"/></svg></button>
+        <button id="next" class="icon" disabled title="Next slide (→)" aria-label="Next slide"><svg class="ic" aria-hidden="true"><use href="#bi-skip-end-fill"/></svg></button>
+        <span id="clock">00:00 / 00:00</span>
+        <span id="slidepos"></span>
+        <span id="state" data-s=""></span>
+        <button id="speed" title="Playback speed" aria-label="Playback speed, 1 times">1×</button>
+        <a id="dl" class="icon" hidden download title="Download the episode (WAV)" aria-label="Download the episode"><svg class="ic" aria-hidden="true"><use href="#bi-download"/></svg></a>
+        <button id="cc" class="icon on" title="Captions (C)" aria-label="Captions" aria-pressed="true"><svg class="ic" aria-hidden="true"><use href="#bi-badge-cc"/></svg></button>
+        <button id="railbtn" class="icon on" title="Transcript panel" aria-label="Transcript panel" aria-pressed="true"><svg class="ic" aria-hidden="true"><use href="#bi-layout-sidebar-reverse"/></svg></button>
+        <button id="fs" class="icon" title="Full screen (F)" aria-label="Full screen"><svg class="ic" aria-hidden="true"><use href="#bi-fullscreen"/></svg></button>
+      </div>
+    </div>
+  </main>
+
+  <aside id="rail">
+    <div id="tabs" role="tablist">
+      <button class="tab on" role="tab" data-pane="lines" aria-selected="true">Transcript</button>
+      <button class="tab" role="tab" data-pane="toc" aria-selected="false">Slides</button>
+    </div>
+    <div id="panes">
+      <div id="lines" role="log" aria-label="Transcript and questions"></div>
+      <div id="toc" hidden></div>
+      <button id="follow" hidden><svg class="ic" aria-hidden="true"><use href="#bi-arrow-down"/></svg> Back to now</button>
+    </div>
+    <div id="err" hidden></div>
+    <div id="mic">
+      <div id="composer">
+        <button id="ask" disabled title="Ask a question (Space)">
+          <svg class="ic" aria-hidden="true"><use href="#bi-mic-fill"/></svg><span>Ask a question</span><span class="kbd">Space</span>
+        </button>
+        <span id="meter" hidden><i></i><i></i><i></i><i></i><i></i></span>
+        <div id="ctext" hidden></div>
+        <button id="discard" class="icon" hidden title="Discard" aria-label="Discard"><svg class="ic" aria-hidden="true"><use href="#bi-x-lg"/></svg></button>
+        <button id="send" class="icon send" hidden title="Send" aria-label="Send"><svg class="ic" aria-hidden="true"><use href="#bi-send-fill"/></svg></button>
+      </div>
+      <div id="mic-state"></div>
+    </div>
+  </aside>
+</div>
+
+<div id="confirm" role="dialog" aria-modal="true" aria-labelledby="confirm-h">
+  <div id="confirm-card">
+    <h3 id="confirm-h">Leave this session?</h3>
+    <p id="confirm-why"></p>
+    <div id="confirm-row">
+      <button id="stay">Stay</button>
+      <button id="do-leave">Leave</button>
+    </div>
+  </div>
+</div>
+
+<audio id="audio" preload="auto"></audio>
+
+<script>
+"use strict";
+const SID = "__SESSION__";
+// The collection this session was made in; the way back lands on its page.
+const COLLECTION = "__COLLECTION__";
+
+// Which build this page came from, and a check that it is still current.
+//
+// This page carries the voice detector inside it, so a cached page is a cached
+// detector: a browser holding yesterday's copy holds yesterday's bugs and there
+// is nothing in the URL to break that. The page is served `no-store` now, but a
+// copy taken before that header existed will sit there forever. So the page
+// asks once whether it is current and reloads itself if it is not.
+//
+// Guarded against a loop: it reloads at most once per build id.
+const BUILD = "__BUILD__";
+(async () => {
+  try {
+    const live = (await (await fetch(`${API}/build`, { cache: "no-store" })).text()).trim();
+    if (!live || live === BUILD) return;
+    const seen = sessionStorage.getItem("opennotebook_reloaded_for");
+    if (seen === live) return;           // already tried; do not loop
+    sessionStorage.setItem("opennotebook_reloaded_for", live);
+    location.reload();
+  } catch (e) {
+    // Offline or the route is missing. The page still works.
+  }
+})();
+
+// The API base is derived from THIS page's own URL, never hard-coded.
+//
+// The page is reached through a reverse proxy at
+// `/<node>/<service>/api/session/player`, so an absolute `/api/session` drops
+// the `/local/opennotebook` prefix and every call 404s. Found by loading the page
+// in a real browser: every route answered when called with the prefix, and the
+// page itself was the only thing that did not use one. Stripping the trailing
+// `/player` gives the right base whether the page is served through the router,
+// through the gateway, or straight off the socket.
+const API = location.pathname.replace(/\/player\/?$/, "");
+
+const $ = (id) => document.getElementById(id);
+const audio = $("audio");
+
+let session = null;      // the whole session document
+let AUDIO = false;       // an audio overview: chapters and voices, no slides
+let flat = [];           // [{slide, line}] in play order
+let idx = -1;            // index into flat
+let playing = false;
+
+// ── RPC ──────────────────────────────────────────────────────────────────────
+// One helper, and it reads the discriminator rather than the payload: a
+// JSON-RPC error is a 200 with an `error` member, so checking res.ok alone
+// would treat every refusal as a success.
+async function rpc(method, params) {
+  const res = await fetch(API + "/rpc", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
+  });
+  const body = await res.json();
+  if (body.error) throw new Error(method + ": " + body.error.message);
+  return body.result;
+}
+
+const at = () => ({
+  sid: SID,
+  slide_ordinal: cur() ? cur().slide.ordinal : 0,
+  line_id: cur() ? cur().line.line_id : "",
+  // The audio element is the only clock that knows what was actually heard, so
+  // the browser reports its position and the studio records it. §5 needs an
+  // arbitrary millisecond, so this is never rounded to a line boundary.
+  offset_ms: Math.round((audio.currentTime || 0) * 1000),
+});
+const cur = () => (idx >= 0 && idx < flat.length ? flat[idx] : null);
+
+// ── session ──────────────────────────────────────────────────────────────────
+async function loadSession() {
+  const r = await rpc("session_get", { sid: SID });
+  // `found` is the discriminator. the store returns key_type "none" with an empty
+  // value for a missing key, so absence and an empty document are
+  // indistinguishable by value one layer down; this surface separates them and
+  // the page reads the field rather than testing `session` for emptiness.
+  if (!r.found) return null;
+  session = r.session;
+  AUDIO = !!session.audio;
+  if (AUDIO) setupAudio();
+  $("title").textContent = session.title || "";
+  document.title = session.title ? `${session.title} · Studio` : "Studio";
+  flat = [];
+  for (const s of [...session.slides].sort((a, b) => a.ordinal - b.ordinal))
+    for (const l of [...s.lines].sort((a, b) => a.ordinal - b.ordinal))
+      flat.push({ slide: s, line: l });
+  renderLines();
+  renderChrome();
+  return session;
+}
+
+// The conversation stream. Narration lines are laid down as messages up front
+// so the thread has shape before it plays; questions and answers are appended
+// where they actually happened, between the lines they interrupted.
+
+// Who a speaker is called. A role word ("Host", "Expert") is not a name, so a
+// speaker who only has one is called by their voice's first name: af_bella is
+// Bella. Mirrors opennotebook_sdk::voices, which the build and the answers use.
+const GENERIC = new Set(["host", "expert", "narrator", "speaker", "speaker 1",
+  "speaker 2", "voice", "presenter", "guest", "studio"]);
+function voiceName(voice) {
+  const n = String(voice || "").split("_").slice(1).join("_");
+  return n ? n[0].toUpperCase() + n.slice(1) : "";
+}
+function displayName(sp) {
+  const name = (sp && sp.display_name || "").trim();
+  if (!GENERIC.has(name.toLowerCase())) return name;
+  return voiceName(sp && sp.voice_id) || name;
+}
+
+function bubble({ who, text, cls }) {
+  const d = document.createElement("div");
+  d.className = "msg" + (cls ? " " + cls : "");
+  const bub = document.createElement("div");
+  bub.className = "bub";
+  const nm = document.createElement("div");
+  nm.className = "nm"; nm.textContent = who;
+  const tx = document.createElement("div");
+  tx.className = "tx"; tx.textContent = text || "";
+  bub.append(nm, tx);
+  // Names only: speakers are known by name, with no picture beside them.
+  d.append(bub);
+  return d;
+}
+
+// A question and its answer go where they happened: straight after the line
+// that was playing (and after any earlier exchange on it), not at the bottom of
+// a transcript that already holds every line still to come.
+function appendMsg(node) {
+  const box = $("lines");
+  const here = idx >= 0 ? $("L" + idx) : null;
+  let before = null;
+  if (here) {
+    before = here.nextSibling;
+    while (before && !before.classList.contains("line") && !before.classList.contains("chap"))
+      before = before.nextSibling;
+  } else if (idx < 0) {
+    before = box.firstChild;
+  }
+  box.insertBefore(node, before);
+  reveal(node);
+  return node;
+}
+
+// The transcript follows the voice until the listener scrolls it themselves,
+// the way a chat stops auto-scrolling when you read back. "Back to now" hands
+// it back.
+let follow = true;
+function reveal(el) {
+  if (follow && el) el.scrollIntoView({ block: "nearest", behavior: "smooth" });
+}
+for (const ev of ["wheel", "touchmove"]) {
+  $("lines").addEventListener(ev, () => {
+    if (!follow) return;
+    follow = false;
+    $("follow").hidden = false;
+  }, { passive: true });
+}
+$("follow").onclick = () => {
+  follow = true;
+  $("follow").hidden = true;
+  reveal($("L" + Math.max(idx, 0)));
+};
+
+function slideName(s) {
+  return (s && s.title) || (s ? `${AUDIO ? "Chapter" : "Slide"} ${s.ordinal + 1}` : "");
+}
+
+const FORMATS = { deep_dive: "Deep Dive", brief: "Brief", critique: "Critique", debate: "Debate" };
+const initialsOf = (n) => String(n || "?").split(/\s+/).map((w) => w[0] || "").join("").slice(0, 2).toUpperCase();
+
+// An audio overview wears the player differently: its stage instead of a
+// slide, "chapter" for "slide" wherever the player says it, a download, and
+// "listen" for "watch".
+function setupAudio() {
+  document.body.classList.add("audio");
+  $("as-fmt").textContent = `${FORMATS[session.audio.format] || "Audio"} · audio overview`;
+  $("as-title").textContent = session.title || "";
+  const hosts = $("as-hosts");
+  hosts.innerHTML = "";
+  for (const sp of session.speakers || []) {
+    const h = document.createElement("div");
+    h.className = "as-host";
+    h.dataset.name = displayName(sp);
+    h.innerHTML = '<div class="as-av"></div><div class="as-nm"></div>';
+    h.querySelector(".as-av").textContent = initialsOf(displayName(sp));
+    h.querySelector(".as-nm").textContent = displayName(sp);
+    hosts.appendChild(h);
+  }
+  $("slide").hidden = true;
+  $("slideimg").hidden = true;
+  $("astage").hidden = false;
+  const tab = document.querySelector('.tab[data-pane="toc"]');
+  if (tab) tab.textContent = "Chapters";
+  for (const [id, word] of [["prev", "Previous chapter"], ["next", "Next chapter"]]) {
+    $(id).title = `${word} (${id === "prev" ? "←" : "→"})`;
+    $(id).setAttribute("aria-label", word);
+  }
+  $("start").setAttribute("aria-label", "Play the audio overview");
+  const end = document.querySelector("#endcard h2");
+  if (end) end.textContent = "That's the episode";
+  $("replay").lastChild.textContent = " Listen again";
+  const dl = $("dl");
+  dl.href = `${API}/episode?session=${encodeURIComponent(SID)}`;
+  dl.hidden = false;
+}
+
+function renderLines() {
+  $("lines").innerHTML = "";
+  let lastSlide = -1;
+  flat.forEach((f, i) => {
+    // A heading per slide gives the transcript the deck's shape.
+    if (f.slide.ordinal !== lastSlide) {
+      lastSlide = f.slide.ordinal;
+      const h = document.createElement("div");
+      h.className = "chap";
+      h.textContent = `${f.slide.ordinal + 1} · ${slideName(f.slide)}`;
+      $("lines").appendChild(h);
+    }
+    // The speaker's place in the session, for the colour of their rule.
+    const v = (session.speakers || []).findIndex((x) => x.speaker_id === f.line.speaker_id);
+    const d = bubble({ who: speakerName(f.line.speaker_id), text: f.line.text, cls: "line v" + (v > 0 ? 1 : 0) });
+    d.id = "L" + i;
+    d.tabIndex = 0;
+    d.title = "Play from here";
+    d.onclick = () => jumpTo(i, 0);
+    d.onkeydown = (e) => { if (e.key === "Enter") jumpTo(i, 0); };
+    $("lines").appendChild(d);
+  });
+}
+
+// ── the player chrome ───────────────────────────────────────────────────────
+// Everything here is derived from `flat` and the playhead; none of it is state
+// of its own.
+const totalMs = () => flat.reduce((a, f) => a + (f.line.duration_ms || 0), 0);
+const slides = () => session ? [...session.slides].sort((a, b) => a.ordinal - b.ordinal) : [];
+const firstLineOf = (ordinal) => flat.findIndex((f) => f.slide.ordinal === ordinal);
+
+function renderChrome() {
+  const n = slides().length;
+  const voices = (session.speakers || []).map(displayName).filter(Boolean);
+  const unit = AUDIO ? "chapter" : "slide";
+  const meta = [`${n} ${unit}${n === 1 ? "" : "s"}`,
+                voices.length ? voices.join(" & ") : "",
+                totalMs() ? hhmmss(totalMs()) : ""].filter(Boolean).join(" · ");
+  $("sub").textContent = meta;
+  $("poster-title").textContent = session.title || "";
+  $("poster-meta").textContent = meta;
+  $("clock").textContent = `00:00 / ${hhmmss(totalMs())}`;
+
+  // The scrubber: one segment per slide, as wide as its narration.
+  const tl = $("timeline");
+  tl.innerHTML = "";
+  for (const s of slides()) {
+    const ms = flat.filter((f) => f.slide.ordinal === s.ordinal)
+                   .reduce((a, f) => a + (f.line.duration_ms || 0), 0);
+    const seg = document.createElement("div");
+    seg.className = "seg";
+    seg.dataset.o = s.ordinal;
+    seg.style.flexGrow = String(Math.max(ms, 1));
+    seg.title = `${s.ordinal + 1}. ${slideName(s)}`;
+    seg.innerHTML = '<div class="f"></div>';
+    tl.appendChild(seg);
+  }
+
+  // The slides tab.
+  const toc = $("toc");
+  toc.innerHTML = "";
+  for (const s of slides()) {
+    const lines = flat.filter((f) => f.slide.ordinal === s.ordinal);
+    const ms = lines.reduce((a, f) => a + (f.line.duration_ms || 0), 0);
+    const b = document.createElement("button");
+    b.className = "toc-item";
+    b.dataset.o = s.ordinal;
+    b.innerHTML = '<span class="toc-n"></span><span class="toc-t"><b></b><span></span></span>';
+    b.querySelector(".toc-n").textContent = s.ordinal + 1;
+    b.querySelector("b").textContent = slideName(s);
+    b.querySelector(".toc-t span").textContent =
+      `${lines.map((f) => speakerName(f.line.speaker_id)).filter((v, i, a) => a.indexOf(v) === i).join(", ")} · ${hhmmss(ms)}`;
+    b.onclick = () => { const i = firstLineOf(s.ordinal); if (i >= 0) jumpTo(i, 0); };
+    toc.appendChild(b);
+  }
+}
+
+// Where the playhead is, shown everywhere at once.
+function markPosition() {
+  const c = cur();
+  const o = c ? c.slide.ordinal : -1;
+  const n = slides().length;
+  $("slidepos").innerHTML = "";
+  if (c) {
+    const b = document.createElement("b");
+    b.textContent = `${AUDIO ? "Chapter" : "Slide"} ${o + 1} of ${n}`;
+    $("slidepos").append(b, ` · ${slideName(c.slide)}`);
+  }
+  for (const el of document.querySelectorAll(".seg, .toc-item"))
+    el.classList.toggle("on", Number(el.dataset.o) === o);
+  capLine = -1;
+  caption();
+}
+
+// A caption is the sentence being said, not the whole line: a narration line
+// is a paragraph, and a paragraph over the slide hides the slide. The audio
+// carries no word timings, so the sentence is picked by how far through the
+// line the audio is, weighted by each sentence's length.
+let capLine = -1, capParts = [], capEnds = [];
+function caption() {
+  const c = cur();
+  const el = $("cap");
+  if (!c || !playing) { el.hidden = true; return; }
+  if (capLine !== idx) {
+    capLine = idx;
+    capParts = (c.line.text.match(/[^.!?]+[.!?]+["')\]]*\s*|[^.!?]+$/g) || [c.line.text]).map((t) => t.trim()).filter(Boolean);
+    const total = capParts.reduce((a, t) => a + t.length, 0) || 1;
+    let acc = 0;
+    capEnds = capParts.map((t) => (acc += t.length) / total);
+  }
+  const d = (c.line.duration_ms || 0) / 1000;
+  const frac = d ? Math.min(1, (audio.currentTime || 0) / d) : 0;
+  let k = capEnds.findIndex((e) => frac <= e);
+  if (k < 0) k = capParts.length - 1;
+  if (el.textContent !== capParts[k]) el.textContent = capParts[k] || "";
+  el.hidden = false;
+}
+
+// Seeking: to a line, and to a point in the whole session.
+async function jumpTo(i, offsetMs) {
+  if (turnBusy || !flat.length || i < 0 || i >= flat.length) return;
+  audio.pause();
+  follow = true;
+  $("follow").hidden = true;
+  await startAt(i, offsetMs || 0);
+}
+function seekMs(ms) {
+  let acc = 0;
+  for (let i = 0; i < flat.length; i++) {
+    const d = flat[i].line.duration_ms || 0;
+    if (ms < acc + d || i === flat.length - 1) return jumpTo(i, Math.max(0, ms - acc));
+    acc += d;
+  }
+}
+$("timeline").onclick = (e) => {
+  if ($("timeline").classList.contains("off")) return;
+  const r = $("timeline").getBoundingClientRect();
+  seekMs(totalMs() * Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)));
+};
+function stepSlide(dir) {
+  const c = cur();
+  const list = slides();
+  if (!list.length) return;
+  const at = c ? list.findIndex((s) => s.ordinal === c.slide.ordinal) : -1;
+  // Previous goes to the start of this slide first if we are well into it,
+  // the way every media player's previous button does.
+  if (dir < 0 && c && firstLineOf(c.slide.ordinal) < idx) return jumpTo(firstLineOf(c.slide.ordinal), 0);
+  const to = list[Math.min(list.length - 1, Math.max(0, at + dir))];
+  const i = firstLineOf(to.ordinal);
+  if (i >= 0) jumpTo(i, 0);
+}
+
+// ── rendering, with letterboxing ─────────────────────────────────────────────
+// The slide's own aspect decides the box; the iframe is laid out at the slide's
+// native pixel size and scaled to fit. Nothing here assumes 16:9 — a PNG deck
+// arrives 1376x768 and gets its own box.
+// One place to tell the listener something went wrong. Silence is the failure
+// mode this player is most prone to, so it needs a voice of its own.
+function say(msg) {
+  const el = $("err");
+  if (!el) return;
+  el.textContent = msg || "";
+  el.hidden = !msg;
+}
+
+// A media element reports an unreachable or undecodable source here rather than
+// by rejecting play(), so both paths have to be wired or a 404 is silent.
+audio.addEventListener("error", () => {
+  const e = audio.error;
+  // MEDIA_ERR_ABORTED is the fetch being cancelled because the source changed,
+  // which is what advancing a line does. Only a source that genuinely cannot be
+  // played is worth a word.
+  if (!e || e.code === 1 /* MEDIA_ERR_ABORTED */) return;
+  if (!audio.src) return;
+  say(`Audio failed (code ${e.code}) for ${audio.src.split("line=")[1] || "this line"}.`);
+  playing = false;
+  buttons();
+});
+
+let shownOrdinal = -1;
+async function showSlide(s) {
+  if (AUDIO) {
+    const n = slides().length;
+    $("as-chap").textContent = `Chapter ${s.ordinal + 1} of ${n} · ${slideName(s)}`;
+    return;
+  }
+  if (s.ordinal === shownOrdinal) return;
+  shownOrdinal = s.ordinal;
+  fit(s.aspect);
+  const url = `${API}/slide?session=${encodeURIComponent(SID)}&ordinal=${s.ordinal}`;
+  const r = await fetch(url);
+  // The DISCRIMINATOR is the response content type, not the shape of the body.
+  // An html deck and a png deck are both a 200 with bytes; reading the body and
+  // guessing is how the wrong door looked like a working one in the first place.
+  const kind = (r.headers.get("content-type") || "").split(";")[0].trim();
+  const img = $("slideimg"), frame = $("slide");
+  if (!r.ok) {
+    img.hidden = true; frame.hidden = false;
+    frame.srcdoc = `<p style="color:#f85149">slide ${s.ordinal}: HTTP ${r.status}</p>`;
+    return;
+  }
+  if (kind === "image/png" || kind === "image/jpeg") {
+    frame.hidden = true; img.hidden = false;
+    img.src = url;
+  } else {
+    // srcdoc, not src: §4 verified the document is self-contained with no base
+    // URL at all, so there is no origin for a src= to resolve against.
+    img.hidden = true; frame.hidden = false;
+    frame.srcdoc = await r.text();
+  }
+}
+
+function fit(aspect) {
+  const w = aspect && aspect.width ? aspect.width : 1920;
+  const h = aspect && aspect.height ? aspect.height : 1080;
+  const stage = $("stage").getBoundingClientRect();
+  const scale = Math.min(stage.width / w, stage.height / h);
+  const box = $("box");
+  box.style.width = w * scale + "px";
+  box.style.height = h * scale + "px";
+  const f = $("slide");
+  f.style.width = w + "px";
+  f.style.height = h + "px";
+  f.style.transform = `scale(${scale})`;
+}
+addEventListener("resize", () => {
+  const c = cur();
+  if (c) fit(c.slide.aspect);
+});
+
+// ── speed ────────────────────────────────────────────────────────────────────
+// NotebookLM's player has a speed setting; podcasts people know cycle through
+// a few steps on one button. Kept in this browser. Every line is a new source
+// on the one audio element, and loading a source resets playbackRate to
+// defaultPlaybackRate, so both are set, and set again on every play.
+const SPEEDS = [1, 1.25, 1.5, 2, 0.75];
+let speed = 1;
+try { speed = Number(localStorage.getItem("opennotebook_speed")) || 1; } catch (_) {}
+if (!SPEEDS.includes(speed)) speed = 1;
+function applySpeed() {
+  audio.defaultPlaybackRate = speed;
+  audio.playbackRate = speed;
+  $("speed").textContent = `${speed}×`;
+  $("speed").setAttribute("aria-label", `Playback speed, ${speed} times`);
+}
+$("speed").onclick = () => {
+  speed = SPEEDS[(SPEEDS.indexOf(speed) + 1) % SPEEDS.length];
+  try { localStorage.setItem("opennotebook_speed", String(speed)); } catch (_) {}
+  applySpeed();
+};
+audio.addEventListener("play", () => { if (audio.playbackRate !== speed) audio.playbackRate = speed; });
+applySpeed();
+
+// ── playback ─────────────────────────────────────────────────────────────────
+async function startAt(i, offsetMs) {
+  idx = i;
+  ended = false;
+  const c = cur();
+  if (!c) return finish();
+  await showSlide(c.slide);
+  document.querySelectorAll(".msg.on").forEach((e) => e.classList.remove("on"));
+  // Everything before the playhead is marked heard. The distinction matters for
+  // more than styling: it is the same boundary the answer is grounded in, so a
+  // listener can see exactly what the model was told they had heard.
+  flat.forEach((_, j) => {
+    const m = $("L" + j);
+    if (m) m.classList.toggle("seen", j < i);
+  });
+  const el = $("L" + i);
+  if (el) { el.classList.add("on"); reveal(el); }
+  $("poster").hidden = true;
+  $("endcard").hidden = true;
+  // NOT `c.line.audio_url`. That field is a SERVICE-relative route,
+  // `/api/session/audio?...`, and the service is mounted under a routing prefix
+  // the server cannot know (`/local/opennotebook`). Using it verbatim resolves
+  // against the origin root and 404s. Same bug as the one that broke every RPC
+  // call before `API` was derived from `location.pathname`; it survived here
+  // because the slide path was rebuilt and this one was not.
+  audio.src = `${API}/audio?session=${encodeURIComponent(SID)}&line=${encodeURIComponent(c.line.line_id)}`;
+  audio.currentTime = (offsetMs || 0) / 1000;
+  playing = true;
+  markPosition();
+  nowSpeaking(speakerName(c.line.speaker_id), true);
+  onAir(true, "LIVE");
+  // A rejected play() is the one failure a listener cannot see: the page looks
+  // right, the slide is up, the line is highlighted, and there is silence. So
+  // it is reported. But NOT every rejection is a failure, and treating them
+  // alike is worse than swallowing them all was.
+  //
+  // `AbortError` is the browser saying this play() was superseded: a newer
+  // `src`, or a `pause()`, landed before the promise settled. That happens on
+  // EVERY line advance and every time a question interrupts, by construction.
+  // Reported as an error it produced "Cannot play s1l0: The play() request was
+  // interrupted by a call to pause()" and, worse, stopped the session, because
+  // the handler also cleared `playing`. The session then sat there until
+  // somebody pressed play, once per line.
+  const token = ++playToken;
+  try {
+    await audio.play();
+    say("");
+  } catch (e) {
+    const name = e && e.name;
+    if (name === "AbortError") {
+      // Superseded. Whoever superseded it owns what happens next.
+      return;
+    }
+    if (name === "NotAllowedError") {
+      // The browser asking for a gesture, which is a different thing from the
+      // audio being unreachable and needs a different sentence.
+      say("The browser blocked playback. Press play again.");
+    } else {
+      say(`Cannot play ${c.line.line_id}: ${e && e.message ? e.message : e}`);
+    }
+    playing = false;
+    buttons();
+    return;
+  }
+  // Stale by the time it resolved: a later line already started.
+  if (token !== playToken) return;
+  buttons();
+  // Told, not awaited. The studio owns the playhead but the browser is the
+  // clock, and blocking the advance on a round trip put a gap between lines
+  // that a listener hears as a stutter.
+  rpc("playback_play", { req: at() }).catch(() => {});
+}
+
+async function finish() {
+  playing = false;
+  ended = true;
+  audio.pause();
+  onAir(false, "ENDED");
+  nowSpeaking("", false);
+  $("cap").hidden = true;
+  $("endcard").hidden = false;
+  await rpc("playback_finish", { sid: SID });
+  buttons();
+}
+
+audio.addEventListener("ended", async () => {
+  if (!playing) return;
+  if (idx + 1 < flat.length) await startAt(idx + 1, 0);
+  else await finish();
+});
+
+// ── the broadcast chrome ─────────────────────────────────────────────────────
+// Three things a viewer reads without being told: whether it is live, who is
+// talking, and how far through it is. None of them are new state — they are all
+// derived from the playhead the studio already owns, rendered where a viewer
+// expects to find them rather than as a line of text.
+
+function speakerName(id) {
+  const sp = (session && session.speakers || []).find((x) => x.speaker_id === id);
+  return (sp && displayName(sp)) || id || "";
+}
+
+function onAir(live, label) {
+  $("onair").classList.toggle("live", !!live);
+  $("onair-t").textContent = label || (live ? "LIVE" : "OFF AIR");
+}
+
+function nowSpeaking(name, moving) {
+  if (AUDIO) {
+    $("astage").classList.toggle("moving", !!name && !!moving);
+    for (const h of document.querySelectorAll(".as-host"))
+      h.classList.toggle("on", !!name && h.dataset.name === name);
+  }
+  const n = $("now");
+  if (!name) { n.classList.remove("show"); return; }
+  n.classList.add("show");
+  n.classList.toggle("paused", !moving);
+  n.querySelector(".nm").textContent = name;
+}
+
+// How far through the WHOLE session, not the current line: a viewer wants to
+// know how much is left, and a per-line bar resets every few seconds and tells
+// them nothing.
+function timeline() {
+  if (!flat.length) return;
+  const total = flat.reduce((a, f) => a + (f.line.duration_ms || 0), 0);
+  if (!total) return;
+  let done = 0;
+  for (let i = 0; i < idx && i < flat.length; i++) done += flat[i].line.duration_ms || 0;
+  done += Math.min((audio.currentTime || 0) * 1000, (cur() && cur().line.duration_ms) || 0);
+  // Fill each slide's segment by how much of that slide has been heard.
+  let acc = 0;
+  for (const seg of document.querySelectorAll("#timeline .seg")) {
+    const o = Number(seg.dataset.o);
+    const ms = flat.filter((f) => f.slide.ordinal === o).reduce((a, f) => a + (f.line.duration_ms || 0), 0);
+    const pct = ms ? Math.min(1, Math.max(0, (done - acc) / ms)) : 0;
+    seg.querySelector(".f").style.width = (100 * pct).toFixed(2) + "%";
+    acc += ms;
+  }
+}
+
+function hhmmss(ms) {
+  const t = Math.max(0, Math.round(ms / 1000));
+  return `${String(Math.floor(t / 60)).padStart(2, "0")}:${String(t % 60).padStart(2, "0")}`;
+}
+
+// Report position while playing, so the studio's playhead is never far behind
+// the only clock that knows the truth.
+let lastReport = 0;
+audio.addEventListener("timeupdate", () => {
+  // Elapsed over total, for the whole session. The old string was slide, line id
+  // and milliseconds — useful while building the playhead, meaningless to a
+  // person watching.
+  if (flat.length) {
+    const total = flat.reduce((a, f) => a + (f.line.duration_ms || 0), 0);
+    let done = 0;
+    for (let i = 0; i < idx && i < flat.length; i++) done += flat[i].line.duration_ms || 0;
+    done += (audio.currentTime || 0) * 1000;
+    $("clock").textContent = `${hhmmss(done)} / ${hhmmss(total)}`;
+  }
+  timeline();
+  caption();
+  const now = Date.now();
+  if (playing && now - lastReport > 1000) {
+    lastReport = now;
+    rpc("playback_progress", { req: at() }).catch(() => {});
+  }
+});
+
+async function playNow() {
+  if (ended) { await jumpTo(0, 0); return; }
+  if (idx < 0) await startAt(0, 0);
+  else {
+    // Resume from wherever the studio recorded the pause — an arbitrary
+    // millisecond inside the line, not the start of it.
+    const h = await rpc("playback_get", { sid: SID });
+    await startAt(idx, h.offset_ms);
+  }
+}
+
+async function pauseNow() {
+  playing = false;
+  audio.pause();
+  onAir(false, "PAUSED");
+  nowSpeaking(cur() ? speakerName(cur().line.speaker_id) : "", false);
+  $("cap").hidden = true;
+  buttons();
+  // §5's seam: the exact offset is what is recorded, mid-line, unrounded.
+  await rpc("playback_pause", { req: at() });
+}
+
+$("playpause").onclick = () => (playing ? pauseNow() : playNow());
+$("start").onclick = () => playNow();
+$("replay").onclick = () => jumpTo(0, 0);
+$("home").onclick = () => { location.href = homeUrl(); };
+$("prev").onclick = () => stepSlide(-1);
+$("next").onclick = () => stepSlide(1);
+
+function toggleCaptions() {
+  const on = $("app").classList.toggle("no-cap") === false;
+  $("cc").classList.toggle("on", on);
+  $("cc").setAttribute("aria-pressed", String(on));
+  try { localStorage.setItem("opennotebook_cc", on ? "1" : "0"); } catch (e) {}
+}
+$("cc").onclick = toggleCaptions;
+try { if (localStorage.getItem("opennotebook_cc") === "0") toggleCaptions(); } catch (e) {}
+
+$("railbtn").onclick = () => {
+  const open = $("app").classList.toggle("no-rail") === false;
+  $("railbtn").classList.toggle("on", open);
+  $("railbtn").setAttribute("aria-pressed", String(open));
+  const c = cur();
+  requestAnimationFrame(() => fit(c ? c.slide.aspect : (flat[0] && flat[0].slide.aspect)));
+};
+
+function toggleFullscreen() {
+  const st = $("stage");
+  if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+  else if (st.requestFullscreen) st.requestFullscreen().catch(() => {});
+}
+$("fs").onclick = toggleFullscreen;
+document.addEventListener("fullscreenchange", () => {
+  $("fs").querySelector("use").setAttribute("href", document.fullscreenElement ? "#bi-fullscreen-exit" : "#bi-fullscreen");
+  const c = cur();
+  requestAnimationFrame(() => fit(c ? c.slide.aspect : (flat[0] && flat[0].slide.aspect)));
+});
+
+for (const t of document.querySelectorAll(".tab")) {
+  t.onclick = () => {
+    for (const o of document.querySelectorAll(".tab")) {
+      const on = o === t;
+      o.classList.toggle("on", on);
+      o.setAttribute("aria-selected", String(on));
+      $(o.dataset.pane).hidden = !on;
+    }
+    if (t.dataset.pane !== "lines") $("follow").hidden = true;
+    else if (!follow) $("follow").hidden = false;
+  };
+}
+
+function buttons() {
+  const ready = session && session.state === "ready" && flat.length > 0;
+  const pp = $("playpause");
+  pp.disabled = !ready || turnBusy;
+  pp.querySelector("use").setAttribute("href", playing ? "#bi-pause-fill" : "#bi-play-fill");
+  pp.title = playing ? "Pause (K)" : "Play (K)";
+  pp.setAttribute("aria-label", playing ? "Pause" : "Play");
+  $("prev").disabled = !ready || turnBusy;
+  $("next").disabled = !ready || turnBusy;
+  $("timeline").classList.toggle("off", !ready || turnBusy);
+  // The poster shows until the first line starts.
+  $("poster").hidden = !(ready && idx < 0 && !turnBusy && !ended);
+  $("start").disabled = !ready;
+  // Asking is allowed while narration runs and while it is paused. It is not
+  // allowed before the session is ready, because there is no material to ground
+  // an answer in, and not during another turn: §5 says one owner, never a queue.
+  $("ask").disabled = !ready || turnBusy;
+  if (!turnBusy) micButtons("idle");
+}
+
+// ── the voice turn ───────────────────────────────────────────────────────────
+//
+// Stop, listen, answer, resume. The shape is the phase 2 spec's, with one
+// decision changed by measurement: the answer is not assembled from a
+// transcribe -> generate -> synthesise pipeline. That measured about 31 seconds
+// on this box, and Moshi's paper (arxiv 2410.00037) argues the pipeline itself
+// is the latency, not any stage of it. The server sends the question's audio to
+// a model that answers in audio. Measured through this page's own route: 1.3 s
+// to the first sound.
+//
+// The answer is spoken by the narrator who was interrupted, in their own Kokoro
+// voice, same as the courtesy lines. It used to come back in a provider voice
+// because the model was asked for audio out and no audio-out model takes a
+// Kokoro id: one turn, two people, and the seam was the first thing anyone
+// noticed. The model is asked for text now and ask.rs synthesises it locally,
+// clause by clause, which costs about a second of first sound and buys back the
+// voice.
+
+// Each play() attempt gets a number so a promise that resolves after a newer
+// one started can tell that it is stale.
+let playToken = 0;
+
+let turnBusy = false;
+// Whether the deck has played out. A question asked AFTER the end must not put
+// narration back on: the listener heard the whole thing, and replaying the last
+// line they already sat through reads as the player losing its place.
+let ended = false;
+let micStream = null, micCtx = null, micNode = null, micChunks = [], micRate = 48000;
+let micAnalyser = null, meterTimer = null;
+// The acknowledgement currently playing, so the level meter can cut it off the
+// instant the listener starts talking. Barge-in on our own courtesy line.
+let ackSink = null;
+
+// Everything below is one mechanism: deciding which of the recorded samples are
+// the listener's question, and when the question has ended.
+//
+// Two bugs made this necessary. Opening the microphone before the
+// acknowledgement finished meant the microphone RECORDED the acknowledgement,
+// and the studio answered its own courtesy line — the reply came back explaining
+// "sure, I see that hand, please go ahead" as if a person had said it. And
+// asking someone to press a second button to send is a second thing to do while
+// they are trying to think.
+//
+// So: capture starts the moment the button is pressed, and `captureFrom` marks
+// the first sample that belongs to the person. Everything before it is our own
+// voice coming back down the microphone and is thrown away.
+// Nothing in the meter counts until the narrator has stopped. Our own voice
+// comes back down the microphone loudly enough to clear any speech threshold —
+// measured as the acknowledgement cutting itself off and the studio then
+// answering its own line. Echo cancellation is not reliable against audio the
+// page plays through Web Audio, so the answer is time, not a filter.
+let armed = false;
+let vadIsWasm = false;     // true when the worklet is running opennotebook_vad
+// Kept because the worklet falls back to them when a box has no wasm built,
+// and because tests/replay.rs measures this exact gate against the detector.
+const SILENCE_PEAK = 0.06; // below this is not speech
+const HANG_MS = 2000;      // silence this long after speech ends the turn
+let loudFrames = 0;
+let captureFrom = 0;       // samples before this are the acknowledgement's echo
+let capturedSamples = 0;   // how many have arrived, for the mark above
+let heardSpeech = false;   // the listener has actually said something
+let quietSince = 0;        // when the current run of silence began
+let speech = null;               // live interim recogniser, when the browser has one
+let heardText = "";              // what the browser's recogniser made of it
+let liveMsg = null, answerMsg = null, ackMsg = null;
+let resumeAfter = null;          // where narration was when we cut in
+let cancelled = false;
+
+// ── full duplex ──────────────────────────────────────────────────────────────
+// The page used to be half duplex: it opened the microphone, then played the
+// whole "go ahead" over the listener, and only started listening once that
+// finished — everything said during it was thrown away as echo. The thanks and
+// the answer played with the microphone closed. So the studio talked over
+// anyone who did not wait for it, which is the one thing a person in a real
+// conversation does not do.
+//
+// Moshi (arXiv 2410.00037) drops explicit turns and models both streams at
+// once; OpenAI's Realtime API gets most of that feel from a pipeline with two
+// rules: `interrupt_response` (speech starting cancels whatever the assistant
+// is saying) and truncation (the record keeps only what was actually heard).
+// This is those two rules. The microphone stays open while the studio speaks,
+// and the listener starting to talk silences it at once and becomes the turn.
+// From the settings dialog, substituted by serve_page. Each falls back to the
+// shipped behaviour when the page is served without substitution.
+const SETTING_INTERRUPT = "__INTERRUPT__";
+const SETTING_EXTEND_MS = "__EXTEND_MS__";
+const SETTING_LANG_TAG = "__LANG_TAG__";
+const BARGE_ON = SETTING_INTERRUPT !== "off";
+const BARGE_PEAK = 0.08;   // input level that counts as the listener, after echo cancel
+const BARGE_POLLS = 5;     // meter polls (60 ms each) of it, ~300 ms, before cutting in
+const PREFIX_MS = 300;     // audio kept from before the detector fired, as OpenAI's prefix_padding_ms
+let vadSpeaking = false;   // the detector's current view
+let speechAt = 0;          // sample index where the current speech began
+let loudPolls = 0;         // recent meter polls above BARGE_PEAK
+let onBarge = null;        // set while the studio is speaking: what to do if they talk over it
+const voices = new Set();  // every sink + request the studio is speaking through right now
+
+// Silence everything the studio is saying and cancel what it was about to say.
+function hush() {
+  for (const v of voices) {
+    try { v.ctrl.abort(); } catch (e) {}
+    v.sink.stop();
+  }
+  voices.clear();
+}
+
+// Semantic end of turn, after OpenAI's `semantic_vad`: a pause that follows
+// "and", "the" or "um" is someone thinking, not someone done. Silence alone
+// cannot tell those apart; the words can. The browser's live transcript is
+// enough to read the last word from.
+const UNFINISHED = new Set(("and or but so because the a an of to in on at for with from about "
+  + "like um uh uhm erm hmm er is are was were what how why which that this my your their our "
+  + "if then when where who can could would should do does did will than as into i we you").split(" "));
+const EXTEND_MS = Number(SETTING_EXTEND_MS) || 2000;  // extra quiet after an unfinished-sounding pause
+let extendTimer = null;
+function soundsUnfinished(text) {
+  const w = (text || "").trim().toLowerCase().replace(/[^a-z' ]/g, "").split(/\s+/).filter(Boolean);
+  return w.length > 0 && UNFINISHED.has(w[w.length - 1]);
+}
+
+function micState(t) { $("mic-state").textContent = t || ""; }
+
+// Take a turn's bubbles back when the turn produced nothing.
+//
+// An acknowledgement is only half a conversation: "I see you have a question"
+// with no question after it is a line the studio said to itself. Left in the
+// thread they stack up, one per attempt, which is what made a single ask look
+// like several.
+function dropEmptyTurn() {
+  if (ackMsg) { ackMsg.remove(); ackMsg = null; }
+  if (liveMsg) { liveMsg.remove(); liveMsg = null; }
+}
+
+function micButtons(mode) {
+  // idle | listening | working
+  //
+  // THERE IS NOW A SEND BUTTON, and the reason is worth keeping. The original
+  // decision was that ending on silence is how a phone call works and a second
+  // button is a thing to remember while you are trying to think. That holds
+  // when detection works. It is exactly wrong when it does not: a listener
+  // whose turn will not end has no way out at all, which is the failure that
+  // was reported from a real room. Silence still ends the turn on its own; the
+  // button is the escape hatch, not the mechanism.
+  // No clock and no blinking dot. The level meter already says "recording",
+  // it says it from the signal rather than from a timer, and a stopwatch
+  // counting up at someone forming a question is pressure they did not ask for.
+  const rec = mode === "listening";
+  $("ask").hidden     = mode !== "idle";
+  $("meter").hidden   = !rec;
+  $("ctext").hidden   = !rec;
+  $("send").hidden    = !rec;
+  $("discard").hidden = !rec;
+  if (!rec) $("ctext").textContent = "";
+}
+
+// ── capture ──────────────────────────────────────────────────────────────────
+// Raw Float32 out of an AudioContext rather than MediaRecorder: the model wants
+// a wav and MediaRecorder cannot make one, it gives webm/opus, and nothing on
+// this box can transcode.
+//
+// Capture runs in an AudioWorklet, not a ScriptProcessorNode. The old node was
+// deprecated, ran its callback on the main thread so a slow render stalled the
+// microphone, and had to be connected onward to micCtx.destination to keep
+// firing at all, which routed the microphone into the speaker output that
+// Chrome's echo canceller takes its reference from. A worklet needs none of
+// that: it runs on the audio thread and it is pulled whether or not its output
+// goes anywhere.
+//
+// The worklet carries the detector as well as the capture, because the endpoint
+// decision belongs where the microphone is. `opennotebook_vad` compiled to wasm
+// answers "has the listener stopped talking"; the same crate answers "did this
+// clip hold speech" on the server, from the same thresholds, so the two cannot
+// drift. When the wasm is not on the box the worklet falls back to the old peak
+// threshold and the page behaves exactly as it used to.
+const VAD_WORKLET_SRC = `
+const SILENCE_PEAK = ${SILENCE_PEAK};
+const HANG_MS = ${HANG_MS};
+
+class OpenNotebookVad extends AudioWorkletProcessor {
+  constructor(opts) {
+    super();
+    this.ready = false; this.ended = false; this.armed = false;
+    this.last = -1;
+    // Samples seen since the node started, the same index space the page
+    // counts capturedSamples in. Carried on every event so the page can
+    // start a question at the moment speech began rather than when it noticed.
+    this.total = 0;
+    // Capture is batched: one postMessage per 128 samples would be 375 a
+    // second on the audio thread's critical path.
+    this.out = new Float32Array(8192); this.n = 0;
+    // Fallback state, used only when there is no wasm.
+    this.heard = false; this.quietMs = 0;
+
+    // arm: the next end of speech ends the turn. disarm: keep watching, never
+    // end. reset: forget any speech so far, which is how the echo of the
+    // narrator is dropped and how a turn is re-opened after a pause that
+    // turned out not to be the end.
+    this.port.onmessage = (e) => {
+      const t = e.data && e.data.t;
+      if (t === "arm") this.armed = true;
+      else if (t === "disarm") this.armed = false;
+      else if (t === "reset") this.reset();
+    };
+
+    const bytes = opts.processorOptions && opts.processorOptions.wasm;
+    if (!bytes) { this.port.postMessage({ t: "nowasm", m: "no module was handed to the worklet" }); return; }
+    WebAssembly.instantiate(bytes, {}).then(({ instance }) => {
+      this.ex = instance.exports;
+      this.vad = this.ex.vad_new(sampleRate);
+      this.cap = 128;
+      this.buf = this.ex.vad_alloc(this.cap);
+      this.ready = true;
+      this.port.postMessage({ t: "ready" });
+    }).catch((err) => this.port.postMessage({ t: "nowasm", m: String(err) }));
+  }
+
+  reset() {
+    if (this.ready) this.ex.vad_reset(this.vad);
+    this.heard = false; this.quietMs = 0;
+    this.ended = false; this.last = -1;
+  }
+
+  flush() {
+    if (!this.n) return;
+    const copy = this.out.slice(0, this.n);
+    this.port.postMessage({ t: "pcm", pcm: copy }, [copy.buffer]);
+    this.n = 0;
+  }
+
+  // The peak gate, kept only for boxes with no wasm installed. Same 0.06 and
+  // same 2 s hang the page has always used, so the fallback is the old
+  // behaviour and not a third thing to reason about.
+  peakStep(ch) {
+    let peak = 0;
+    for (let i = 0; i < ch.length; i++) {
+      const q = Math.round(Math.abs(ch[i]) * 128) / 128;
+      if (q > peak) peak = q;
+    }
+    const ms = (ch.length / sampleRate) * 1000;
+    if (peak > SILENCE_PEAK) { this.heard = true; this.quietMs = 0; return 1; }
+    if (this.heard) { this.quietMs += ms; if (this.quietMs >= HANG_MS) return 2; return 1; }
+    return 0;
+  }
+
+  process(inputs) {
+    const ch = inputs[0] && inputs[0][0];
+    if (!ch || ch.length === 0) return true;
+
+    // Always capture, armed or not: captureFrom on the main thread is what
+    // discards the acknowledgement, and it needs the samples to count.
+    if (this.n + ch.length > this.out.length) this.flush();
+    this.out.set(ch, this.n); this.n += ch.length;
+    if (this.n >= this.out.length) this.flush();
+    const at = this.total;
+    this.total += ch.length;
+
+    // The detector runs ARMED OR NOT. Full duplex: the page has to hear the
+    // listener start talking while the narrator is still speaking, or the
+    // narrator talks over them. Only an armed detector may end a turn.
+    if (this.ended) return true;
+
+    let ev;
+    if (this.ready) {
+      if (ch.length > this.cap) {
+        this.ex.vad_dealloc(this.buf, this.cap);
+        this.cap = ch.length;
+        this.buf = this.ex.vad_alloc(this.cap);
+      }
+      // Re-read memory.buffer every time: growing the wasm heap detaches the
+      // old ArrayBuffer and a cached view writes into nothing, silently.
+      new Float32Array(this.ex.memory.buffer, this.buf, ch.length).set(ch);
+      ev = this.ex.vad_push(this.vad, this.buf, ch.length);
+    } else {
+      ev = this.peakStep(ch);
+    }
+
+    if (ev === 2 && !this.armed) {
+      // Speech came and went while nobody was listening for a turn: the
+      // narrator's own echo, or a cough. Forget it and keep watching.
+      this.reset();
+      ev = 0;
+    }
+    if (ev !== this.last) { this.last = ev; this.port.postMessage({ t: "ev", ev, at }); }
+    if (ev === 2) {
+      this.ended = true;
+      this.flush();
+      this.port.postMessage({ t: "end", speech_ms: this.ready ? this.ex.vad_speech_ms(this.vad) : 0 });
+    }
+    return true;
+  }
+}
+registerProcessor("opennotebook-vad", OpenNotebookVad);
+`;
+
+// The detector ships INSIDE this page, base64 in a const, substituted by
+// `serve_page` from the same file `/api/session/vad.wasm` serves.
+//
+// It used to be a second request, and a second request is a second thing that
+// can fail: measured on the owner's browser as `Failed to fetch`, on a URL that
+// answers 200 to curl from the same host. A page that has already arrived
+// cannot fail to arrive, so the bytes ride with it and the whole class of
+// network, cache, proxy and extension failures goes away. The route stays for
+// debugging and as the fallback when this const is empty.
+const VAD_WASM_B64 = "__VAD_WASM_B64__";
+
+let vadWasmBytes = null;   // the module, once it has been decoded or fetched
+let vadWorkletURL = null;
+let vadWarned = false;     // the degraded notice is said once per page
+
+// Why the fallback has to be loud.
+//
+// Without the wasm the worklet runs the old peak threshold, and the old peak
+// threshold is the bug this whole crate was written to close: any room noise
+// above 0.06 resets its hang timer on every block, so the turn never ends and
+// the listener waits while nothing happens. A silent fallback to that is not a
+// graceful degradation, it is the original bug with the evidence removed.
+//
+// It was also silent in a way that could not self-correct. The fetch used to
+// ask for the cached copy without revalidating, and this route answered 404
+// for as long as the page existed before the detector shipped, so a browser
+// holding that cached 404 would never see the wasm appear. Latching
+// `vadWasmBytes = false` then pinned it for the life of the page. Both are
+// gone: the fetch revalidates, and a failure is retried on the next turn.
+async function loadVadWasm() {
+  if (vadWasmBytes) return vadWasmBytes;
+  // Carried into the banner so a report says which of the two paths failed and
+  // why, instead of only naming the second one.
+  let inlineWhy = VAD_WASM_B64 ? "inline present" : "inline EMPTY in this page";
+
+  // Inline first. No request, so nothing to block.
+  if (VAD_WASM_B64) {
+    try {
+      // A data: URL, decoded by the browser, rather than atob plus a manual
+      // copy. It avoids holding the base64 string, an 88 KB binary string and
+      // an 88 KB typed array alive at once, which is three copies of the same
+      // bytes at the exact moment a page under memory pressure cannot spare
+      // them. Measured as "Array buffer allocation failed" on a real browser.
+      const r = await fetch(`data:application/wasm;base64,${VAD_WASM_B64}`);
+      vadWasmBytes = await r.arrayBuffer();
+      return vadWasmBytes;
+    } catch (e) {
+      // Decoding bytes that came with the page should not fail. If it does,
+      // the page itself is damaged and the route will not be better, but try.
+      inlineWhy = `inline present (${VAD_WASM_B64.length} chars) but did not decode: ${e && e.message ? e.message : e}`;
+      console.warn("inline detector did not decode, trying the route:", e);
+    }
+  }
+
+  let why = "";
+  try {
+    const url = new URL(`${API}/vad.wasm`, location.href).href;
+    const r = await fetch(url);
+    if (r.ok) {
+      vadWasmBytes = await r.arrayBuffer();
+      return vadWasmBytes;
+    }
+    why = `HTTP ${r.status} from ${url}`;
+  } catch (e) {
+    // Name the URL. "Failed to fetch" on its own cannot be acted on, and that
+    // is exactly the report this arrived as.
+    why = `${e && e.message ? e.message : e} from ${new URL(`${API}/vad.wasm`, location.href).href}`;
+  }
+  vadDegraded(`could not load the voice detector. ${inlineWhy}; then ${why}`);
+  return null;
+}
+
+// Said out loud, on screen, not only in a console nobody has open.
+function vadDegraded(why) {
+  vadIsWasm = false;
+  console.warn("opennotebook_vad unavailable, falling back to the loudness gate:", why);
+  if (vadWarned) return;
+  vadWarned = true;
+  appendMsg(bubble({
+    who: "Studio",
+    cls: "err",
+    text: `Voice detection is not loaded, so the microphone is falling back to a loudness `
+        + `threshold. In a room with any background noise the turn may not send on its own. `
+        + `Reason: ${why}.`,
+  }));
+}
+
+async function micStart() {
+  // Idempotent, because it was called TWICE per turn and every first call was
+  // abandoned: a live MediaStream with the recording indicator still lit, an
+  // AudioContext, and an AudioWorklet still filling buffers, none of them ever
+  // closed. Four turns in, an 88 KB ArrayBuffer allocation fails and the page
+  // stops being able to decode the detector or fetch anything, which is how it
+  // was reported: "inline present but did not decode: Array buffer allocation
+  // failed". It also broke capture outright, because `capturedSamples` counted
+  // both nodes while `micChunks` was reset between them, so `captureFrom` ran
+  // past the end of the buffer and `micStop` returned nothing at all: "0.0s of
+  // audio, too short to be a question".
+  //
+  // The duplicate call is gone. This guard is here so that reintroducing one
+  // costs a wasted getUserMedia and not a leak.
+  micTeardown();
+
+  micStream = await navigator.mediaDevices.getUserMedia({
+    audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true },
+  });
+  micCtx = new (window.AudioContext || window.webkitAudioContext)();
+  micRate = micCtx.sampleRate;
+  const src = micCtx.createMediaStreamSource(micStream);
+  micChunks = [];
+  captureFrom = 0; capturedSamples = 0; heardSpeech = false; quietSince = 0; armed = false;
+  vadSpeaking = false; speechAt = 0; loudPolls = 0;
+
+  if (!vadWorkletURL) {
+    vadWorkletURL = URL.createObjectURL(new Blob([VAD_WORKLET_SRC], { type: "text/javascript" }));
+  }
+  await micCtx.audioWorklet.addModule(vadWorkletURL);
+
+  const wasm = await loadVadWasm();
+  micNode = new AudioWorkletNode(micCtx, "opennotebook-vad", {
+    numberOfInputs: 1, numberOfOutputs: 0, channelCount: 1,
+    processorOptions: { wasm: wasm || null },
+  });
+  vadIsWasm = !!wasm;
+
+  micNode.port.onmessage = (e) => {
+    const m = e.data;
+    if (m.t === "pcm") {
+      micChunks.push(m.pcm);
+      capturedSamples += m.pcm.length;
+    } else if (m.t === "ev") {
+      // 0 idle, 1 speaking, 2 ended. The meter follows the detector now
+      // rather than following loudness.
+      if (m.ev === 1 && !vadSpeaking) speechAt = m.at || 0;
+      vadSpeaking = m.ev === 1;
+      if (m.ev >= 1 && armed) {
+        heardSpeech = true; micState("listening");
+        // They carried on after a pause that sounded unfinished.
+        if (extendTimer) { clearTimeout(extendTimer); extendTimer = null; }
+      }
+    } else if (m.t === "end") {
+      if (soundsUnfinished(heardText) && !extendTimer) {
+        // Re-open the turn and give them longer. New speech clears the timer
+        // above and the detector ends the turn again on its own.
+        micNode.port.postMessage({ t: "reset" });
+        micState("listening… take your time");
+        extendTimer = setTimeout(() => { extendTimer = null; askSend(); }, EXTEND_MS);
+      } else {
+        askSend();
+      }
+    } else if (m.t === "nowasm") {
+      vadDegraded(m.m || "the detector did not start in the audio thread");
+    }
+  };
+
+  // The bars, and only the bars. An AnalyserNode is a tap: it reads what
+  // passes through and drives nothing, so it is the right tool for a meter and
+  // was the wrong one for a turn.
+  micAnalyser = micCtx.createAnalyser();
+  micAnalyser.fftSize = 512;
+  src.connect(micAnalyser);
+
+  // No connect to destination. The worklet is pulled because it has an input,
+  // and giving it zero outputs is what lets the microphone stay out of the
+  // speaker path.
+  src.connect(micNode);
+  startMeter();
+}
+
+function startMeter() {
+  const buf = new Uint8Array(micAnalyser.frequencyBinCount);
+  const bars = $("meter").querySelectorAll("i");
+  meterTimer = setInterval(() => {
+    micAnalyser.getByteTimeDomainData(buf);
+    let peak = 0;
+    for (const v of buf) peak = Math.max(peak, Math.abs(v - 128) / 128);
+    loudPolls = peak > BARGE_PEAK ? loudPolls + 1 : Math.max(0, loudPolls - 1);
+    // Both the detector and the level have to agree it is a person talking for
+    // a moment, so a bump on the desk or a leak of the studio's own voice past
+    // the echo canceller does not cut it off.
+    if (BARGE_ON && onBarge && vadSpeaking && loudPolls >= BARGE_POLLS) { const f = onBarge; onBarge = null; f(); }
+    bars.forEach((b, k) => {
+      const want = Math.min(1, peak * (1.6 - k * 0.15)) * 18;
+      b.style.height = Math.max(3, want) + "px";
+    });
+    // The meter is a meter again. It draws the bars and nothing else: the
+    // turn now ends when the detector in the worklet says so, on 16 ms frames
+    // of the actual signal, rather than when a 21 ms sample of loudness taken
+    // every 60 ms happens to fall below a number.
+  }, 60);
+}
+
+// Everything the capture graph holds, released. Separate from `micStop` so it
+// can run before a start as well as after one, and safe to call when there is
+// nothing open.
+function micTeardown() {
+  if (meterTimer) { clearInterval(meterTimer); meterTimer = null; }
+  if (extendTimer) { clearTimeout(extendTimer); extendTimer = null; }
+  onBarge = null; vadSpeaking = false;
+  if (micNode) {
+    micNode.port.onmessage = null;
+    try { micNode.disconnect(); } catch (e) {}
+    micNode = null;
+  }
+  // Stopping the tracks is what turns the browser's recording indicator off.
+  // Closing the context alone leaves it lit, which reads as the page listening
+  // when it is not.
+  if (micStream) { micStream.getTracks().forEach((t) => t.stop()); micStream = null; }
+  if (micCtx) { try { micCtx.close(); } catch (e) {} micCtx = null; }
+  micAnalyser = null;
+}
+
+function micStop() {
+  const out = micTake();
+  micTeardown();
+  micChunks = [];
+  return out;
+}
+
+// The question so far, WITHOUT closing the microphone: it stays open while the
+// studio answers so the listener can talk over it.
+function micTake() {
+  const n = micChunks.reduce((a, c) => a + c.length, 0);
+  const all = new Float32Array(n);
+  let o = 0;
+  for (const c of micChunks) { all.set(c, o); o += c.length; }
+  // Drop our own voice. Without this the question begins with the
+  // acknowledgement and the model answers that instead.
+  const from = Math.min(captureFrom, all.length);
+  return all.slice(from);
+}
+
+// ── the live transcript ──────────────────────────────────────────────────────
+// This is the browser's own recogniser, and it is a CONVENIENCE, not the record.
+// It exists because the only other way to show words while someone is still
+// speaking is streaming STT, and this stack's realtime endpoint is not usable:
+// measured, nothing is emitted below about 45 s of audio, and a question is
+// always shorter than that.
+//
+// The authoritative transcript is `heard`, which the server produces locally
+// from the recorded wav and sends back. When both exist, `heard` wins and
+// replaces this text, because it is the one the answer was actually grounded in.
+function speechStart() {
+  const R = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!R) return null;
+  heardText = "";
+  const r = new R();
+  r.continuous = true; r.interimResults = true; r.lang = SETTING_LANG_TAG.startsWith("__") ? "en-US" : SETTING_LANG_TAG;
+  r.onresult = (e) => {
+    let txt = "";
+    for (let i = 0; i < e.results.length; i++) txt += e.results[i][0].transcript;
+    // The bar, and only the bar: the listener is looking at the thing they
+    // are pressing, not up at the thread.
+    heardText = txt;
+    const t = $("ctext");
+    if (t && !t.hidden) t.textContent = txt;
+  };
+  r.onerror = () => {};
+  try { r.start(); } catch (e) { return null; }
+  return r;
+}
+
+function setText(msg, text, live) {
+  const tx = msg.querySelector(".tx");
+  tx.textContent = text || "";
+  if (live) {
+    const c = document.createElement("span");
+    c.className = "caret"; c.textContent = " ";
+    tx.appendChild(c);
+  }
+  reveal(msg);
+}
+
+// 16 kHz mono wav, decimated from whatever the device gave us. This is speech
+// for recognition, not for playback, so size on the way up matters more than
+// fidelity.
+function toWav(samples, rateIn) {
+  const rateOut = 16000;
+  const ratio = rateIn / rateOut;
+  const outLen = Math.floor(samples.length / ratio);
+  const pcm = new Int16Array(outLen);
+  for (let i = 0; i < outLen; i++) {
+    const v = samples[Math.floor(i * ratio)] || 0;
+    pcm[i] = Math.max(-1, Math.min(1, v)) * 0x7fff;
+  }
+  const buf = new ArrayBuffer(44 + pcm.length * 2);
+  const dv = new DataView(buf);
+  const str = (off, t) => { for (let i = 0; i < t.length; i++) dv.setUint8(off + i, t.charCodeAt(i)); };
+  str(0, "RIFF"); dv.setUint32(4, 36 + pcm.length * 2, true); str(8, "WAVE");
+  str(12, "fmt "); dv.setUint32(16, 16, true); dv.setUint16(20, 1, true);
+  dv.setUint16(22, 1, true); dv.setUint32(24, rateOut, true);
+  dv.setUint32(28, rateOut * 2, true); dv.setUint16(32, 2, true); dv.setUint16(34, 16, true);
+  str(36, "data"); dv.setUint32(40, pcm.length * 2, true);
+  new Int16Array(buf, 44).set(pcm);
+  return new Blob([buf], { type: "audio/wav" });
+}
+
+// ── reply playback ───────────────────────────────────────────────────────────
+// Chunks scheduled back to back on one AudioContext clock. The reply arrives as
+// headerless PCM while it is still being generated, and an <audio> element needs
+// a complete container.
+function makeSink() {
+  const ctx = new (window.AudioContext || window.webkitAudioContext)();
+  let cursor = 0, dead = false;
+  const live = [];
+  return {
+    push(pcm16) {
+      // Stopped means stopped: a frame still in flight from the server after a
+      // barge-in must not start the voice up again.
+      if (dead) return;
+      const f = new Float32Array(pcm16.length);
+      for (let i = 0; i < pcm16.length; i++) f[i] = pcm16[i] / 0x8000;
+      const b = ctx.createBuffer(1, f.length, 24000); // ask.rs REPLY_RATE
+      b.copyToChannel(f, 0);
+      const n = ctx.createBufferSource();
+      n.buffer = b; n.connect(ctx.destination);
+      if (cursor < ctx.currentTime) cursor = ctx.currentTime + 0.02;
+      n.start(cursor); cursor += b.duration; live.push(n);
+    },
+    endsIn() { return Math.max(0, cursor - ctx.currentTime); },
+    stop() { dead = true; cursor = 0; live.forEach((n) => { try { n.stop(); } catch (e) {} }); },
+    close() { try { ctx.close(); } catch (e) {} },
+  };
+}
+
+function b64ToPcm16(b64) {
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new Int16Array(bytes.buffer, 0, bytes.length >> 1);
+}
+
+// ── the turn ─────────────────────────────────────────────────────────────────
+// Read one of the audio event streams into a sink. Shared by the acknowledgement
+// and the answer: both are "a narrator says a thing", and the only difference is
+// which route produced it.
+async function speak(url, opts) {
+  const o = opts || {};
+  const sink = makeSink();
+  if (o.sinkOut) o.sinkOut(sink);
+  const ctrl = new AbortController();
+  const voice = { sink, ctrl };
+  voices.add(voice);
+  let said = "", who = o.who || "Studio", msg = null;
+  try {
+    const res = await fetch(url, { ...(o.fetch || {}), signal: ctrl.signal });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const reader = res.body.getReader();
+    const dec = new TextDecoder();
+    let buf = "";
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      let cut;
+      while ((cut = buf.indexOf("\n\n")) >= 0) {
+        const frame = buf.slice(0, cut); buf = buf.slice(cut + 2);
+        let ev = null; const data = [];
+        for (const ln of frame.split("\n")) {
+          if (ln.startsWith("event:")) ev = ln.slice(6).trim();
+          else if (ln.startsWith("data:")) data.push(ln.slice(5).replace(/^ /, ""));
+        }
+        const payload = data.join("\n");
+        if (ev === "speaker") { who = JSON.parse(payload).t || who; if (o.onSpeaker) o.onSpeaker(who); }
+        else if (ev === "audio") { if (!msg && o.onFirstAudio) o.onFirstAudio(who); sink.push(b64ToPcm16(payload)); msg = true; }
+        else if (ev === "said") { said += JSON.parse(payload).t; if (o.onSaid) o.onSaid(said, who); }
+        else if (ev === "heard") { if (o.onHeard) o.onHeard(JSON.parse(payload).t); }
+        else if (ev === "failed") throw new Error(JSON.parse(payload).t);
+      }
+    }
+    if (o.onDone) o.onDone(said, who);
+    // Wait for the last frame to play, unless someone talks over it first.
+    await new Promise((r) => {
+      const t = setTimeout(r, Math.ceil(sink.endsIn() * 1000) + 120);
+      ctrl.signal.addEventListener("abort", () => { clearTimeout(t); r(); });
+    });
+  } finally {
+    voices.delete(voice);
+    sink.stop(); sink.close();
+  }
+  return said;
+}
+
+async function askStart() {
+  if (turnBusy) return;
+  turnBusy = true; cancelled = false;
+  const c = cur();
+  resumeAfter = { i: idx, ended: ended || !c };
+  if (playing) {
+    playing = false;
+    audio.pause();
+    await rpc("playback_pause", { req: at() }).catch(() => {});
+  }
+  buttons();
+  // The microphone opens FIRST and the acknowledgement plays over it.
+  //
+  // It used to be the other way round, and it was the worst moment in the
+  // product: you press the button, you are ready to talk, and the thing is
+  // still saying "I see your hand" at you. Making the listener wait for a
+  // courtesy is worse than not having the courtesy.
+  //
+  // So the wait is gone, and the acknowledgement yields the moment you actually
+  // start speaking — `barge` below stops it mid-word off the input level. A real
+  // presenter does the same thing.
+  try {
+    await micStart();
+  } catch (e) {
+    turnBusy = false; micButtons("idle"); buttons();
+    micState(`microphone refused: ${e && e.message ? e.message : e}`);
+    return;
+  }
+  // Capturing already, but ARMED for nothing. The empty "You" bubble with its
+  // blinking caret is the page saying "go ahead", and it must not say that while
+  // the narrator is still talking — that was the confusing half of this moment.
+  micButtons("working");
+  onAir(true, "HAND UP");
+
+  // Talking over the acknowledgement ends it on the spot, and what they said
+  // is the start of the question rather than echo to throw away.
+  let barged = false;
+  onBarge = () => {
+    barged = true;
+    hush();
+    captureFrom = Math.max(0, speechAt - Math.round(micRate * PREFIX_MS / 1000));
+    stopSpeech(); speech = speechStart();
+  };
+
+  try {
+    const c0 = cur();
+    const qs = new URLSearchParams({
+      session: SID,
+      slide: String(c0 ? c0.slide.ordinal : 0),
+      line: c0 ? c0.line.line_id : "",
+      offset_ms: String(Math.round((audio.currentTime || 0) * 1000)),
+    });
+    ackMsg = null;
+    ackSink = null;
+    await speak(`${API}/ack?${qs}`, {
+      sinkOut: (s) => { ackSink = s; },
+      onSaid: (t, who) => {
+        if (!ackMsg) ackMsg = appendMsg(bubble({ who, text: "", cls: "on" }));
+        // No caret: this is the narrator speaking, not an invitation to type.
+        setText(ackMsg, t, false);
+      },
+      onDone: () => { if (ackMsg) ackMsg.classList.remove("on"); },
+    });
+  } catch (e) {
+    // A courtesy that fails is not a reason to refuse the question.
+  } finally {
+    onBarge = null;
+    ackSink = null;
+    quietSince = 0;
+    if (barged) {
+      // Already mid-sentence. The detector is left as it is so their speech
+      // carries straight on into the turn.
+      heardSpeech = true;
+    } else {
+      // Everything captured so far is the acknowledgement coming back down the
+      // microphone. The question starts here.
+      captureFrom = capturedSamples;
+      heardSpeech = false;
+      if (micNode && micNode.port) micNode.port.postMessage({ t: "reset" });
+    }
+  }
+  if (cancelled) return;
+  listen();
+}
+
+// The floor is theirs, and the page says so. Entered after the acknowledgement,
+// and again whenever the listener talks over the studio's answer.
+function listen() {
+  micButtons("listening");
+  micState("listening");
+  onAir(true, "LISTENING");
+  nowSpeaking("You", true);
+  // No thread bubble yet. The words appear in the composer while they are
+  // being said, and the thread gets ONE bubble at send. Two live copies of the
+  // same sentence is what "sentence duplication" looked like on screen.
+  liveMsg = null;
+  if (!speech) speech = speechStart();
+  armed = true;
+  if (micNode && micNode.port) micNode.port.postMessage({ t: "arm" });
+}
+
+function stopSpeech() {
+  if (speech) { try { speech.stop(); } catch (e) {} speech = null; }
+}
+
+async function askCancel() {
+  cancelled = true;
+  hush();
+  stopSpeech(); micStop();
+  if (liveMsg) { liveMsg.remove(); liveMsg = null; }
+  micButtons("idle"); micState(""); turnBusy = false; buttons();
+  await resumeNarration();
+}
+
+let sending = false;
+async function askSend() {
+  // The silence timer fires on an interval, so this can be entered twice for
+  // one turn. Guarded rather than debounced: a second send would upload the
+  // same audio and bill for two answers.
+  if (sending || !turnBusy || !micStream) return;
+  sending = true;
+  stopSpeech();
+  if (extendTimer) { clearTimeout(extendTimer); extendTimer = null; }
+  const questionFrom = captureFrom;
+  const samples = micTake();
+  // Stop ending turns, keep listening for one starting.
+  armed = false;
+  if (micNode && micNode.port) { micNode.port.postMessage({ t: "disarm" }); micNode.port.postMessage({ t: "reset" }); }
+  micButtons("working");
+  const secs = samples.length / micRate;
+  if (secs < 0.4) {
+    micStop();
+    // Phase 2 §8 resumes silently here, and that is still right for a key
+    // pressed by accident. It is NOT right for a deliberate send: a listener
+    // who pressed the button and got nothing back has no idea whether the
+    // studio heard them, and reads it as the button being broken. Which is
+    // exactly how it was reported.
+    dropEmptyTurn();
+    appendMsg(bubble({
+      who: "Studio", cls: "err",
+      text: `That recording was ${secs.toFixed(1)}s of audio, too short to be a question. `
+          + `Nothing was sent. Try holding the mic a moment longer.`,
+    }));
+    micButtons("idle"); micState(""); turnBusy = false; sending = false; buttons();
+    await resumeNarration();
+    return;
+  }
+  // One bubble, now, with whatever the browser heard. `heard` from the server
+  // replaces it when it lands, because that is the text the answer was actually
+  // grounded in.
+  liveMsg = appendMsg(bubble({ who: "You", text: heardText || "\u2026", cls: "you" }));
+  micState("thinking…");
+  onAir(true, "THINKING");
+  nowSpeaking("", false);
+
+  // No canned "thanks" line any more: the answer itself opens with the
+  // narrator thinking aloud about the question, generated from the session, and
+  // that is spoken within a couple of seconds on the same queue as the rest.
+
+  const wav = toWav(samples, micRate);
+  const sink = makeSink();
+  const answerCtrl = new AbortController();
+  const answerVoice = { sink, ctrl: answerCtrl };
+  voices.add(answerVoice);
+  answerMsg = null;
+
+  // Talking while the studio thinks or answers is interrupt_response: silence
+  // it, cancel the answer, and give them the floor. Before any answer has
+  // been heard they were simply not finished, so the new speech CONTINUES the
+  // question instead of replacing it, and the model gets the whole thing.
+  let barged = false;
+  let holdMsg = null;        // the "one moment" bubble while the answer is prepared
+  let answerHeard = false;   // any of the answer has actually played
+  onBarge = () => {
+    barged = true;
+    const continuing = !answerHeard;
+    hush();
+    if (continuing) {
+      captureFrom = questionFrom;
+      if (liveMsg) { liveMsg.remove(); liveMsg = null; }
+      if (ackMsg) { ackMsg.remove(); ackMsg = null; }
+      if (answerMsg) { answerMsg.remove(); answerMsg = null; }
+      if (holdMsg) { holdMsg.remove(); holdMsg = null; }
+    } else {
+      captureFrom = Math.max(0, speechAt - Math.round(micRate * PREFIX_MS / 1000));
+    }
+    speech = speechStart();
+  };
+  let said = "";
+  let silent = null;   // the server's {input_ms, speech_ms, segment_count}
+  let answerWho = "Studio";
+  try {
+    const c = resumeAfter ? flat[resumeAfter.i] : null;
+    const qs = new URLSearchParams({
+      session: SID,
+      slide: String(c ? c.slide.ordinal : 0),
+      line: c ? c.line.line_id : "",
+      offset_ms: String(Math.round((audio.currentTime || 0) * 1000)),
+    });
+    const res = await fetch(`${API}/ask?${qs}`, {
+      method: "POST", headers: { "Content-Type": "audio/wav" }, body: wav,
+      signal: answerCtrl.signal,
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+    const reader = res.body.getReader();
+    const dec = new TextDecoder();
+    let buf = "";
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      let cut;
+      while ((cut = buf.indexOf("\n\n")) >= 0) {
+        const frame = buf.slice(0, cut); buf = buf.slice(cut + 2);
+        let ev = null; const data = [];
+        for (const ln of frame.split("\n")) {
+          if (ln.startsWith("event:")) ev = ln.slice(6).trim();
+          // Only ONE space is consumed by the field, and the payload is JSON so
+          // whitespace inside it survives regardless.
+          else if (ln.startsWith("data:")) data.push(ln.slice(5).replace(/^ /, ""));
+        }
+        const payload = data.join("\n");
+        if (ev === "hold") {
+          // The narrator filling the wait ("let me look into that") while the
+          // whole answer is prepared. One bubble per turn, showing the latest.
+          if (barged) continue;
+          if (!holdMsg) holdMsg = appendMsg(bubble({ who: answerWho, text: "", cls: "on" }));
+          setText(holdMsg, JSON.parse(payload).t, false);
+        } else if (ev === "hold_audio") {
+          // Played on the same queue as the answer, so it can never overlap it,
+          // but it is not the answer: talking over it still continues the
+          // question rather than interrupting a reply.
+          if (barged) continue;
+          sink.push(b64ToPcm16(payload));
+        } else if (ev === "audio") {
+          if (barged) continue;
+          answerHeard = true;
+          if (!answerMsg) { micState(`${answerWho} is answering`); onAir(true, "ANSWERING"); nowSpeaking(answerWho, true); }
+          sink.push(b64ToPcm16(payload));
+        } else if (ev === "speaker") {
+          // Who is about to answer. The bubble is created here, before any
+          // audio, so the name is right from the first frame rather than
+          // appearing as "Studio" and being corrected.
+          answerWho = JSON.parse(payload).t || "Studio";
+        } else if (ev === "said") {
+          if (holdMsg) { holdMsg.classList.remove("on"); holdMsg = null; }
+          said += JSON.parse(payload).t;
+          if (!answerMsg) answerMsg = appendMsg(bubble({ who: answerWho, text: "", cls: "on" }));
+          setText(answerMsg, said, true);
+        } else if (ev === "heard") {
+          // The authoritative transcript, from the same bytes the model got.
+          if (liveMsg) setText(liveMsg, JSON.parse(payload).t, false);
+        } else if (ev === "silent") {
+          // The server found no speech in the clip. Phase 2 §8 says resume
+          // silently, and this used to do exactly that: the bubbles were taken
+          // back and NOTHING replaced them, so a listener who had just pressed
+          // send watched their question disappear and reported the button as
+          // broken. Silence is now said out loud, with the numbers.
+          silent = JSON.parse(payload || "{}");
+        } else if (ev === "heard_failed") {
+          if (liveMsg) liveMsg.title = JSON.parse(payload).t;
+        } else if (ev === "failed") {
+          throw new Error(JSON.parse(payload).t);
+        }
+      }
+    }
+    if (silent) {
+      dropEmptyTurn();
+      const secs = ((silent.input_ms || 0) / 1000).toFixed(1);
+      appendMsg(bubble({
+        who: "Studio", cls: "err",
+        text: `I could not hear any speech in that ${secs}s recording, so I did not answer it. `
+            + `If you did speak, the microphone may be picking up the room instead of you.`,
+      }));
+      micState("");
+    } else {
+      if (answerMsg) setText(answerMsg, said, false);
+      micState("");
+      await new Promise((r) => {
+        const t = setTimeout(r, Math.ceil(sink.endsIn() * 1000) + 150);
+        answerCtrl.signal.addEventListener("abort", () => { clearTimeout(t); r(); });
+      });
+    }
+  } catch (e) {
+    if (barged) {
+      // Not a failure: they cut in. The bubble keeps only what was said
+      // before they did, the way a transcript of a real conversation would.
+    } else {
+    if (!answerMsg) dropEmptyTurn();
+    appendMsg(bubble({ who: "Studio", text: `could not answer: ${e && e.message ? e.message : e}`, cls: "err" }));
+    micState("");
+    }
+  } finally {
+    onBarge = null;
+    voices.delete(answerVoice);
+    sink.stop(); sink.close();
+    if (answerMsg) {
+      if (barged) setText(answerMsg, said.trim() + " \u2014", false);
+      answerMsg.classList.remove("on");
+    }
+    if (holdMsg) holdMsg.classList.remove("on");
+    liveMsg = null; answerMsg = null; ackMsg = null;
+    sending = false;
+  }
+  if (barged && !cancelled && micStream) {
+    // Same turn, their floor again. The narration stays paused.
+    heardSpeech = true;
+    listen();
+    return;
+  }
+  stopSpeech(); micStop();
+  armed = false; micButtons("idle"); turnBusy = false; buttons();
+  if (!cancelled) await resumeNarration();
+}
+
+// §5, decided: the interrupted line replays from its START, not from the offset.
+// `cues[]` is empty and cue granularity is 11.6 s, so no millisecond in this
+// stack maps to a word boundary and a seek lands mid-syllable.
+async function resumeNarration() {
+  const r = resumeAfter;
+  resumeAfter = null;
+  if (!r) return;
+  // Nothing to go back to. Measured as a bug: after the deck finished, asking a
+  // question replayed a line that had already been covered, because the resume
+  // only ever looked at the index and never at whether there was still a session
+  // running to return to.
+  if (r.ended) { onAir(false, "ENDED"); nowSpeaking("", false); buttons(); return; }
+  await startAt(r.i, 0);
+}
+
+$("ask").onclick = askStart;
+$("send").onclick = () => askSend();
+$("discard").onclick = askCancel;
+
+// A video player's keys: K plays and pauses, the arrows move a slide, C is
+// captions, F is full screen. Space stays the microphone, because asking is
+// what this page is for.
+addEventListener("keydown", (e) => {
+  const tag = (e.target && e.target.tagName) || "";
+  if (tag === "INPUT" || tag === "TEXTAREA" || e.ctrlKey || e.metaKey || e.altKey) return;
+  if ($("confirm").classList.contains("show")) return;
+  const k = e.key.toLowerCase();
+  if (k === "k") { e.preventDefault(); if (!$("playpause").disabled) $("playpause").onclick(); }
+  else if (e.key === "ArrowLeft") { if (!$("prev").disabled) { e.preventDefault(); stepSlide(-1); } }
+  else if (e.key === "ArrowRight") { if (!$("next").disabled) { e.preventDefault(); stepSlide(1); } }
+  else if (k === "c") { toggleCaptions(); }
+  else if (k === "f") { toggleFullscreen(); }
+});
+
+// Space is the shortcut, not the mechanism: press to open the mic, press again
+// to send. Hold-to-talk was the first shape and it makes a long question mean
+// holding a key for a long time, which is the thing the Send button removes.
+addEventListener("keydown", (e) => {
+  if (e.code !== "Space" || e.repeat) return;
+  const tag = (e.target && e.target.tagName) || "";
+  if (tag === "INPUT" || tag === "TEXTAREA") return;
+  e.preventDefault();
+  if (!turnBusy) { if (!$("ask").disabled) askStart(); }
+  else if (micStream) askCancel();
+});
+
+// ── leaving ──────────────────────────────────────────────────────────────────
+// Home is the collection this session was made in, on the studio's own page,
+// which is a sibling of this route rather than a path this page can assume:
+// the service root is whatever precedes /api. With no collection known (the
+// session could not be read) it is the studio's home.
+function homeUrl() {
+  const ui = API.replace(/\/api\/session$/, "") + "/ui/";
+  return COLLECTION ? ui + "c/" + encodeURIComponent(COLLECTION) : ui;
+}
+
+$("leave").onclick = () => {
+  const c = cur();
+  // Only ask when there is a place to lose: before the first line and after
+  // the last there is nothing to warn about, so the mark just goes home.
+  if (!c || idx < 0 || ended) { $("do-leave").onclick(); return; }
+  $("confirm-why").textContent = c && !ended
+    ? `You are on slide ${c.slide.ordinal + 1} of ${slides().length}. Your place is not kept, so coming back starts from the beginning.`
+    : "Your place is not kept, so coming back starts from the beginning.";
+  $("confirm").classList.add("show");
+};
+$("stay").onclick = () => $("confirm").classList.remove("show");
+$("do-leave").onclick = async () => {
+  playing = false;
+  audio.pause();
+  try { es.close(); } catch (e) {}
+  // Tell the studio the session stopped rather than just walking away: it owns
+  // the playhead and nothing else would ever tell it.
+  await rpc("playback_pause", { req: at() }).catch(() => {});
+  location.href = homeUrl();
+};
+addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && $("confirm").classList.contains("show")) $("stay").onclick();
+});
+
+// ── event stream ─────────────────────────────────────────────────────────────
+const es = new EventSource(`${API}/events?session=${encodeURIComponent(SID)}`);
+
+es.addEventListener("session.state", async (e) => {
+  const st = JSON.parse(e.data).state;
+  $("state").textContent = st;
+  $("state").dataset.s = st;
+  if (st === "ready" && !session) {
+    await loadSession();
+    $("prep").hidden = true;
+    const c = flat[0];
+    if (c) { fit(c.slide.aspect); showSlide(c.slide); }
+    buttons();
+  }
+  if (st === "failed") {
+    $("prep").hidden = false;
+    $("stage-name").textContent = "prep failed";
+    $("prep-sub").textContent = "check the job list";
+    // A sweeping bar on a dead job is the page claiming work is happening.
+    $("bar").classList.remove("idle");
+    $("fill").style.width = "0%";
+    onAir(false, "FAILED");
+  }
+});
+
+// The six phases the pipeline actually runs, in order, so the card can say
+// "3 of 6 · narrate" rather than a bare step name a viewer cannot place.
+const PHASE_LABEL = {
+  ingest:   "reading your resources",
+  script:   "writing the script",
+  deck:     "building the slides",
+  measure:  "measuring the narration",
+  narrate:  "recording the voices",
+  validate: "checking it renders",
+};
+
+es.addEventListener("prep.progress", (e) => {
+  const p = JSON.parse(e.data);
+  $("stage-name").textContent = PHASE_LABEL[p.step] || p.step || "starting";
+  // steps_total 0 is the job runner's own "this job does not report", not "no
+  // phases". A 0% bar there would be a claim; the sweep is the absence of one.
+  const known = p.steps_total > 0;
+  $("bar").classList.toggle("idle", !known);
+  $("prep-sub").textContent = known ? `step ${p.steps_done} of ${p.steps_total}` : "";
+  $("fill").style.width = known
+    ? (100 * p.steps_done) / p.steps_total + "%"
+    : "";
+});
+
+// The remaining three are the studio telling the page what it is doing. The page
+// already advances itself from the audio element, so these drive the display
+// rather than the audio — the studio stays the thing that knows the position.
+es.addEventListener("slide.enter", (e) => {
+  const d = JSON.parse(e.data);
+  const s = session && session.slides.find((x) => x.ordinal === d.slide_ordinal);
+  if (s) showSlide(s);
+});
+es.addEventListener("line.start", (e) => {
+  const d = JSON.parse(e.data);
+  nowSpeaking(speakerName(d.speaker_id), true);
+  onAir(true, "LIVE");
+  $("state").textContent = "";
+});
+es.addEventListener("line.end", () => {});
+es.addEventListener("playhead", () => {});
+
+// First paint: a session that is already ready should not wait a poll interval.
+(async () => {
+  const s = await loadSession();
+  if (s && s.state === "ready") {
+    $("state").textContent = "ready";
+    $("state").dataset.s = "ready";
+    $("prep").hidden = true;
+    if (flat[0]) { fit(flat[0].slide.aspect); showSlide(flat[0].slide); }
+    buttons();
+  } else if (s) {
+    $("state").textContent = s.state;
+    $("state").dataset.s = s.state;
+    $("stage-name").textContent =
+      s.state === "preparing" ? "preparing this session" : s.state;
+  } else {
+    $("state").textContent = "";
+    $("stage-name").textContent = "no such session";
+    $("prep-sub").textContent = SID;
+    $("bar").classList.remove("idle");
+  }
+})();
+</script>

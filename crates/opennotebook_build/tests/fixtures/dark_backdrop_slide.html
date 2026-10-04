@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Handling Arbitrary Conversation Dynamics</title>
+	<link rel="stylesheet" href="k-style.css">
+	<style>
+		body { position: relative; }
+		.k-overlay { position: absolute; bottom: 80px; left: 80px; right: 80px; max-width: 600px; }
+		.k-split { display: grid; grid-template-columns: 1fr 1fr; gap: 34px; align-items: end; }
+	</style>
+</head>
+<body>	<div class="k-overlay">
+		<div class="k-kicker">Moshi Advancements</div>
+		<h1 class="k-title">Handling Arbitrary Conversation Dynamics</h1>
+		<div class="k-split">
+			<div class="k-stack">
+				<div class="k-sub">Speech-to-Speech</div>
+				<ul class="k-points">
+					<li>Eliminates fixed speaker turns</li>
+					<li>Emulates real-world complexity</li>
+					<li>Parallel stream modeling</li>
+				</ul>
+			</div>
+			<div class="k-card k-stat">
+				<div class="k-num">Real-time</div>
+				<div class="k-cap">Reduced complexity</div>
+			</div>
+		</div>
+	</div>
+	<figure class="k-figure" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; width: 100%; height: 100%;">
+		<svg viewBox="0 0 1920 1080" style="width: 100%; height: 100%;">
+			<!-- Background gradient simulation with subtle pattern -->
+			<defs>
+				<linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+					<stop offset="0%" style="stop-color:#1a1a1a;stop-opacity:1" />
+					<stop offset="100%" style="stop-color:#0d0d0d;stop-opacity:1" />
+				</linearGradient>
+			</defs>
+			<rect width="1920" height="1080" fill="url(#bgGrad)"/>
+			
+			<!-- Conversation flow diagram -->
+			<g opacity="0.15">
+				<!-- Top speaker -->
+				<circle cx="960" cy="200" r="40" class="k-ink" stroke-width="2"/>
+				<text class="k-lab" x="960" y="205" font-size="24">🎤</text>
+				
+				<!-- Bottom speaker -->
+				<circle cx="960" cy="880" r="40" class="k-ink" stroke-width="2"/>
+				<text class="k-lab" x="960" y="885" font-size="24">🎤</text>
+				
+				<!-- Bidirectional arrows showing parallel streams -->
+				<path class="k-ink" d="M 800 300 Q 960 400 800 500" stroke-width="2" fill="none"/>
+				<path class="k-ink" d="M 1120 300 Q 960 400 1120 500" stroke-width="2" fill="none"/>
+				<path class="k-ink" d="M 800 580 Q 960 680 800 780" stroke-width="2" fill="none"/>
+				<path class="k-ink" d="M 1120 580 Q 960 680 1120 780" stroke-width="2" fill="none"/>
+				
+				<!-- Center accent circle -->
+				<circle cx="960" cy="540" r="60" class="k-f1" opacity="0.4"/>
+				<circle cx="960" cy="540" r="60" class="k-ink" stroke-width="2" fill="none"/>
+			</g>
+		</svg>
+	</figure>
+</body>
+</html>

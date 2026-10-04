@@ -1,0 +1,6 @@
+# Rust build artifacts.
+# No trailing slash on purpose: a trailing slash matches directories ONLY, so a
+# symlink named `target` slips through and gets committed.
+target
+
+__pycache__/

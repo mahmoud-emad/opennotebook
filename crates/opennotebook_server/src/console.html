@@ -1,0 +1,257 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>opennotebook</title>
+<style>
+  :root { color-scheme: dark; --bg:#0e1116; --fg:#e6edf3; --dim:#8b949e; --accent:#58a6ff;
+          --ok:#3fb950; --bad:#f85149; --line:#222a33; --panel:#161b22; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg);
+         font:14px/1.5 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; }
+  header { display:flex; gap:12px; align-items:baseline; padding:12px 16px;
+           border-bottom:1px solid var(--line); }
+  h1 { font-size:15px; margin:0; font-weight:600; }
+  .dim { color:var(--dim); }
+  .grow { flex:1; }
+  main { display:grid; grid-template-columns: minmax(0,1fr) 340px; gap:0; align-items:start; }
+  @media (max-width: 860px) { main { grid-template-columns: 1fr; } aside { border-left:0 !important; } }
+  section { padding:16px; min-width:0; }
+  aside { padding:16px; border-left:1px solid var(--line); }
+  h2 { font-size:12px; text-transform:uppercase; letter-spacing:.08em;
+       color:var(--dim); margin:0 0 10px; font-weight:600; }
+
+  table { width:100%; border-collapse:collapse; }
+  th { text-align:left; font-size:12px; color:var(--dim); font-weight:600;
+       padding:6px 8px; border-bottom:1px solid var(--line); }
+  td { padding:8px; border-bottom:1px solid var(--line); vertical-align:middle; }
+  tr:last-child td { border-bottom:0; }
+  .sid { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12px; color:var(--dim); }
+  .title { font-weight:600; }
+
+  .badge { display:inline-block; padding:1px 8px; border-radius:999px; font-size:12px;
+           font-weight:600; border:1px solid transparent; }
+  .badge.ready     { color:var(--ok);     border-color:#23803a; }
+  .badge.failed    { color:var(--bad);    border-color:#8b2b28; }
+  .badge.preparing { color:var(--accent); border-color:#2b5f96; }
+
+  button { background:#1b2027; color:var(--fg); border:1px solid #303840;
+           border-radius:6px; padding:6px 12px; font:inherit; cursor:pointer; }
+  button:hover:not(:disabled) { border-color:#454f5a; }
+  button:disabled { opacity:.4; cursor:default; }
+  button.primary { background:#1f6feb; border-color:#1f6feb; color:#fff; width:100%; }
+  a.play { color:var(--accent); text-decoration:none; font-weight:600; }
+  a.play:hover { text-decoration:underline; }
+
+  label { display:block; margin:10px 0 0; font-size:12px; color:var(--dim); }
+  input { width:100%; margin-top:3px; background:#0b0e13; color:var(--fg);
+          border:1px solid #303840; border-radius:6px; padding:6px 8px; font:inherit; }
+  input:focus { outline:0; border-color:var(--accent); }
+  .row { display:flex; gap:8px; }
+  .row > * { flex:1; }
+
+  #bar { height:6px; background:#1b2027; border-radius:3px; overflow:hidden; margin-top:6px; }
+  #fill { height:100%; width:0%; background:var(--accent); transition:width .3s; }
+  #note { margin-top:10px; font-size:12px; min-height:1.4em; }
+  #note.err { color:var(--bad); }
+  #note.ok  { color:var(--ok); }
+  .empty { color:var(--dim); padding:18px 8px; }
+  footer { padding:10px 16px; border-top:1px solid var(--line); color:var(--dim); font-size:12px; }
+  code { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; }
+</style>
+
+<header>
+  <h1>opennotebook</h1>
+  <span class="dim">sessions</span>
+  <span class="grow"></span>
+  <span class="dim" id="count"></span>
+  <button id="refresh">Refresh</button>
+</header>
+
+<main>
+  <section>
+    <h2>Sessions</h2>
+    <table>
+      <thead><tr><th>Title</th><th>State</th><th>Slides</th><th>Voices</th><th></th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <div class="empty" id="empty" hidden>No sessions yet. Prepare one on the right.</div>
+  </section>
+
+  <aside>
+    <h2>Prepare a session</h2>
+    <label>Title
+      <input id="f-title" placeholder="How narration works">
+    </label>
+    <label>Resource directory <span class="dim">on the studio box</span>
+      <input id="f-dir" placeholder="/home/mahmoud/resources/demo">
+    </label>
+    <div class="row">
+      <label>Slides
+        <input id="f-slides" type="number" min="1" max="40" value="5">
+      </label>
+      <label>Voices
+        <input id="f-voices" type="number" min="1" max="2" value="1">
+      </label>
+    </div>
+    <label>Session id <span class="dim">names the collection too</span>
+      <input id="f-sid" placeholder="auto">
+    </label>
+    <label style="margin-top:14px">
+      <button class="primary" id="go">Prepare</button>
+    </label>
+    <div id="bar" hidden><div id="fill"></div></div>
+    <div id="note"></div>
+  </aside>
+</main>
+
+<footer>
+  Prep takes minutes: the slides are written by a model, four at a time, and the narration is synthesised at about 1.2x realtime.
+  Progress below the button is live.
+</footer>
+
+<script>
+// The route is mounted under the router's own prefix (/<node>/opennotebook/api/session),
+// so derive the API base from where this page was actually served rather than
+// hard-coding /api/session. Hard-coding it is what broke the player: every call
+// 404'd behind the routing prefix and only a browser found it.
+const API = location.pathname.replace(/\/console\/?$/, "");
+const $ = (id) => document.getElementById(id);
+
+// One RPC helper. It reads the discriminator, not the payload: a JSON-RPC error
+// is a 200 with an `error` member, so res.ok alone calls every refusal a success.
+async function rpc(method, params) {
+  const res = await fetch(API + "/rpc", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
+  });
+  const body = await res.json().catch(() => null);
+  if (!body) throw new Error("HTTP " + res.status + ", no JSON body");
+  if (body.error) throw new Error(body.error.message || JSON.stringify(body.error));
+  return body.result;
+}
+
+function note(msg, cls) { const n = $("note"); n.textContent = msg; n.className = cls || ""; }
+
+// ── the list ────────────────────────────────────────────────────────────────
+async function load() {
+  let out;
+  try { out = await rpc("session_list", {}); }
+  catch (e) { note("Could not list sessions: " + e.message, "err"); return; }
+  const list = (out && out.sessions) || [];
+  $("count").textContent = list.length + (list.length === 1 ? " session" : " sessions");
+  $("empty").hidden = list.length > 0;
+  const tb = $("rows");
+  tb.textContent = "";
+  for (const s of list) {
+    const tr = document.createElement("tr");
+
+    const t = document.createElement("td");
+    const title = document.createElement("div");
+    title.className = "title"; title.textContent = s.title || "(untitled)";
+    const sid = document.createElement("div");
+    sid.className = "sid"; sid.textContent = s.sid;
+    t.append(title, sid); tr.append(t);
+
+    const st = document.createElement("td");
+    const b = document.createElement("span");
+    b.className = "badge " + s.state; b.textContent = s.state;
+    st.append(b); tr.append(st);
+
+    const sl = document.createElement("td"); sl.textContent = s.slide_count; tr.append(sl);
+    const sp = document.createElement("td"); sp.textContent = s.speakers; tr.append(sp);
+
+    const act = document.createElement("td");
+    // Only a ready session has audio and slides to play. A preparing one would
+    // open a player onto a session with no lines, which reads as a broken page
+    // rather than as one that is not finished yet.
+    if (s.state === "ready") {
+      const a = document.createElement("a");
+      a.className = "play";
+      a.href = API + "/player?session=" + encodeURIComponent(s.sid);
+      a.textContent = "Play";
+      act.append(a);
+    } else if (s.state === "preparing") {
+      const w = document.createElement("span");
+      w.className = "dim"; w.textContent = "preparing";
+      act.append(w);
+    }
+    tr.append(act);
+    tb.append(tr);
+  }
+}
+
+// ── preparing one ───────────────────────────────────────────────────────────
+let watching = null;
+
+function watch(sid) {
+  if (watching) { watching.close(); watching = null; }
+  $("bar").hidden = false;
+  // The same stream the player uses. The prep half of it is polled server-side
+  // because another process writes it; see the phase 1 spec, section 4.
+  const es = new EventSource(API + "/events?session=" + encodeURIComponent(sid));
+  watching = es;
+  es.addEventListener("prep.progress", (e) => {
+    const d = JSON.parse(e.data);
+    const pct = d.steps_total > 0 ? Math.round(100 * d.steps_done / d.steps_total) : 0;
+    $("fill").style.width = pct + "%";
+    note(d.step + "  " + d.steps_done + "/" + d.steps_total, "");
+  });
+  es.addEventListener("session.state", (e) => {
+    const d = JSON.parse(e.data);
+    if (d.state === "ready") {
+      $("fill").style.width = "100%";
+      note("Ready. Hit Play.", "ok");
+      es.close(); watching = null; load();
+    } else if (d.state === "failed") {
+      note("Prep failed. The session's failure field and the server log say why.", "err");
+      es.close(); watching = null; load();
+    }
+  });
+  es.onerror = () => { /* the stream reconnects on its own; nothing to report */ };
+}
+
+$("go").onclick = async () => {
+  const title = $("f-title").value.trim();
+  const dir   = $("f-dir").value.trim();
+  if (!title) { note("A title, please.", "err"); return; }
+  if (!dir)   { note("A resource directory on the studio box, please.", "err"); return; }
+
+  const voices = Math.max(1, Math.min(2, parseInt($("f-voices").value, 10) || 1));
+  // speaker_id is required on every line, so a one-voice session still names its
+  // one speaker. Two voices is config, not a schema change.
+  const all = [
+    { speaker_id: "host",   voice_id: "af_bella", display_name: "Host",   role: "narrator" },
+    { speaker_id: "expert", voice_id: "am_adam",  display_name: "Expert", role: "expert" },
+  ];
+  const req = {
+    sid: $("f-sid").value.trim() || ("s" + Date.now()),
+    title,
+    resource_dir: dir,
+    speakers: all.slice(0, voices),
+    slide_count: Math.max(1, parseInt($("f-slides").value, 10) || 5),
+  };
+
+  $("go").disabled = true;
+  note("Submitting...", "");
+  try {
+    // `accepted` says the job row exists, NOT that the session prepared. The
+    // stream below is what says that.
+    const out = await rpc("session_prepare", { req });
+    note("Job " + out.prep_job_sid + " accepted.", "");
+    $("f-sid").value = out.sid;
+    await load();
+    watch(out.sid);
+  } catch (e) {
+    note(e.message, "err");
+  } finally {
+    $("go").disabled = false;
+  }
+};
+
+$("refresh").onclick = load;
+load();
+// A session prepared from another window, or a job finishing, should show up
+// without a reload. One call a second against a local socket, per the spec.
+setInterval(() => { if (!watching) load(); }, 5000);
+</script>

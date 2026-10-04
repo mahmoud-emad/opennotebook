@@ -1,0 +1,25 @@
+[package]
+name = "opennotebook_session"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "The OpenNotebook narration store: session, speakers, slides and narration lines, persisted in SQLite."
+
+[dependencies]
+# Sessions, collections and jobs: one SQLite file in the data directory.
+rusqlite = { workspace = true }
+# The platform data directory, when OPENNOTEBOOK_HOME is not set.
+dirs = { workspace = true }
+# settings.toml.
+toml = { workspace = true }
+opennotebook_ai = { path = "../opennotebook_ai" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+# A prep's spend ledger is task-local; see src/spend.rs.
+tokio = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }

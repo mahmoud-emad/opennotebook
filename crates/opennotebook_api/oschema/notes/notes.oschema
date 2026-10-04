@@ -1,0 +1,117 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# opennotebook — NOTES domain.
+#
+# Study notes of a collection's sources: a written study guide of the key ideas, with
+# every claim cited to the passage it rests on. Served at /api/notes/rpc, and
+# each method's comment is written for an agent reading
+# the method list. The design is docs/study-notes-spec.md.
+#
+# The sections are NotebookLM's study guide (short-answer quiz, its answer key,
+# essay questions, glossary of key terms) with its briefing doc's overview and
+# key ideas in front. Text fields are Markdown carrying [n] markers; each n is
+# one entry of `citations`.
+# ─────────────────────────────────────────────────────────────────────────────
+
+NoteIdea = {
+  heading: str
+  body:    str  # Markdown with [n] markers
+}
+
+NoteTerm = {
+  term:       str
+  definition: str  # with [n] markers
+}
+
+NoteQuestion = {
+  question: str
+  answer:   str  # with [n] markers; empty when the model wrote no answer for it
+}
+
+NoteCitation = {
+  n:       u32  # the number used in the notes, [1], [2], in reading order
+  name:    str  # the source's file name, as source_list names it
+  title:   str
+  url:     str  # empty for a note or a research report
+  excerpt: str  # the passage the claim rests on
+}
+
+StudyNotes = {
+  id:         str  # a UUID, the notes' own address
+  sid:        str  # the collection (cid) whose sources they were made from
+  title:      str
+  focus:      str  # what the person asked them to centre on; empty when nothing
+  sources:    [str] # the source names they were made from, as source_list names them
+  excerpted:  bool # the sources were too long to send whole and were cut to excerpts
+  model:      str
+  created_ms: u64
+  dropped:    u32  # citations removed: a number naming no passage, or a passage that does not say the claim
+  unchecked:  bool # the citation check did not run: the notes are not in English
+  overview:   str
+  ideas:      [NoteIdea]
+  quiz:       [NoteQuestion]
+  essays:     [str]
+  glossary:   [NoteTerm]  # alphabetical
+  citations:  [NoteCitation]
+  markdown:   str  # the whole notes as one Markdown document, sources listed at the end: the export
+}
+
+StudyNotesSummary = {
+  id:         str
+  sid:        str  # the collection (cid) whose sources they were made from
+  title:      str
+  focus:      str
+  created_ms: u64
+  sources:    [str]
+  ideas:      u32  # how many key ideas
+  questions:  u32  # how many quiz questions
+  terms:      u32  # how many glossary terms
+  headings:   [str] # the key ideas' headings, in order, for a cover
+}
+
+NotesListResult = {
+  notes: [StudyNotesSummary] # newest first
+}
+
+NotesCreateReq = {
+  sid:      str    # a collection's cid, from collection_create
+  focus?:   str    # a topic to centre the notes on, in the person's words
+  sources?: [str]  # source names from source_list; every source when absent
+}
+
+NotesRef = {
+  sid: str
+  id:  str
+}
+
+NotesRetitleReq = {
+  sid:   str
+  id:    str
+  title: str  # the new name, trimmed; empty is refused
+}
+
+# What notes_create would cost, before it runs. One model call over the
+# sources' whole text; a second one only when the first comes back without its
+# sections.
+NotesEstimate = {
+  sources:       u32
+  chars:         u64  # readable text across the sources
+  model:         str
+  input_tokens:  u64  # estimated at four characters a token, prompt and passage numbers included
+  output_tokens: u64  # typical notes
+  cost_usd:      f64  # one call, the usual case
+  cost_high_usd: f64  # two calls, when the first comes back without its sections
+  priced:        bool # false when the price catalog had no price for the model; the costs are then 0
+}
+
+service NotesService {
+  version:     "0.1.0"
+  description: "Study notes of a collection's sources: a written study guide of the key ideas, a quiz with its answers, essay questions and a glossary, every claim cited to its source passage."
+
+  notes_create(req: NotesCreateReq) -> StudyNotes        # Write study notes of a collection's sources. Reads every source whole; takes 10 to 40 seconds.
+  notes_estimate(sid: str)          -> NotesEstimate     # What notes_create would cost for a collection, before running it. Makes no model call.
+  notes_list(sid: str)              -> NotesListResult   # The study notes of a collection, newest first, as summaries. Use notes_get for the text.
+  notes_list_all()                  -> NotesListResult   # Every set of study notes of every collection, newest first, as summaries.
+  notes_get(req: NotesRef)          -> StudyNotes        # One set of study notes in full, citations included.
+  notes_delete(req: NotesRef)       -> bool              # Delete a set of study notes. False when there were no such notes.
+  notes_retitle(req: NotesRetitleReq) -> bool          # Rename a set of study notes. False when there were no such notes.
+}

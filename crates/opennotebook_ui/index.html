@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title></title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="dark light">
+    <!-- The viewer's theme, before the first paint: the app is wasm and paints
+         late, and without this the page flashes the other theme first. The
+         script is opennotebook_sdk::theme::BOOT_SCRIPT, held equal by a test. -->
+    <script>try{if(localStorage.getItem("opennotebook.theme")==="light")document.documentElement.setAttribute("data-bs-theme","light")}catch(e){}</script>
+    <style>
+      html { background: #16181d; }
+      html[data-bs-theme="light"] { background: #fafafb; }
+    </style>
+  </head>
+  <body>
+    <div id="main"></div>
+  </body>
+</html>

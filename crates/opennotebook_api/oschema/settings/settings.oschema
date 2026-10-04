@@ -1,0 +1,78 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# opennotebook — SETTINGS domain.
+#
+# The studio's defaults: voices, speaker count, slide count, slide style, the
+# models it uses, the session language. Stored in settings.toml in the data
+# directory, with environment overrides, and read at the moment they are
+# needed, so a change reaches the next build without a restart.
+# ─────────────────────────────────────────────────────────────────────────────
+
+SettingOption = {
+  value: str
+  label: str
+  hint:  str # a model's price, e.g. "$1 / $5 per M tokens"; empty when unknown or not a model
+}
+
+Setting = {
+  key:      str             # pass to settings_set
+  tab:      str             # the tab label it sits on, one of SettingsGetResult.tabs
+  group:    str             # a heading inside the tab, e.g. "Writing"; empty for none
+  label:    str
+  help:     str
+  kind:     str             # choice, number, toggle or text
+  value:    str             # current value; empty means the default applies
+  default:  str
+  options:  [SettingOption] # the allowed values when kind is choice; the tested models when `model`
+  min?:     i64             # bounds when kind is number
+  max?:     i64
+  unit:     str             # what a number counts, "slides" or "min"; empty for none
+  advanced: bool            # shown in a collapsed Advanced section
+  # A model id setting: kind is text, `options` are the tested models, and any
+  # other id the AI endpoint's model catalogue lists is accepted too.
+  model:    bool
+  price:    str             # the price of the model in effect, as an option's hint; empty when unknown
+}
+
+# One tab of the settings dialog, in display order.
+SettingTab = {
+  id:       str  # stable, for links: defaults, voices, language, conversation, costs, models
+  label:    str  # what Setting.tab holds
+  note:     str  # a line shown above the tab's rows; empty for none
+  advanced: bool # drawn collapsed until opened
+}
+
+SettingsGetResult = {
+  tabs:     [SettingTab]
+  settings: [Setting]
+}
+
+SettingSetResult = {
+  setting: Setting
+  # Said about the save when it went through with a caveat, e.g. a custom
+  # model id that could not be checked because the catalogue was unreachable.
+  note:    str
+}
+
+SettingSetReq = {
+  key:   str # a key from settings_get
+  value: str # the new value; empty resets it to the default
+}
+
+Style = {
+  id:    str # pass as `style` to session_build
+  label: str
+  blurb: str # what it looks like, in a few words
+}
+
+StylesListResult = {
+  styles: [Style]
+}
+
+service SettingsService {
+  version:     "0.1.0"
+  description: "Read and change the studio's defaults, and list the slide styles a session can be built in."
+
+  settings_get()                   -> SettingsGetResult # Every studio setting with its current value, default and allowed values.
+  settings_set(req: SettingSetReq) -> SettingSetResult  # Change one studio setting; an empty value resets it to its default. Refused when the key or value is not allowed, or a model id the AI endpoint does not list.
+  styles_list()                    -> StylesListResult  # The slide styles a session can be built in; pass an id as `style` to session_build.
+}

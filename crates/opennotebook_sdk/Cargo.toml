@@ -1,0 +1,13 @@
+[package]
+name = "opennotebook_sdk"
+description = "Client SDK for opennotebook_server: the generated clients and the shared tables (styles, voices, icons, theme)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+# The generated clients and types; they build for wasm32 and natively, which
+# is what lets the web app depend on the same SDK the native crates use.
+opennotebook_api = { path = "../opennotebook_api" }
+serde = { workspace = true }
+serde_json = { workspace = true }

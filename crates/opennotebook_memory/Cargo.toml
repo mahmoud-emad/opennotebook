@@ -1,0 +1,23 @@
+[package]
+name = "opennotebook_memory"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Retrieval over a collection's sources: chunked full-text and vector search, and extracted Q&A pairs, in SQLite."
+
+[dependencies]
+opennotebook_ai = { path = "../opennotebook_ai" }
+# The shared SQLite handle, and the spend ledger extraction calls are recorded on.
+opennotebook_session = { path = "../opennotebook_session" }
+rusqlite = { workspace = true }
+text-splitter = { version = "0.33", features = ["markdown"] }
+async-trait = { workspace = true }
+futures-util = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+
+[dev-dependencies]
+axum = { workspace = true }

@@ -1,0 +1,14 @@
+[application]
+
+[web.app]
+title = "OpenNotebook"
+# EMPTY ON PURPOSE, and this file is what dx falls back to when no flag is given,
+# so an absent value is a silent override rather than a neutral one. The bundle
+# has no single mount: install.sh passes an empty --base-path and rewrites the
+# asset refs to relative ones, so any value here would be a claim that is wrong
+# everywhere the bundle is not mounted.
+base_path = ""
+
+[web.wasm]
+# wasm-opt SIGABRTs on DWARF debug info.
+skip-wasm-opt = true

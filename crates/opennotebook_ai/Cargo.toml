@@ -1,0 +1,19 @@
+[package]
+name = "opennotebook_ai"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "A small client for OpenAI-compatible chat completions: OpenRouter, OpenAI, Ollama, LM Studio, vLLM."
+
+[dependencies]
+reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "rustls-tls"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+futures-util = { workspace = true }
+tokio = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+axum = { workspace = true }

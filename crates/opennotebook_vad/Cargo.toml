@@ -1,0 +1,44 @@
+# opennotebook_vad — the studio's own voice detection.
+#
+# ONE crate, TWO targets, one set of thresholds. That is the whole point: the
+# decision the browser makes live is the decision the replay harness makes
+# offline, so a threshold can be tuned against recorded clips instead of
+# guessed at in a page nobody can instrument.
+#
+#   native  — a workspace member. `ask.rs` gates an uploaded clip with it, and
+#             `tests/replay.rs` replays a corpus through it.
+#   wasm32  — `cdylib`, raw `extern "C"` exports, NO wasm-bindgen. An
+#             AudioWorkletGlobalScope has no DOM, no `fetch` and no module
+#             loader, so bindgen's JS glue does not belong there. The worklet
+#             gets the bytes handed to it and calls `WebAssembly.instantiate`.
+#
+# Build the wasm with `scripts/build-vad-wasm.sh`, never bare cargo: the shared
+# CARGO_TARGET_DIR would otherwise grow a second artifact tree (see CLAUDE.md).
+[package]
+name        = "opennotebook_vad"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace  = true
+description = "Voice activity detection for opennotebook: when a turn ends, and whether a clip held speech."
+
+# rlib for the server and the tests, cdylib for the worklet. Native builds emit
+# an unused .so alongside the rlib, which costs a link and nothing else.
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+# `wav` is on for native callers and OFF for the worklet build: hound has no
+# business in an audio thread, and `scripts/build-vad-wasm.sh` passes
+# --no-default-features so the wasm stays dependency-free.
+default = ["wav"]
+wav = ["dep:hound"]
+
+[dependencies]
+hound = { version = "3.5", optional = true }
+
+# The detector. Zero runtime dependencies, weights embedded in the crate at
+# 39,940 bytes, so there is no model download and no ONNX runtime. See the
+# module docs in src/lib.rs for what was rejected and why.
+earshot = "1.2"
+

@@ -1,0 +1,21 @@
+[package]
+name = "opennotebook_script"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Turns an ingested collection into a speaker-tagged narration script, grounded in the source."
+
+[dependencies]
+opennotebook_session = { path = "../opennotebook_session" }
+opennotebook_memory = { path = "../opennotebook_memory" }
+opennotebook_ai = { path = "../opennotebook_ai" }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true }
+# The tests seed through the real ingest path rather than writing the store
+# directly, which section 1 forbids for tests as well as for code.
+opennotebook_ingest = { path = "../opennotebook_ingest" }
+opennotebook_memory = { path = "../opennotebook_memory" }
