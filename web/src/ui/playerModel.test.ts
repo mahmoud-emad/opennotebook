@@ -103,6 +103,8 @@ describe("the session", () => {
 
   it("calls a speaker with only a role by their voice", () => {
     expect(voiceName("af_bella")).toBe("Bella");
+    expect(voiceName("en-US-AvaMultilingualNeural")).toBe("Ava");
+    expect(voiceName("en-GB-RyanNeural")).toBe("Ryan");
     expect(voiceName("")).toBe("");
     expect(displayName({ display_name: "Host", voice_id: "af_bella" })).toBe("Bella");
     expect(displayName({ display_name: "Dr Reef", voice_id: "am_adam" })).toBe("Dr Reef");

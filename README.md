@@ -28,7 +28,7 @@ make check   # formatting, lint, types and tests, server and web
 ## What it needs
 
 - **An OpenAI-compatible model endpoint.** OpenRouter by default: set `OPENNOTEBOOK_AI_KEY` (`OPENROUTER_API_KEY` works too). Any `/chat/completions` server works through `OPENNOTEBOOK_AI_BASE_URL`; the default model ids are OpenRouter's, so set the models in Settings for another endpoint.
-- **A speech server for narration and spoken questions**, OpenAI-compatible: [Speaches](https://speaches.ai) by default at `OPENNOTEBOOK_TTS_BASE_URL`. Mind maps, study notes and Ask work without one.
+- **Voices:** Microsoft's neural voices by default, free through Edge's Read Aloud service with no key. For production, set `OPENNOTEBOOK_TTS_PROVIDER=azure` with an Azure Speech key; or `openai` for an OpenAI-compatible server such as [Speaches](https://speaches.ai). Spoken questions are transcribed by that server at `OPENNOTEBOOK_TTS_BASE_URL`.
 
 Every variable is listed with its default in [deploy/.env.example](deploy/.env.example). Everything a person chooses (styles, voices, language, spending limit) is in the app's Settings.
 

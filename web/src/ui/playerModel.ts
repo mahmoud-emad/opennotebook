@@ -100,7 +100,7 @@ export function flatten(s: SessionDoc): Flat[] {
 // ── names ────────────────────────────────────────────────────────────────────
 
 // A role word is not a name, so a speaker who only has one is called by their
-// voice's first name: af_bella is Bella.
+// voice's first name: af_bella is Bella, en-US-AvaMultilingualNeural is Ava.
 const GENERIC = new Set([
   "host",
   "expert",
@@ -114,7 +114,11 @@ const GENERIC = new Set([
   "studio",
 ]);
 
+const MICROSOFT_NAME = /^[a-z]{2,3}-[A-Z]{2}(?:-[a-z]+)?-([A-Z][a-z]+)[A-Za-z]*Neural$/;
+
 export function voiceName(voice: string): string {
+  const m = MICROSOFT_NAME.exec(String(voice || ""));
+  if (m) return m[1]!;
   const n = String(voice || "")
     .split("_")
     .slice(1)

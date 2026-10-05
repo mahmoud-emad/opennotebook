@@ -22,6 +22,7 @@ import logging
 from enum import StrEnum
 
 from opennotebook import speech, storage
+from opennotebook.speech import provider
 
 log = logging.getLogger(__name__)
 
@@ -156,8 +157,9 @@ def cache_path(voice: str, text: str) -> str:
     h = 1469598103934665603
     for b in text.encode():
         h = ((h ^ b) * 1099511628211) & _MASK
-    # The voice id is a Kokoro name like `af_bella`; anything else is dropped
-    # so it is a safe path segment.
+    # A voice id is a Kokoro name like `af_bella` or a Microsoft one like
+    # `en-US-AvaMultilingualNeural`; anything else is dropped so it is a safe
+    # path segment.
     safe = "".join(c for c in voice if (c.isascii() and c.isalnum()) or c == "_")
     return f"banter/{safe}/{h:016x}.wav"
 
@@ -167,6 +169,9 @@ async def spoken(voice: str, text: str) -> bytes | None:
     files volume. None when there is no speech server and no cached copy,
     which the caller turns into "say it on screen and play nothing": a
     courtesy that cannot be spoken is not a reason to refuse the question."""
+    # Cached under the voice that actually reads it, so a line said by the
+    # provider in force is never played for a voice of another.
+    voice = provider.resolve(provider.provider(), voice)
     path = cache_path(voice, text)
     try:
         return storage.read(path)

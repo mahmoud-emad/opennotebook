@@ -208,5 +208,10 @@ def from_env(http: httpx.AsyncClient | None = None) -> Speech:
 
 
 def speech() -> Speech:
-    """The studio's speech client. A function, so tests can replace it."""
-    return from_env()
+    """The studio's speech client: Microsoft's voices or the OpenAI-compatible
+    server, as `OPENNOTEBOOK_TTS_PROVIDER` says (`speech/provider.py`), and
+    the OpenAI-compatible server for speech to text. A function, so tests can
+    replace it."""
+    from opennotebook.speech.provider import chosen
+
+    return chosen(from_env())

@@ -163,6 +163,14 @@ function otherLanguage(cfg: Cfg): string | null {
   return l !== undefined && l !== "English" ? l : null;
 }
 
+/** Whether both voices speak any output language natively: Microsoft's
+ * Multilingual voices do; Kokoro's and the other Microsoft voices keep an
+ * English accent. */
+function nativeVoices(cfg: Cfg): boolean {
+  const voices = [cfg.get(keys.SPEAKER1_VOICE), cfg.get(keys.SPEAKER2_VOICE)];
+  return voices.every((v) => (v ?? "").includes("Multilingual"));
+}
+
 /** How long Research a topic reads the web, by the depth setting. */
 function researchTime(cfg: Cfg): string {
   return cfg.get(keys.RESEARCH_DEPTH) === "quick" ? "about a minute" : "a few minutes";
@@ -1448,7 +1456,9 @@ function Options({
       {language !== null && (
         <p className="lang-chip">
           <Icon name="translate" />
-          {build ? `Writing in ${language} · voices are English. ` : `Writing in ${language}. `}
+          {build && !nativeVoices(cfg)
+            ? `Writing in ${language} · voices are English. `
+            : `Writing in ${language}. `}
           <SettingsLink tab="general" text="Settings › General" />
         </p>
       )}

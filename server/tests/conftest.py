@@ -2,7 +2,8 @@
 migrated from empty at the start of the run and emptied after every test."""
 
 import os
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Mapping
+from typing import Any
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -14,6 +15,9 @@ os.environ["DATABASE_URL"] = os.environ["TEST_DATABASE_URL"]
 os.environ["OPENNOTEBOOK_AUTH"] = "local"
 # No test reaches a real AI endpoint; one that tries fails at once.
 os.environ["OPENNOTEBOOK_AI_BASE_URL"] = "http://ai.invalid/v1"
+# Lines are read aloud by the OpenAI-compatible client, which the tests fake;
+# the Microsoft voices' own tests choose them where they need them.
+os.environ["OPENNOTEBOOK_TTS_PROVIDER"] = "openai"
 
 from alembic import command
 from alembic.config import Config
@@ -56,6 +60,27 @@ async def model_down(monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[None]:
     monkeypatch.setattr(covers, "ai", lambda: down)
     yield
     await http.aclose()
+
+
+@pytest.fixture(autouse=True)
+def no_internet_voices(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Microsoft's voices are services on the internet: a test that reaches
+    for them without a fake of its own fails at once instead of calling out."""
+    import httpx
+
+    from opennotebook.speech import microsoft
+
+    async def offline(text: str, voice: str) -> AsyncIterator[Mapping[str, Any]]:
+        raise OSError("tests do not reach Microsoft's voice service")
+        yield {}
+
+    def down(_: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("tests do not reach Azure Speech")
+
+    monkeypatch.setattr(microsoft, "edge_stream", offline)
+    monkeypatch.setattr(
+        microsoft, "new_http", lambda: httpx.AsyncClient(transport=httpx.MockTransport(down))
+    )
 
 
 @pytest.fixture(autouse=True)

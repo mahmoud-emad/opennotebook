@@ -7,6 +7,7 @@ the title, `reconcile` and `settle`) and the audio overview's spec from
 `build/pipeline.py`; the job that runs it is `jobs/`.
 """
 
+import re
 import uuid
 from dataclasses import dataclass, field
 from typing import Any
@@ -145,9 +146,17 @@ GENERIC = frozenset(
 )
 
 
+# A Microsoft voice's short name, its first name the capitalised word after
+# the locale.
+_MICROSOFT_NAME = re.compile(r"[a-z]{2,3}-[A-Z]{2}(?:-[a-z]+)?-([A-Z][a-z]+)[A-Za-z]*Neural")
+
+
 def voice_name(voice_id: str) -> str:
-    """The first name a Kokoro voice id carries: `af_bella` is Bella. Empty
-    for an id that does not have one."""
+    """The first name a voice id carries: Kokoro's `af_bella` is Bella and
+    Microsoft's `en-US-AvaMultilingualNeural` is Ava. Empty for an id that
+    does not have one."""
+    if m := _MICROSOFT_NAME.fullmatch(voice_id):
+        return m.group(1)
     _, sep, name = voice_id.partition("_")
     if not sep or not name:
         return ""

@@ -27,6 +27,8 @@ Secrets are not settings: the AI key comes from the environment only
 (`config.Settings.ai_key`), never from these tables.
 """
 
+import dataclasses
+import functools
 import os
 import re
 import uuid
@@ -42,6 +44,7 @@ from opennotebook.config import settings as config
 from opennotebook.db.models import InstanceSetting, User, UserSetting
 from opennotebook.domain.styles import STYLES
 from opennotebook.errors import Problem
+from opennotebook.speech import provider as speech_provider
 
 Scope = Literal["instance", "user"]
 
@@ -154,21 +157,12 @@ def clamp_slides(n: int) -> int:
     return max(SLIDES_MIN, min(SLIDES_MAX, n))
 
 
-# The voices offered, by their Kokoro names, which Speaches and Kokoro-FastAPI
-# both accept. A speech server that does not know an id may quietly fall back
-# to a default voice, which is why only these are offered.
-VOICES: Pairs = (
-    ("af_bella", "Bella (US, female)"),
-    ("af_nicole", "Nicole (US, female)"),
-    ("af_sarah", "Sarah (US, female)"),
-    ("af_sky", "Sky (US, female)"),
-    ("am_adam", "Adam (US, male)"),
-    ("am_michael", "Michael (US, male)"),
-    ("bf_emma", "Emma (UK, female)"),
-    ("bf_isabella", "Isabella (UK, female)"),
-    ("bm_george", "George (UK, male)"),
-    ("bm_lewis", "Lewis (UK, male)"),
-)
+# The voices offered depend on who reads aloud (`OPENNOTEBOOK_TTS_PROVIDER`,
+# `speech/provider.py`): Microsoft's neural voices by default, Kokoro's on an
+# OpenAI-compatible server. The catalogue below is written for the default;
+# `for_provider` gives the voice and language rows for the provider in force.
+VOICES: Pairs = speech_provider.voices(speech_provider.DEFAULT)
+KOKORO_VOICES: Pairs = speech_provider.KOKORO_VOICES
 
 # The languages narration and answers can be written in, with the BCP 47 tag
 # the browser's speech recogniser wants for the same language.
@@ -374,7 +368,8 @@ CATALOGUE: tuple[Def, ...] = (
         LANGUAGE_KEY,
         TAB_GENERAL,
         "Output language",
-        "Scripts, notes, maps, answers and chat are written in this. Voices stay English-accented.",
+        "Scripts, notes, maps, answers and chat are written in this. Multilingual voices speak "
+        "it natively; the others keep their own accent.",
         choice(*LANGUAGE_CHOICES),
         "English",
     ),
@@ -420,9 +415,9 @@ CATALOGUE: tuple[Def, ...] = (
         SPEAKER1_VOICE_KEY,
         TAB_VOICES,
         "Host voice",
-        "Local English voice.",
+        "Microsoft neural voice. Multilingual voices speak the output language natively.",
         choice(*VOICES),
-        "af_bella",
+        speech_provider.default_voice(speech_provider.DEFAULT, 1),
         group=HOST,
     ),
     Def(
@@ -447,9 +442,9 @@ CATALOGUE: tuple[Def, ...] = (
         SPEAKER2_VOICE_KEY,
         TAB_VOICES,
         "Second voice",
-        "Local English voice.",
+        "Microsoft neural voice. Multilingual voices speak the output language natively.",
         choice(*VOICES),
-        "am_adam",
+        speech_provider.default_voice(speech_provider.DEFAULT, 2),
         group=SECOND,
     ),
     Def(
@@ -594,10 +589,53 @@ CATALOGUE: tuple[Def, ...] = (
 
 _BY_KEY = {d.key: d for d in CATALOGUE}
 
+# The voice settings, by speaker: the host is 1, the second voice 2.
+VOICE_KEYS: dict[str, Literal[1, 2]] = {SPEAKER1_VOICE_KEY: 1, SPEAKER2_VOICE_KEY: 2}
+
+
+@functools.cache
+def _for(p: speech_provider.Provider) -> dict[str, Def]:
+    """The catalogue as it reads under the speech provider `p`."""
+    out = dict(_BY_KEY)
+    if speech_provider.is_microsoft(p):
+        return out
+    # An OpenAI-compatible server, with Kokoro's English voices.
+    for key, speaker in VOICE_KEYS.items():
+        out[key] = dataclasses.replace(
+            out[key],
+            help="Local English voice.",
+            kind=choice(*speech_provider.voices(p)),
+            default=speech_provider.default_voice(p, speaker),
+        )
+    out[LANGUAGE_KEY] = dataclasses.replace(
+        out[LANGUAGE_KEY],
+        help="Scripts, notes, maps, answers and chat are written in this. Voices stay "
+        "English-accented.",
+    )
+    return out
+
+
+def for_provider(d: Def) -> Def:
+    """`d` as it reads under the speech provider in force: the voices it
+    offers and their default, and what the language row says about them."""
+    return _for(speech_provider.provider()).get(d.key, d)
+
+
+def fit(key: str, v: str) -> str:
+    """A voice the provider in force cannot read in is read as its default
+    for that speaker: a voice kept from another provider never fails a
+    build. Any other value is returned as it is."""
+    speaker = VOICE_KEYS.get(key)
+    if speaker is None or not v:
+        return v
+    return speech_provider.resolve(speech_provider.provider(), v, speaker)
+
 
 def find(key: str) -> Def | None:
-    """The catalogue entry for a key."""
-    return _BY_KEY.get(key)
+    """The catalogue entry for a key, as it reads under the speech provider in
+    force."""
+    d = _BY_KEY.get(key)
+    return None if d is None else for_provider(d)
 
 
 def need(key: str) -> Def:
@@ -710,11 +748,11 @@ def effective(
     fails: an unknown key with nothing stored is empty."""
     d = find(key)
     if v := from_env(key, env):
-        return v
+        return fit(key, v)
     if (d is None or d.scope == "user") and (v := user.get(key, "").strip()):
-        return v
+        return fit(key, v)
     if v := instance.get(key, "").strip():
-        return v
+        return fit(key, v)
     return d.default if d else ""
 
 
@@ -739,17 +777,17 @@ async def values(s: AsyncSession, owner: uuid.UUID) -> dict[str, str]:
 async def value(s: AsyncSession, owner: uuid.UUID, key: str) -> str:
     """One setting's value in force for a person."""
     if v := from_env(key):
-        return v
+        return fit(key, v)
     d = find(key)
     if d is None or d.scope == "user":
         mine = await s.scalar(
             select(UserSetting.value).where(UserSetting.owner_id == owner, UserSetting.key == key)
         )
         if mine and mine.strip():
-            return mine.strip()
+            return fit(key, mine.strip())
     shared = await s.scalar(select(InstanceSetting.value).where(InstanceSetting.key == key))
     if shared and shared.strip():
-        return shared.strip()
+        return fit(key, shared.strip())
     return d.default if d else ""
 
 
@@ -772,12 +810,22 @@ class Current:
         return self.value or self.default
 
 
+def offered(key: str, v: str) -> str:
+    """`v`, or empty for a voice the provider in force cannot read in: it is
+    not offered, so the page shows the default that is read in instead."""
+    if key in VOICE_KEYS and v and not speech_provider.belongs(speech_provider.provider(), v):
+        return ""
+    return v
+
+
 def current(d: Def, user: Mapping[str, str], instance: Mapping[str, str]) -> Current:
-    env = from_env(d.key)
-    shared = instance.get(d.key, "").strip()
+    d = for_provider(d)
+    env = offered(d.key, from_env(d.key))
+    shared = offered(d.key, instance.get(d.key, "").strip())
     if d.scope == "instance":
         return Current(d, env or shared, d.default)
-    return Current(d, env or user.get(d.key, "").strip(), shared or d.default)
+    own = offered(d.key, user.get(d.key, "").strip())
+    return Current(d, env or own, shared or d.default)
 
 
 async def describe(s: AsyncSession, owner: uuid.UUID) -> list[Current]:
