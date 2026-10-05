@@ -50,7 +50,6 @@ import {
   madeCreated,
   madeKey,
   retitle,
-  subject,
   type Made,
   type Target,
 } from "./outputs";
@@ -235,6 +234,9 @@ function pageState(props: CollectionPageProps) {
     // The build call is in flight (seconds); the build itself is not waited on.
     generating: store(false),
     genErr: store(""),
+    // Why the last action on one row failed, by row: `session:<id>`,
+    // `map:<id>`, `notes:<id>`, `src:<file>`. Said under that row.
+    rowErr: store<Record<string, string>>({}),
     // A build's estimated cost, fetched whenever what would be built changes.
     est: store<Estimate | null>(null),
     estErr: store(""),
@@ -392,6 +394,15 @@ function pageActions(cid: string, S: PageState, chat: ChatState) {
     await load();
   };
 
+  // One row's failure, set or cleared (an empty sentence clears it).
+  const setRowErr = (key: string, text: string) =>
+    S.rowErr.set((m) => {
+      const next = { ...m };
+      if (text === "") delete next[key];
+      else next[key] = text;
+      return next;
+    });
+
   const removeSource = (s: Src) => {
     if (s.file === "") {
       const key = JSON.stringify(s);
@@ -401,8 +412,9 @@ function pageActions(cid: string, S: PageState, chat: ChatState) {
     void (async () => {
       try {
         await sourceRemove(cid, s.file);
+        setRowErr(`src:${s.file}`, "");
       } catch (e) {
-        report(`“${s.name}” could not be removed. ${errText(e)}`);
+        setRowErr(`src:${s.file}`, `It could not be removed. ${errText(e)}`);
       }
       await loadSources();
       await load();
@@ -447,8 +459,9 @@ function pageActions(cid: string, S: PageState, chat: ChatState) {
     void (async () => {
       try {
         await retitle(cid, t, next);
+        setRowErr(`${t.kind}:${t.id}`, "");
       } catch (e) {
-        report(`${subject(t)} could not be renamed. ${errText(e)}`);
+        setRowErr(`${t.kind}:${t.id}`, `It could not be renamed. ${errText(e)}`);
         return;
       }
       if (t.kind === "session") S.outputs.set((v) => v.map((s) => (s.sid === t.id ? { ...s, title: next } : s)));
@@ -465,8 +478,9 @@ function pageActions(cid: string, S: PageState, chat: ChatState) {
     void (async () => {
       try {
         await deleteOutput(cid, t);
+        setRowErr(`${t.kind}:${t.id}`, "");
       } catch (e) {
-        report(`${subject(t)} could not be deleted. ${errText(e)}`);
+        setRowErr(`${t.kind}:${t.id}`, `It could not be deleted. ${errText(e)}`);
       }
       if (t.kind === "map") await loadMaps(cid, S.mm);
       else if (t.kind === "notes") await loadNotes(cid, S.nt);
@@ -669,6 +683,7 @@ function pageActions(cid: string, S: PageState, chat: ChatState) {
     addSource,
     research,
     removeSource,
+    setRowErr,
     uploadFiles,
     rename,
     remove,
@@ -797,6 +812,7 @@ export function CollectionPage(props: CollectionPageProps) {
   const audioFocus = useStore(S.audioFocus);
   const generating = useStore(S.generating);
   const genErr = useStore(S.genErr);
+  const rowErr = useStore(S.rowErr);
   const est = useStore(S.est);
   const estErr = useStore(S.estErr);
   const estLoading = useStore(S.estLoading);
@@ -1032,7 +1048,13 @@ export function CollectionPage(props: CollectionPageProps) {
               </div>
             ) : (
               srcs.map((s, n) => (
-                <SrcRow key={`${n}-${s.file}-${s.icon}`} s={s} onRemove={ro ? undefined : A.removeSource} />
+                <SrcRow
+                  key={`${n}-${s.file}-${s.icon}`}
+                  s={s}
+                  onRemove={ro ? undefined : A.removeSource}
+                  err={rowErr[`src:${s.file}`] ?? ""}
+                  onDismissErr={() => A.setRowErr(`src:${s.file}`, "")}
+                />
               ))
             )}
           </div>
@@ -1264,6 +1286,8 @@ export function CollectionPage(props: CollectionPageProps) {
                         onChanged={() => void A.load()}
                         onRename={ro ? undefined : (t) => A.rename({ kind: "session", id: s.sid }, t)}
                         onDelete={ro ? undefined : () => A.remove({ kind: "session", id: s.sid })}
+                        err={rowErr[`session:${s.sid}`] ?? ""}
+                        onDismissErr={() => A.setRowErr(`session:${s.sid}`, "")}
                       />
                     );
                   }
@@ -1281,6 +1305,8 @@ export function CollectionPage(props: CollectionPageProps) {
                         onOpen={() => onOpen({ kind: "map", id: x.id })}
                         onRename={ro ? undefined : (t) => A.rename({ kind: "map", id: x.id }, t)}
                         onDelete={ro ? undefined : () => A.remove({ kind: "map", id: x.id })}
+                        err={rowErr[`map:${x.id}`] ?? ""}
+                        onDismissErr={() => A.setRowErr(`map:${x.id}`, "")}
                       />
                     );
                   }
@@ -1297,6 +1323,8 @@ export function CollectionPage(props: CollectionPageProps) {
                       onOpen={() => onOpen({ kind: "notes", id: x.id })}
                       onRename={ro ? undefined : (t) => A.rename({ kind: "notes", id: x.id }, t)}
                       onDelete={ro ? undefined : () => A.remove({ kind: "notes", id: x.id })}
+                      err={rowErr[`notes:${x.id}`] ?? ""}
+                      onDismissErr={() => A.setRowErr(`notes:${x.id}`, "")}
                     />
                   );
                 })}

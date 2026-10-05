@@ -66,6 +66,10 @@ export function App() {
   // address belongs to the collection it made; anywhere else, it is forgotten.
   const setView = useCallback((v: View) => {
     setPreselect((p) => (p && (v.kind !== "collection" || v.cid !== p[0]) ? null : p));
+    // An error is about the screen it happened on; another screen starts
+    // clear. A success notice keeps its own few seconds, since it is often
+    // said on the way to the screen it describes.
+    if (!sameView(v, viewRef.current)) FLASH.set("");
     setViewRaw(v);
   }, []);
 
@@ -381,6 +385,8 @@ export function App() {
           <Icon name="gear" className="lg" />
         </button>
       </header>
+      {(notice || flash) && (
+        <div className="flash-stack">
       {notice && (
         <div className="flash ok" role="status">
           <Icon name="check-circle-fill" />
@@ -397,6 +403,8 @@ export function App() {
           <button className="icon-btn" title="Dismiss" aria-label="Dismiss" onClick={() => FLASH.set("")}>
             <Icon name="x-lg" />
           </button>
+        </div>
+      )}
         </div>
       )}
       {snackS && (

@@ -279,6 +279,19 @@ export function removedLine(what: string): string {
  * Read only, with no rename or delete, it is a shared output on a shared
  * collection's page; with `href` it is a link (a shared deck or audio
  * overview, to the player) rather than a button. */
+/** What went wrong with one row's action (a retry, a rename, a delete), said
+ * right under that row rather than in a banner away from it. */
+export function RowErr({ text, onDismiss }: { text: string; onDismiss: () => void }) {
+  return (
+    <div className="opt-err row-err" role="alert">
+      <span className="grow">{text}</span>
+      <button className="icon-btn" title="Dismiss" aria-label="Dismiss" onClick={onDismiss}>
+        <Icon name="x-lg" />
+      </button>
+    </div>
+  );
+}
+
 export function ItemRow({
   icon,
   what,
@@ -290,6 +303,8 @@ export function ItemRow({
   onOpen,
   onRename,
   onDelete,
+  err = "",
+  onDismissErr,
 }: {
   icon: string;
   /** What it is, for the delete question: "mind map", "study notes". */
@@ -305,6 +320,9 @@ export function ItemRow({
   /** The new name, once the person has given one that differs. */
   onRename?: (next: string) => void;
   onDelete?: () => void;
+  /** Why the last rename or delete of it failed; empty when nothing did. */
+  err?: string;
+  onDismissErr?: () => void;
 }) {
   const shown = title.trim() === "" ? `Untitled ${what}` : title;
   const w = when(whenMs);
@@ -323,33 +341,36 @@ export function ItemRow({
     </>
   );
   return (
-    <div className={on ? "out-row on" : "out-row"}>
-      {href !== undefined ? (
-        <a className="out-open" href={href} title="Play">
-          {body}
-          <span className="out-play">
-            <Icon name="play-fill" />
-          </span>
-        </a>
-      ) : (
-        <button
-          className="out-open"
-          aria-pressed={onOpen ? on : undefined}
-          onClick={() => onOpen?.()}
-        >
-          {body}
-        </button>
-      )}
-      {onRename && onDelete && (
-        <OutputMenu
-          title={title}
-          shown={shown}
-          consequence={removedLine(what)}
-          onRename={onRename}
-          onDelete={onDelete}
-        />
-      )}
-    </div>
+    <>
+      <div className={on ? "out-row on" : "out-row"}>
+        {href !== undefined ? (
+          <a className="out-open" href={href} title="Play">
+            {body}
+            <span className="out-play">
+              <Icon name="play-fill" />
+            </span>
+          </a>
+        ) : (
+          <button
+            className="out-open"
+            aria-pressed={onOpen ? on : undefined}
+            onClick={() => onOpen?.()}
+          >
+            {body}
+          </button>
+        )}
+        {onRename && onDelete && (
+          <OutputMenu
+            title={title}
+            shown={shown}
+            consequence={removedLine(what)}
+            onRename={onRename}
+            onDelete={onDelete}
+          />
+        )}
+      </div>
+      {err !== "" && <RowErr text={err} onDismiss={() => onDismissErr?.()} />}
+    </>
   );
 }
 
@@ -362,6 +383,8 @@ export function SessionRow({
   onChanged,
   onRename,
   onDelete,
+  err = "",
+  onDismissErr,
 }: {
   s: SessionSummary;
   /** Whether this row follows its prep's event stream; see `LIVE_MAX`. */
@@ -370,12 +393,17 @@ export function SessionRow({
   /** Without these the row has no menu: an output of a read-only copy. */
   onRename?: (next: string) => void;
   onDelete?: () => void;
+  /** Why the last rename or delete of it failed; empty when nothing did. */
+  err?: string;
+  onDismissErr?: () => void;
 }) {
   const audio = s.kind === "audio";
   const icon = audio ? "soundwave" : "easel";
   const shown = s.title.trim() === "" ? collTitle("") : s.title;
   const state = s.state;
   const [retrying, setRetrying] = useState(false);
+  // Why the last Retry could not start, said under the row it is about.
+  const [retryErr, setRetryErr] = useState("");
   // A failed prep's reason, from the output itself.
   const why = state === "failed" ? prepFailureText(s.failure) : null;
   const w = when(s.created_ms);
@@ -383,10 +411,11 @@ export function SessionRow({
   const retry = () => {
     if (retrying) return;
     setRetrying(true);
+    setRetryErr("");
     retryPrep(s.sid, s.title)
       .then(
         (note) => note && report(note),
-        (e) => report(`It could not be started again. ${errText(e)}`),
+        (e) => setRetryErr(`It could not be started again. ${errText(e)}`),
       )
       .finally(() => {
         setRetrying(false);
@@ -472,6 +501,8 @@ export function SessionRow({
           />
         )}
       </div>
+      {retryErr !== "" && <RowErr text={retryErr} onDismiss={() => setRetryErr("")} />}
+      {err !== "" && <RowErr text={err} onDismiss={() => onDismissErr?.()} />}
       {why && why[1] !== "" && (
         <details className="whydetail out-why">
           <summary>Technical details</summary>

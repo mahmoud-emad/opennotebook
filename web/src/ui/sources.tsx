@@ -6,6 +6,7 @@ import { useState } from "react";
 import { sourceList } from "./api";
 import { readable } from "./errors";
 import { Icon } from "./Icon";
+import { RowErr } from "./outputs";
 
 /** One source on the sources panel. */
 export type Src = {
@@ -102,7 +103,18 @@ export function srcFrom(g: Record<string, unknown>): Src {
  *
  * The remove button takes it out of the collection, or clears a row that
  * failed and never reached the server. */
-export function SrcRow({ s, onRemove }: { s: Src; onRemove?: (s: Src) => void }) {
+export function SrcRow({
+  s,
+  onRemove,
+  err = "",
+  onDismissErr,
+}: {
+  s: Src;
+  onRemove?: (s: Src) => void;
+  /** Why the last removal failed, said under the row; empty when none did. */
+  err?: string;
+  onDismissErr?: () => void;
+}) {
   const reading = s.detail === FETCHING;
   // Without `onRemove` the row is read only: a shared source, or one in a
   // read-only copy.
@@ -111,20 +123,23 @@ export function SrcRow({ s, onRemove }: { s: Src; onRemove?: (s: Src) => void })
   // error row; one that did is removed from the collection.
   const verb = s.file === "" ? "Dismiss" : "Remove";
   return (
-    <div className={s.ok ? "src" : "src bad"}>
-      <SrcIcon s={s} />
-      <div className="src-t">
-        <div className="src-n" title={s.name}>
-          {s.name}
+    <>
+      <div className={s.ok ? "src" : "src bad"}>
+        <SrcIcon s={s} />
+        <div className="src-t">
+          <div className="src-n" title={s.name}>
+            {s.name}
+          </div>
+          <div className="src-d">{s.detail}</div>
         </div>
-        <div className="src-d">{s.detail}</div>
+        {removable && (
+          <button className="icon-btn src-x" title={verb} aria-label={`${verb} ${s.name}`} onClick={() => onRemove?.(s)}>
+            <Icon name="x-lg" />
+          </button>
+        )}
       </div>
-      {removable && (
-        <button className="icon-btn src-x" title={verb} aria-label={`${verb} ${s.name}`} onClick={() => onRemove?.(s)}>
-          <Icon name="x-lg" />
-        </button>
-      )}
-    </div>
+      {err !== "" && <RowErr text={err} onDismiss={() => onDismissErr?.()} />}
+    </>
   );
 }
 
