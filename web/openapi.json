@@ -1,0 +1,6239 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "OpenNotebook",
+    "description": "Collections of sources, and the decks, audio overviews, mind maps and notes made from them. Everything the web app does goes through this API.",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/api/health": {
+      "get": {
+        "tags": [
+          "account"
+        ],
+        "summary": "Health",
+        "description": "Up, and the database answers.",
+        "operationId": "health",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/me": {
+      "get": {
+        "tags": [
+          "account"
+        ],
+        "summary": "Me",
+        "operationId": "me",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeOut"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/keys": {
+      "get": {
+        "tags": [
+          "account"
+        ],
+        "summary": "List Keys",
+        "description": "Your API keys that still work, newest first.",
+        "operationId": "list_keys",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/KeyOut"
+                  },
+                  "type": "array",
+                  "title": "Response List Keys"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "account"
+        ],
+        "summary": "Make Key",
+        "description": "Make an API key for an agent or a script to act as you.",
+        "operationId": "make_key",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewKey"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MadeKey"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/keys/{kid}": {
+      "delete": {
+        "tags": [
+          "account"
+        ],
+        "summary": "Revoke Key",
+        "description": "Revoke a key. Anything using it stops working at once.",
+        "operationId": "revoke_key",
+        "parameters": [
+          {
+            "name": "kid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Kid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/collections": {
+      "get": {
+        "tags": [
+          "collections"
+        ],
+        "summary": "List Collections",
+        "description": "Every collection, most recently updated first, with counts of what it holds.",
+        "operationId": "list_collections",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/CollectionSummary"
+                  },
+                  "type": "array",
+                  "title": "Response List Collections"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "collections"
+        ],
+        "summary": "Create Collection",
+        "description": "Start a collection: an empty set of sources to add to and build outputs from.",
+        "operationId": "create_collection",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CollectionCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionSummary"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/collections/{cid}": {
+      "get": {
+        "tags": [
+          "collections"
+        ],
+        "summary": "Get Collection",
+        "description": "One collection, with its decks and audio overviews.",
+        "operationId": "get_collection",
+        "parameters": [
+          {
+            "name": "cid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Cid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "collections"
+        ],
+        "summary": "Update Collection",
+        "description": "Rename or pin a collection. A read-only copy can be pinned, not renamed.",
+        "operationId": "update_collection",
+        "parameters": [
+          {
+            "name": "cid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Cid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CollectionPatch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionSummary"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "collections"
+        ],
+        "summary": "Delete Collection",
+        "description": "Delete a collection with its sources and everything made from them.",
+        "operationId": "delete_collection",
+        "parameters": [
+          {
+            "name": "cid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Cid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/collections/{cid}/cover": {
+      "post": {
+        "tags": [
+          "collections"
+        ],
+        "summary": "Refresh Cover",
+        "description": "Design the collection's cover again, from what it holds now, and answer\nonce it is drawn. With covers off in Settings no model is asked and the\ncover stays the one drawn from the title. If the model fails, the cover\nthe collection had is kept and the answer says why.",
+        "operationId": "refresh_cover",
+        "parameters": [
+          {
+            "name": "cid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Cid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionSummary"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "collections"
+        ],
+        "summary": "Read Cover",
+        "description": "The collection's cover: a self-contained HTML page (an SVG, no script,\nnothing fetched) for a sandboxed iframe. Cached for good when `v` is the\nversion drawn now, so a new version is a new URL.",
+        "operationId": "read_cover",
+        "parameters": [
+          {
+            "name": "cid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Cid"
+            }
+          },
+          {
+            "name": "v",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "The `cover_version` the page was listed with",
+              "default": "",
+              "title": "V"
+            },
+            "description": "The `cover_version` the page was listed with"
+          },
+          {
+            "name": "theme",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "`light`, else the dark default",
+              "default": "dark",
+              "title": "Theme"
+            },
+            "description": "`light`, else the dark default"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/collections/{cid}/sources": {
+      "get": {
+        "tags": [
+          "sources"
+        ],
+        "summary": "List Sources",
+        "description": "The sources in a collection, in the order they were added.",
+        "operationId": "list_sources",
+        "parameters": [
+          {
+            "name": "cid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Cid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SourceOut"
+                  },
+                  "title": "Response List Sources"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "sources"
+        ],
+        "summary": "Add Sources",
+        "description": "Add a note, or read web pages, into a collection. One result per thing\nasked for, failures included, each saying why.",
+        "operationId": "add_sources",
+        "parameters": [
+          {
+            "name": "cid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Cid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/AddNote"
+                  },
+                  {
+                    "$ref": "#/components/schemas/AddUrls"
+                  }
+                ],
+                "discriminator": {
+                  "propertyName": "kind",
+                  "mapping": {
+                    "text": "#/components/schemas/AddNote",
+                    "urls": "#/components/schemas/AddUrls"
+                  }
+                },
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AddResult"
+                  },
+                  "title": "Response Add Sources"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/collections/{cid}/sources/files": {
+      "post": {
+        "tags": [
+          "sources"
+        ],
+        "summary": "Add Files",
+        "description": "Add documents to a collection. Each is read into text verbatim and\ntitled by its file name; a result says why when one could not be read.",
+        "operationId": "add_files",
+        "parameters": [
+          {
+            "name": "cid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Cid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_add_files"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AddResult"
+                  },
+                  "title": "Response Add Files"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/collections/{cid}/sources/{name}": {
+      "get": {
+        "tags": [
+          "sources"
+        ],
+        "summary": "Read Source",
+        "description": "One source with its text, for reading it beside a citation.",
+        "operationId": "read_source",
+        "parameters": [
+          {
+            "name": "cid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Cid"
+            }
+          },
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SourceText"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "sources"
+        ],
+        "summary": "Remove Source",
+        "description": "Remove one source from a collection.",
+        "operationId": "remove_source",
+        "parameters": [
+          {
+            "name": "cid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Cid"
+            }
+          },
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/search": {
+      "post": {
+        "tags": [
+          "sources"
+        ],
+        "summary": "Web Search",
+        "description": "Search the web. Nothing is added: pass the best links to add_sources.",
+        "operationId": "web_search",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SearchReq"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/WebHit"
+                  },
+                  "type": "array",
+                  "title": "Response Web Search"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/collections/{cid}/research": {
+      "post": {
+        "tags": [
+          "sources"
+        ],
+        "summary": "Deep Research",
+        "description": "Research a topic in depth and add the written report as one source.\nRuns in the background, minutes; follow it on /api/jobs/{job_id}.",
+        "operationId": "deep_research",
+        "parameters": [
+          {
+            "name": "cid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Cid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResearchReq"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/collections/{cid}/ask": {
+      "post": {
+        "tags": [
+          "ask"
+        ],
+        "summary": "Ask Sources",
+        "description": "Answer a question from the collection's sources (or only the named\nones), with citations. Takes a few seconds.",
+        "operationId": "ask_sources",
+        "parameters": [
+          {
+            "name": "cid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Cid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AskReq"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AskOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/collections/{cid}/outputs": {
+      "post": {
+        "tags": [
+          "outputs"
+        ],
+        "summary": "Build",
+        "description": "Build a narrated slide deck or an audio overview from a collection's\nsources, with the person's settings for what the request leaves out.\nTakes minutes; follow it on /api/sessions/{sid}/events. Refused when its\nhigh estimate is over the spending limit.",
+        "operationId": "build",
+        "parameters": [
+          {
+            "name": "cid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Cid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BuildReq"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionSummary"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/collections/{cid}/outputs/estimate": {
+      "post": {
+        "tags": [
+          "outputs"
+        ],
+        "summary": "Estimate",
+        "description": "What a build with the same arguments would cost, step by step, before\nrunning it. The same plan as the build, so the estimate describes exactly\nthe build the button next to it starts. Makes no model call.",
+        "operationId": "estimate",
+        "parameters": [
+          {
+            "name": "cid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Cid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BuildReq"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionEstimate"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/sessions": {
+      "get": {
+        "tags": [
+          "outputs"
+        ],
+        "summary": "List Sessions",
+        "description": "Every deck and audio overview, newest first.",
+        "operationId": "list_sessions",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SessionSummary"
+                  },
+                  "type": "array",
+                  "title": "Response List Sessions"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/sessions/{sid}": {
+      "get": {
+        "tags": [
+          "outputs"
+        ],
+        "summary": "Get Session",
+        "description": "One output in full: its state, parts and every narration line.",
+        "operationId": "get_session",
+        "parameters": [
+          {
+            "name": "sid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Sid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "outputs"
+        ],
+        "summary": "Update Session",
+        "description": "Rename or pin an output. One in a read-only copy can be pinned, not\nrenamed.",
+        "operationId": "update_session",
+        "parameters": [
+          {
+            "name": "sid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Sid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SessionPatch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionSummary"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "outputs"
+        ],
+        "summary": "Delete Session",
+        "description": "Delete an output. A build still running is stopped first; its files go\nonce the row is gone for good.",
+        "operationId": "delete_session",
+        "parameters": [
+          {
+            "name": "sid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Sid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/sessions/{sid}/playback": {
+      "get": {
+        "tags": [
+          "outputs"
+        ],
+        "summary": "Get Playback",
+        "description": "Where the output's playback is.",
+        "operationId": "get_playback",
+        "parameters": [
+          {
+            "name": "sid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Sid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Playhead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "outputs"
+        ],
+        "summary": "Set Playback",
+        "description": "Record where playback is: started, paused, moving, or finished.",
+        "operationId": "set_playback",
+        "parameters": [
+          {
+            "name": "sid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Sid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Playhead"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Playhead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/sessions/{sid}/events": {
+      "get": {
+        "tags": [
+          "outputs"
+        ],
+        "summary": "Session Events",
+        "description": "Server-sent events while an output is made and played:\n`session.state`, `prep.progress` (step, steps_done, steps_total), and\nthe playback events `slide.enter`, `line.start`, `line.end`, `playhead`.\nThe current state comes first, so a client that connects late misses\nnothing.",
+        "operationId": "session_events",
+        "parameters": [
+          {
+            "name": "sid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Sid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Server-sent events",
+            "content": {
+              "text/event-stream": {}
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/jobs/{job_id}": {
+      "get": {
+        "tags": [
+          "outputs"
+        ],
+        "summary": "Get Job",
+        "description": "A piece of background work, such as deep research, and how far it\ngot.",
+        "operationId": "get_job",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/sessions/{sid}/voice": {
+      "post": {
+        "tags": [
+          "outputs"
+        ],
+        "summary": "Voice Ask",
+        "description": "Ask a question aloud while listening; the answer streams back as audio.",
+        "operationId": "voice_ask",
+        "parameters": [
+          {
+            "name": "sid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Sid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/sessions/{sid}/audio/{line_id}": {
+      "get": {
+        "tags": [
+          "media"
+        ],
+        "summary": "Line Audio",
+        "description": "One narration line's audio, as the player plays it.",
+        "operationId": "line_audio",
+        "parameters": [
+          {
+            "name": "sid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Sid"
+            }
+          },
+          {
+            "name": "line_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Line Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A WAV file",
+            "content": {
+              "audio/wav": {}
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/shares/{share_id}/sessions/{sid}/audio/{line_id}": {
+      "get": {
+        "tags": [
+          "media"
+        ],
+        "summary": "Shared Line Audio",
+        "description": "One narration line's audio, of a deck or audio overview a share\nincludes.",
+        "operationId": "shared_line_audio",
+        "parameters": [
+          {
+            "name": "share_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Share Id"
+            }
+          },
+          {
+            "name": "sid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Sid"
+            }
+          },
+          {
+            "name": "line_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Line Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A WAV file",
+            "content": {
+              "audio/wav": {}
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/sessions/{sid}/episode": {
+      "get": {
+        "tags": [
+          "media"
+        ],
+        "summary": "Episode",
+        "description": "Every line, in order, as one WAV with natural pauses between them: an\naudio overview to download.",
+        "operationId": "episode",
+        "parameters": [
+          {
+            "name": "sid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Sid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A WAV file",
+            "content": {
+              "audio/wav": {}
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/shares/{share_id}/sessions/{sid}/episode": {
+      "get": {
+        "tags": [
+          "media"
+        ],
+        "summary": "Shared Episode",
+        "description": "The whole episode of an audio overview a share includes.",
+        "operationId": "shared_episode",
+        "parameters": [
+          {
+            "name": "share_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Share Id"
+            }
+          },
+          {
+            "name": "sid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Sid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A WAV file",
+            "content": {
+              "audio/wav": {}
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/sessions/{sid}/slides/{ordinal}": {
+      "get": {
+        "tags": [
+          "media"
+        ],
+        "summary": "Slide",
+        "description": "One slide of a deck as its own HTML document (or PNG), with an ETag so\na browser that holds it is answered 304.",
+        "operationId": "slide",
+        "parameters": [
+          {
+            "name": "sid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Sid"
+            }
+          },
+          {
+            "name": "ordinal",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Ordinal"
+            }
+          },
+          {
+            "name": "thumb",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Any value but empty, `0` or `false` asks for a thumbnail: scripts are removed, and a slide that cannot be drawn is a small placeholder rather than an error",
+              "default": "",
+              "title": "Thumb"
+            },
+            "description": "Any value but empty, `0` or `false` asks for a thumbnail: scripts are removed, and a slide that cannot be drawn is a small placeholder rather than an error"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The slide's own HTML document, or a PNG for a deck drawn as pictures",
+            "content": {
+              "text/html": {},
+              "image/png": {}
+            }
+          },
+          "304": {
+            "description": "The copy the browser holds is current"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/shares/{share_id}/sessions/{sid}/slides/{ordinal}": {
+      "get": {
+        "tags": [
+          "media"
+        ],
+        "summary": "Shared Slide",
+        "description": "One slide of a deck a share includes.",
+        "operationId": "shared_slide",
+        "parameters": [
+          {
+            "name": "share_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Share Id"
+            }
+          },
+          {
+            "name": "sid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Sid"
+            }
+          },
+          {
+            "name": "ordinal",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Ordinal"
+            }
+          },
+          {
+            "name": "thumb",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Any value but empty, `0` or `false` asks for a thumbnail: scripts are removed, and a slide that cannot be drawn is a small placeholder rather than an error",
+              "default": "",
+              "title": "Thumb"
+            },
+            "description": "Any value but empty, `0` or `false` asks for a thumbnail: scripts are removed, and a slide that cannot be drawn is a small placeholder rather than an error"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The slide's own HTML document, or a PNG for a deck drawn as pictures",
+            "content": {
+              "text/html": {},
+              "image/png": {}
+            }
+          },
+          "304": {
+            "description": "The copy the browser holds is current"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/collections/{cid}/mindmaps": {
+      "get": {
+        "tags": [
+          "mindmaps"
+        ],
+        "summary": "List Mindmaps",
+        "description": "A collection's mind maps, newest first.",
+        "operationId": "list_mindmaps",
+        "parameters": [
+          {
+            "name": "cid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Cid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/MindMapSummary"
+                  },
+                  "title": "Response List Mindmaps"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "mindmaps"
+        ],
+        "summary": "Make Mindmap",
+        "description": "Map the topics a collection's sources cover. Takes a few seconds.",
+        "operationId": "make_mindmap",
+        "parameters": [
+          {
+            "name": "cid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Cid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MakeReq"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MindMapOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/collections/{cid}/mindmaps/estimate": {
+      "get": {
+        "tags": [
+          "mindmaps"
+        ],
+        "summary": "Estimate Mindmap",
+        "description": "What making a mind map of every source would cost, before making it.",
+        "operationId": "estimate_mindmap",
+        "parameters": [
+          {
+            "name": "cid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Cid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Estimate"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/collections/{cid}/mindmaps/{mid}": {
+      "get": {
+        "tags": [
+          "mindmaps"
+        ],
+        "summary": "Get Mindmap",
+        "operationId": "get_mindmap",
+        "parameters": [
+          {
+            "name": "cid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Cid"
+            }
+          },
+          {
+            "name": "mid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Mid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MindMapOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "mindmaps"
+        ],
+        "summary": "Retitle Mindmap",
+        "operationId": "retitle_mindmap",
+        "parameters": [
+          {
+            "name": "cid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Cid"
+            }
+          },
+          {
+            "name": "mid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Mid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Retitle"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MindMapSummary"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "mindmaps"
+        ],
+        "summary": "Delete Mindmap",
+        "operationId": "delete_mindmap",
+        "parameters": [
+          {
+            "name": "cid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Cid"
+            }
+          },
+          {
+            "name": "mid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Mid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/collections/{cid}/notes": {
+      "get": {
+        "tags": [
+          "notes"
+        ],
+        "summary": "List Notes",
+        "description": "A collection's study notes, newest first.",
+        "operationId": "list_notes",
+        "parameters": [
+          {
+            "name": "cid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Cid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/NotesSummary"
+                  },
+                  "title": "Response List Notes"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "notes"
+        ],
+        "summary": "Make Notes",
+        "description": "Write study notes of a collection's sources. Takes 10 to 40 seconds.",
+        "operationId": "make_notes",
+        "parameters": [
+          {
+            "name": "cid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Cid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MakeReq"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotesOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/collections/{cid}/notes/estimate": {
+      "get": {
+        "tags": [
+          "notes"
+        ],
+        "summary": "Estimate Notes",
+        "description": "What writing study notes of every source would cost, before writing them.",
+        "operationId": "estimate_notes",
+        "parameters": [
+          {
+            "name": "cid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Cid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Estimate"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/collections/{cid}/notes/{nid}": {
+      "get": {
+        "tags": [
+          "notes"
+        ],
+        "summary": "Get Notes",
+        "operationId": "get_notes",
+        "parameters": [
+          {
+            "name": "cid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Cid"
+            }
+          },
+          {
+            "name": "nid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Nid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotesOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "notes"
+        ],
+        "summary": "Retitle Notes",
+        "operationId": "retitle_notes",
+        "parameters": [
+          {
+            "name": "cid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Cid"
+            }
+          },
+          {
+            "name": "nid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Nid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Retitle"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotesSummary"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "notes"
+        ],
+        "summary": "Delete Notes",
+        "operationId": "delete_notes",
+        "parameters": [
+          {
+            "name": "cid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Cid"
+            }
+          },
+          {
+            "name": "nid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Nid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/commands": {
+      "get": {
+        "tags": [
+          "chat"
+        ],
+        "summary": "List Commands",
+        "description": "The `/` commands, in menu order.",
+        "operationId": "list_commands",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/Command"
+                  },
+                  "type": "array",
+                  "title": "Response List Commands"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/collections/{cid}/chat": {
+      "get": {
+        "tags": [
+          "chat"
+        ],
+        "summary": "Read Chat",
+        "description": "A collection's conversation, oldest first.",
+        "operationId": "read_chat",
+        "parameters": [
+          {
+            "name": "cid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Cid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Message"
+                  },
+                  "title": "Response Read Chat"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "chat"
+        ],
+        "summary": "Clear Chat",
+        "description": "Clear a collection's conversation.",
+        "operationId": "clear_chat",
+        "parameters": [
+          {
+            "name": "cid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Cid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "chat"
+        ],
+        "summary": "Say",
+        "description": "Send a message. The answer streams back as server-sent events: thinking,\nstep, step_note, step_done, source, reply, state. The turn is kept.",
+        "operationId": "say",
+        "parameters": [
+          {
+            "name": "cid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Cid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Say"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/collections/{cid}/chat/commands": {
+      "post": {
+        "tags": [
+          "chat"
+        ],
+        "summary": "Run Command",
+        "description": "Run a `/` command. It streams the same events a message does.",
+        "operationId": "run_command",
+        "parameters": [
+          {
+            "name": "cid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Cid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RunCommand"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/settings": {
+      "get": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Get Settings",
+        "description": "Every setting with its current value, default and allowed values.",
+        "operationId": "get_settings",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SettingsOut"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/settings/{key}": {
+      "patch": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Set Setting",
+        "description": "Change one setting; an empty value resets it. A user setting changes\nonly for the person asking; an instance setting changes for everyone and\nonly whoever runs the studio may change it.",
+        "operationId": "set_setting",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetValue"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Setting"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/styles": {
+      "get": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "List Styles",
+        "description": "The slide styles a deck can be built in, the default first.",
+        "operationId": "list_styles",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/Style"
+                  },
+                  "type": "array",
+                  "title": "Response List Styles"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/shares": {
+      "get": {
+        "tags": [
+          "shares"
+        ],
+        "summary": "List Shares",
+        "description": "Discover: what everyone on the studio shared.",
+        "operationId": "list_shares",
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 200,
+              "description": "Case-insensitive; matched against the title, the note and the cover's topic and terms",
+              "default": "",
+              "title": "Query"
+            },
+            "description": "Case-insensitive; matched against the title, the note and the cover's topic and terms"
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "newest",
+                "reused"
+              ],
+              "type": "string",
+              "description": "`newest` (the default) or `reused`: most reused first",
+              "default": "newest",
+              "title": "Sort"
+            },
+            "description": "`newest` (the default) or `reused`: most reused first"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ShareCard"
+                  },
+                  "title": "Response List Shares"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/shares/items": {
+      "get": {
+        "tags": [
+          "shares"
+        ],
+        "summary": "List Shared Items",
+        "description": "Discover's items: each ready output a share includes, on its own, from\nthe shares of everyone on the studio. Only what a share includes is\nlisted, and only while it is there and ready.",
+        "operationId": "list_shared_items",
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "slides",
+                    "audio",
+                    "mindmap",
+                    "notes"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "`slides`, `audio`, `mindmap` or `notes`; every kind when absent",
+              "title": "Kind"
+            },
+            "description": "`slides`, `audio`, `mindmap` or `notes`; every kind when absent"
+          },
+          {
+            "name": "query",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 200,
+              "description": "Case-insensitive; matched against the item's title, and its share as the feed matches it: the collection's title, the note and the cover's topic and terms",
+              "default": "",
+              "title": "Query"
+            },
+            "description": "Case-insensitive; matched against the item's title, and its share as the feed matches it: the collection's title, the note and the cover's topic and terms"
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "newest",
+                "reused"
+              ],
+              "type": "string",
+              "description": "`newest` made first (the default) or `reused`: most reused share first",
+              "default": "newest",
+              "title": "Sort"
+            },
+            "description": "`newest` made first (the default) or `reused`: most reused share first"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 60,
+              "minimum": 1,
+              "default": 24,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100000,
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SharedItems"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/shares/{share_id}": {
+      "get": {
+        "tags": [
+          "shares"
+        ],
+        "summary": "Get Share",
+        "description": "One shared collection as a visitor sees it: what it is and what it\nincludes.",
+        "operationId": "get_share",
+        "parameters": [
+          {
+            "name": "share_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Share Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShareView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "shares"
+        ],
+        "summary": "Update Share",
+        "description": "Change what your share includes; what is not sent stays as it is.",
+        "operationId": "update_share",
+        "parameters": [
+          {
+            "name": "share_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Share Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SharePatch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShareOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "shares"
+        ],
+        "summary": "Delete Share",
+        "description": "Stop sharing a collection. Copies people already made stay theirs.",
+        "operationId": "delete_share",
+        "parameters": [
+          {
+            "name": "share_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Share Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/shares/{share_id}/cover": {
+      "get": {
+        "tags": [
+          "shares"
+        ],
+        "summary": "Read Share Cover",
+        "description": "A shared collection's cover, as its owner sees it; see the collection's\ncover route.",
+        "operationId": "read_share_cover",
+        "parameters": [
+          {
+            "name": "share_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Share Id"
+            }
+          },
+          {
+            "name": "v",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "The `cover_version` the card was listed with",
+              "default": "",
+              "title": "V"
+            },
+            "description": "The `cover_version` the card was listed with"
+          },
+          {
+            "name": "theme",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "`light`, else the dark default",
+              "default": "dark",
+              "title": "Theme"
+            },
+            "description": "`light`, else the dark default"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/shares/{share_id}/sources/{name}": {
+      "get": {
+        "tags": [
+          "shares"
+        ],
+        "summary": "Read Shared Source",
+        "description": "One source of a share that includes its sources, with its text.",
+        "operationId": "read_shared_source",
+        "parameters": [
+          {
+            "name": "share_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Share Id"
+            }
+          },
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SourceText"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/shares/{share_id}/sessions/{sid}": {
+      "get": {
+        "tags": [
+          "shares"
+        ],
+        "summary": "Read Shared Session",
+        "description": "A deck or audio overview a share includes, in full, to play.",
+        "operationId": "read_shared_session",
+        "parameters": [
+          {
+            "name": "share_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Share Id"
+            }
+          },
+          {
+            "name": "sid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Sid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/shares/{share_id}/mindmaps/{mid}": {
+      "get": {
+        "tags": [
+          "shares"
+        ],
+        "summary": "Read Shared Mindmap",
+        "description": "A mind map a share includes, to read only.",
+        "operationId": "read_shared_mindmap",
+        "parameters": [
+          {
+            "name": "share_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Share Id"
+            }
+          },
+          {
+            "name": "mid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Mid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MindMapOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/shares/{share_id}/notes/{nid}": {
+      "get": {
+        "tags": [
+          "shares"
+        ],
+        "summary": "Read Shared Notes",
+        "description": "Study notes a share includes, to read only.",
+        "operationId": "read_shared_notes",
+        "parameters": [
+          {
+            "name": "share_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Share Id"
+            }
+          },
+          {
+            "name": "nid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Nid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotesOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/shares/{share_id}/reuse": {
+      "post": {
+        "tags": [
+          "shares"
+        ],
+        "summary": "Reuse Share",
+        "description": "Copy what a share includes into a new collection of your own, wholly\nindependent of the original: it stays when the original or the share\ngoes. When the share does not allow edits the copy is read-only; when it\ndoes, it is yours to change and share again, and what you change never\ntouches the original.",
+        "operationId": "reuse_share",
+        "parameters": [
+          {
+            "name": "share_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Share Id"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionSummary"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/collections/{cid}/share": {
+      "get": {
+        "tags": [
+          "shares"
+        ],
+        "summary": "Get Collection Share",
+        "description": "The share of one of your collections; null when it is not shared.",
+        "operationId": "get_collection_share",
+        "parameters": [
+          {
+            "name": "cid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Cid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ShareOut"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Response Get Collection Share"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/collections/{cid}/shares": {
+      "post": {
+        "tags": [
+          "shares"
+        ],
+        "summary": "Share Collection",
+        "description": "Share a collection with everyone on the studio, or change what its share\nincludes: the sources or not, each ready output, and whether copies may be\nedited. A collection has at most one share, so asking again changes it.\nA read-only copy cannot be shared.",
+        "operationId": "share_collection",
+        "parameters": [
+          {
+            "name": "cid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Cid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ShareSet"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShareOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AddNote": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "text",
+            "title": "Kind"
+          },
+          "text": {
+            "type": "string",
+            "maxLength": 2000000,
+            "title": "Text",
+            "description": "The note, in plain text or Markdown"
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 200,
+            "title": "Title",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "text"
+        ],
+        "title": "AddNote"
+      },
+      "AddResult": {
+        "properties": {
+          "url": {
+            "type": "string",
+            "title": "Url",
+            "description": "The page asked for; empty for a note or a file"
+          },
+          "ok": {
+            "type": "boolean",
+            "title": "Ok"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SourceOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "error": {
+            "type": "string",
+            "title": "Error",
+            "description": "Why it was not added, in a sentence; empty when ok"
+          }
+        },
+        "type": "object",
+        "required": [
+          "url",
+          "ok",
+          "error"
+        ],
+        "title": "AddResult",
+        "description": "What happened to one thing asked to be added."
+      },
+      "AddUrls": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "urls",
+            "title": "Kind"
+          },
+          "urls": {
+            "items": {
+              "type": "string",
+              "maxLength": 2083,
+              "minLength": 1,
+              "format": "uri"
+            },
+            "type": "array",
+            "maxItems": 8,
+            "minItems": 1,
+            "title": "Urls"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "urls"
+        ],
+        "title": "AddUrls"
+      },
+      "AskOut": {
+        "properties": {
+          "answer": {
+            "type": "string",
+            "title": "Answer",
+            "description": "Markdown with [n] markers that match the citations"
+          },
+          "citations": {
+            "items": {
+              "$ref": "#/components/schemas/Citation"
+            },
+            "type": "array",
+            "title": "Citations",
+            "description": "Only the passages cited, in order of first use"
+          }
+        },
+        "type": "object",
+        "required": [
+          "answer",
+          "citations"
+        ],
+        "title": "AskOut"
+      },
+      "AskReq": {
+        "properties": {
+          "question": {
+            "type": "string",
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Question"
+          },
+          "sources": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sources",
+            "description": "Source names; all when absent"
+          }
+        },
+        "type": "object",
+        "required": [
+          "question"
+        ],
+        "title": "AskReq"
+      },
+      "Body_add_files": {
+        "properties": {
+          "files": {
+            "items": {
+              "type": "string",
+              "contentMediaType": "application/octet-stream"
+            },
+            "type": "array",
+            "title": "Files",
+            "description": "pdf, docx, pptx, xlsx, md, txt or csv"
+          }
+        },
+        "type": "object",
+        "required": [
+          "files"
+        ],
+        "title": "Body_add_files"
+      },
+      "BuildReq": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "slides",
+              "audio"
+            ],
+            "title": "Kind"
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 200,
+            "title": "Title",
+            "default": ""
+          },
+          "speakers": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 2.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Speakers"
+          },
+          "slide_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Slide Count",
+            "description": "3 to 12; outside is clamped"
+          },
+          "style": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Style",
+            "description": "A style id from /api/styles"
+          },
+          "audio_format": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "deep_dive",
+                  "brief",
+                  "critique",
+                  "debate"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audio Format"
+          },
+          "audio_length": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "shorter",
+                  "default",
+                  "longer"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audio Length"
+          },
+          "focus": {
+            "type": "string",
+            "maxLength": 400,
+            "title": "Focus",
+            "default": ""
+          },
+          "research": {
+            "type": "string",
+            "maxLength": 400,
+            "title": "Research",
+            "description": "A topic to research on the web first; the report is added as a source. Empty builds from the sources as they are",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind"
+        ],
+        "title": "BuildReq"
+      },
+      "Citation": {
+        "properties": {
+          "n": {
+            "type": "integer",
+            "title": "N",
+            "description": "The number in the text, [1], [2], in reading order"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "description": "The source's name"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "url": {
+            "type": "string",
+            "title": "Url"
+          },
+          "excerpt": {
+            "type": "string",
+            "title": "Excerpt",
+            "description": "The passage the claim rests on"
+          }
+        },
+        "type": "object",
+        "required": [
+          "n",
+          "name",
+          "title",
+          "url",
+          "excerpt"
+        ],
+        "title": "Citation"
+      },
+      "CollectionCreate": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 200,
+            "title": "Title",
+            "description": "What the person called it; empty and the studio names it from its sources",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "title": "CollectionCreate"
+      },
+      "CollectionDetail": {
+        "properties": {
+          "collection": {
+            "$ref": "#/components/schemas/CollectionSummary"
+          },
+          "outputs": {
+            "items": {
+              "$ref": "#/components/schemas/SessionSummary"
+            },
+            "type": "array",
+            "title": "Outputs",
+            "description": "Decks and audio overviews, newest first"
+          }
+        },
+        "type": "object",
+        "required": [
+          "collection",
+          "outputs"
+        ],
+        "title": "CollectionDetail"
+      },
+      "CollectionPatch": {
+        "properties": {
+          "title": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title",
+            "description": "Empty hands the naming back to the studio"
+          },
+          "pinned": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pinned"
+          }
+        },
+        "type": "object",
+        "title": "CollectionPatch"
+      },
+      "CollectionSummary": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "title_auto": {
+            "type": "boolean",
+            "title": "Title Auto",
+            "description": "The studio named it; a person's title is never replaced"
+          },
+          "pinned": {
+            "type": "boolean",
+            "title": "Pinned"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At",
+            "description": "The last time a source or an output changed"
+          },
+          "cover_version": {
+            "type": "string",
+            "title": "Cover Version",
+            "description": "The cover drawn now: `f-\u2026` until one is designed, `g-\u2026` after. Load the cover with it as `v`, so a new one is fetched when it changes"
+          },
+          "sources": {
+            "type": "integer",
+            "title": "Sources"
+          },
+          "decks": {
+            "type": "integer",
+            "title": "Decks",
+            "description": "Narrated slide decks, any state"
+          },
+          "audios": {
+            "type": "integer",
+            "title": "Audios",
+            "description": "Audio overviews, any state"
+          },
+          "maps": {
+            "type": "integer",
+            "title": "Maps"
+          },
+          "notes": {
+            "type": "integer",
+            "title": "Notes"
+          },
+          "preparing": {
+            "type": "integer",
+            "title": "Preparing",
+            "description": "Decks and audio overviews still being made"
+          },
+          "failed": {
+            "type": "integer",
+            "title": "Failed"
+          },
+          "reused_from": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reused From",
+            "description": "The share this collection was copied from by a reuse; null when none. The share may since have been removed"
+          },
+          "shared": {
+            "type": "boolean",
+            "title": "Shared",
+            "description": "It has a share, so everyone on the studio sees it in Discover"
+          },
+          "reuses": {
+            "type": "integer",
+            "title": "Reuses",
+            "description": "How many times its share was reused; 0 when not shared"
+          },
+          "read_only": {
+            "type": "boolean",
+            "title": "Read Only",
+            "description": "A copy whose share did not allow edits: it can be read, asked, pinned and deleted, but nothing in it changes and it cannot be shared"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "title_auto",
+          "pinned",
+          "created_at",
+          "updated_at",
+          "cover_version",
+          "sources",
+          "decks",
+          "audios",
+          "maps",
+          "notes",
+          "preparing",
+          "failed",
+          "reused_from",
+          "shared",
+          "reuses",
+          "read_only"
+        ],
+        "title": "CollectionSummary"
+      },
+      "Command": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "description": "Typed after the slash: /slides"
+          },
+          "arg": {
+            "type": "string",
+            "title": "Arg",
+            "description": "What may follow it: [optional] or <required>; empty for none"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "icon": {
+            "type": "string",
+            "title": "Icon",
+            "description": "A bootstrap-icons name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "arg",
+          "label",
+          "icon"
+        ],
+        "title": "Command"
+      },
+      "CostLine": {
+        "properties": {
+          "group": {
+            "type": "string",
+            "title": "Group",
+            "description": "The stage it belongs to: Reading your sources, \u2026"
+          },
+          "step": {
+            "type": "string",
+            "title": "Step"
+          },
+          "detail": {
+            "type": "string",
+            "title": "Detail"
+          },
+          "model": {
+            "type": "string",
+            "title": "Model",
+            "description": "Empty for a step that calls no model"
+          },
+          "via": {
+            "type": "string",
+            "title": "Via",
+            "description": "The service that makes the call and how it is paid"
+          },
+          "calls_low": {
+            "type": "integer",
+            "title": "Calls Low"
+          },
+          "calls_typical": {
+            "type": "integer",
+            "title": "Calls Typical"
+          },
+          "calls_high": {
+            "type": "integer",
+            "title": "Calls High"
+          },
+          "input_tokens": {
+            "type": "integer",
+            "title": "Input Tokens"
+          },
+          "output_tokens_low": {
+            "type": "integer",
+            "title": "Output Tokens Low"
+          },
+          "output_tokens_typical": {
+            "type": "integer",
+            "title": "Output Tokens Typical"
+          },
+          "output_tokens_high": {
+            "type": "integer",
+            "title": "Output Tokens High"
+          },
+          "cost_low_usd": {
+            "type": "number",
+            "title": "Cost Low Usd"
+          },
+          "cost_typical_usd": {
+            "type": "number",
+            "title": "Cost Typical Usd"
+          },
+          "cost_high_usd": {
+            "type": "number",
+            "title": "Cost High Usd"
+          },
+          "free": {
+            "type": "boolean",
+            "title": "Free"
+          },
+          "unpriced": {
+            "type": "boolean",
+            "title": "Unpriced",
+            "description": "The model has no price in the catalogue: counted as $0"
+          },
+          "price_in_per_million": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price In Per Million"
+          },
+          "price_out_per_million": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price Out Per Million"
+          }
+        },
+        "type": "object",
+        "required": [
+          "group",
+          "step",
+          "detail",
+          "model",
+          "via",
+          "calls_low",
+          "calls_typical",
+          "calls_high",
+          "input_tokens",
+          "output_tokens_low",
+          "output_tokens_typical",
+          "output_tokens_high",
+          "cost_low_usd",
+          "cost_typical_usd",
+          "cost_high_usd",
+          "free",
+          "unpriced",
+          "price_in_per_million",
+          "price_out_per_million"
+        ],
+        "title": "CostLine",
+        "description": "One step of a build and what it costs: low, typical and high."
+      },
+      "Estimate": {
+        "properties": {
+          "sources": {
+            "type": "integer",
+            "title": "Sources"
+          },
+          "chars": {
+            "type": "integer",
+            "title": "Chars",
+            "description": "Characters of source text"
+          },
+          "model": {
+            "type": "string",
+            "title": "Model"
+          },
+          "input_tokens": {
+            "type": "integer",
+            "title": "Input Tokens"
+          },
+          "output_tokens": {
+            "type": "integer",
+            "title": "Output Tokens"
+          },
+          "cost_usd": {
+            "type": "number",
+            "title": "Cost Usd",
+            "description": "The typical cost; 0 when the model has no price"
+          },
+          "cost_high_usd": {
+            "type": "number",
+            "title": "Cost High Usd",
+            "description": "Twice the typical cost: a second attempt"
+          },
+          "priced": {
+            "type": "boolean",
+            "title": "Priced",
+            "description": "False when the model's price is not known"
+          }
+        },
+        "type": "object",
+        "required": [
+          "sources",
+          "chars",
+          "model",
+          "input_tokens",
+          "output_tokens",
+          "cost_usd",
+          "cost_high_usd",
+          "priced"
+        ],
+        "title": "Estimate",
+        "description": "What one call over a collection's sources would cost, before making it."
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "Health": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "title": "Ok"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ok"
+        ],
+        "title": "Health"
+      },
+      "JobOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "running",
+              "done",
+              "failed",
+              "cancelled"
+            ],
+            "title": "Status"
+          },
+          "step": {
+            "type": "string",
+            "title": "Step",
+            "description": "What it is doing now; empty before it starts"
+          },
+          "steps_done": {
+            "type": "integer",
+            "title": "Steps Done"
+          },
+          "steps_total": {
+            "type": "integer",
+            "title": "Steps Total",
+            "description": "0 when the work does not report its steps"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error",
+            "description": "Why it failed or stopped; null unless it did"
+          },
+          "session_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Session Id"
+          },
+          "collection_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Collection Id"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "status",
+          "step",
+          "steps_done",
+          "steps_total",
+          "error",
+          "session_id",
+          "collection_id",
+          "created_at"
+        ],
+        "title": "JobOut",
+        "description": "A piece of background work and how far it got."
+      },
+      "KeyOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "prefix": {
+            "type": "string",
+            "title": "Prefix",
+            "description": "The key's first characters, to tell keys apart"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "last_used_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Used At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "prefix",
+          "created_at",
+          "last_used_at"
+        ],
+        "title": "KeyOut"
+      },
+      "MadeKey": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "prefix": {
+            "type": "string",
+            "title": "Prefix",
+            "description": "The key's first characters, to tell keys apart"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "last_used_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Used At"
+          },
+          "key": {
+            "type": "string",
+            "title": "Key",
+            "description": "The key itself. Shown this once; only its hash is kept"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "prefix",
+          "created_at",
+          "last_used_at",
+          "key"
+        ],
+        "title": "MadeKey"
+      },
+      "MakeReq": {
+        "properties": {
+          "focus": {
+            "type": "string",
+            "maxLength": 400,
+            "title": "Focus",
+            "default": ""
+          },
+          "sources": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sources",
+            "description": "Source names; all when absent"
+          }
+        },
+        "type": "object",
+        "title": "MakeReq"
+      },
+      "MeOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "email": {
+            "type": "string",
+            "title": "Email"
+          },
+          "display_name": {
+            "type": "string",
+            "title": "Display Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "email",
+          "display_name"
+        ],
+        "title": "MeOut"
+      },
+      "Message": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "user",
+              "assistant"
+            ],
+            "title": "Role"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "steps": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Steps",
+            "description": "The work lines shown under an answer"
+          },
+          "citations": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Citations"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "role",
+          "text",
+          "steps",
+          "citations",
+          "created_at"
+        ],
+        "title": "Message"
+      },
+      "MindMapOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "collection_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Collection Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "focus": {
+            "type": "string",
+            "title": "Focus"
+          },
+          "node_count": {
+            "type": "integer",
+            "title": "Node Count"
+          },
+          "sources": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Sources"
+          },
+          "shape": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Shape",
+            "description": "Subtopics per main topic, in order: the outline"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "excerpted": {
+            "type": "boolean",
+            "title": "Excerpted",
+            "description": "The sources were cut to excerpts to fit"
+          },
+          "model": {
+            "type": "string",
+            "title": "Model"
+          },
+          "dropped": {
+            "type": "integer",
+            "title": "Dropped",
+            "description": "Nodes removed because the sources never mention them"
+          },
+          "unchecked": {
+            "type": "boolean",
+            "title": "Unchecked",
+            "description": "The check against the sources did not run"
+          },
+          "root": {
+            "$ref": "#/components/schemas/MindNode"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "collection_id",
+          "title",
+          "focus",
+          "node_count",
+          "sources",
+          "shape",
+          "created_at",
+          "excerpted",
+          "model",
+          "dropped",
+          "unchecked",
+          "root"
+        ],
+        "title": "MindMapOut"
+      },
+      "MindMapSummary": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "collection_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Collection Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "focus": {
+            "type": "string",
+            "title": "Focus"
+          },
+          "node_count": {
+            "type": "integer",
+            "title": "Node Count"
+          },
+          "sources": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Sources"
+          },
+          "shape": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Shape",
+            "description": "Subtopics per main topic, in order: the outline"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "collection_id",
+          "title",
+          "focus",
+          "node_count",
+          "sources",
+          "shape",
+          "created_at"
+        ],
+        "title": "MindMapSummary"
+      },
+      "MindNode": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "children": {
+            "items": {
+              "$ref": "#/components/schemas/MindNode"
+            },
+            "type": "array",
+            "title": "Children"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "MindNode"
+      },
+      "NewKey": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "NewKey"
+      },
+      "NoteIdea": {
+        "properties": {
+          "heading": {
+            "type": "string",
+            "title": "Heading"
+          },
+          "body": {
+            "type": "string",
+            "title": "Body",
+            "description": "Markdown with [n] markers"
+          }
+        },
+        "type": "object",
+        "required": [
+          "heading",
+          "body"
+        ],
+        "title": "NoteIdea"
+      },
+      "NoteQuestion": {
+        "properties": {
+          "question": {
+            "type": "string",
+            "title": "Question"
+          },
+          "answer": {
+            "type": "string",
+            "title": "Answer"
+          }
+        },
+        "type": "object",
+        "required": [
+          "question",
+          "answer"
+        ],
+        "title": "NoteQuestion"
+      },
+      "NoteTerm": {
+        "properties": {
+          "term": {
+            "type": "string",
+            "title": "Term"
+          },
+          "definition": {
+            "type": "string",
+            "title": "Definition"
+          }
+        },
+        "type": "object",
+        "required": [
+          "term",
+          "definition"
+        ],
+        "title": "NoteTerm"
+      },
+      "NotesOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "collection_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Collection Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "focus": {
+            "type": "string",
+            "title": "Focus"
+          },
+          "sources": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Sources"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "ideas": {
+            "type": "integer",
+            "title": "Ideas"
+          },
+          "questions": {
+            "type": "integer",
+            "title": "Questions"
+          },
+          "terms": {
+            "type": "integer",
+            "title": "Terms"
+          },
+          "headings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Headings"
+          },
+          "excerpted": {
+            "type": "boolean",
+            "title": "Excerpted"
+          },
+          "model": {
+            "type": "string",
+            "title": "Model"
+          },
+          "dropped": {
+            "type": "integer",
+            "title": "Dropped",
+            "description": "Citations removed: naming no passage, or not saying it"
+          },
+          "unchecked": {
+            "type": "boolean",
+            "title": "Unchecked"
+          },
+          "overview": {
+            "type": "string",
+            "title": "Overview"
+          },
+          "idea_list": {
+            "items": {
+              "$ref": "#/components/schemas/NoteIdea"
+            },
+            "type": "array",
+            "title": "Idea List"
+          },
+          "quiz": {
+            "items": {
+              "$ref": "#/components/schemas/NoteQuestion"
+            },
+            "type": "array",
+            "title": "Quiz"
+          },
+          "essays": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Essays"
+          },
+          "glossary": {
+            "items": {
+              "$ref": "#/components/schemas/NoteTerm"
+            },
+            "type": "array",
+            "title": "Glossary"
+          },
+          "citations": {
+            "items": {
+              "$ref": "#/components/schemas/Citation"
+            },
+            "type": "array",
+            "title": "Citations"
+          },
+          "markdown": {
+            "type": "string",
+            "title": "Markdown",
+            "description": "The whole notes as one Markdown document: the export"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "collection_id",
+          "title",
+          "focus",
+          "sources",
+          "created_at",
+          "ideas",
+          "questions",
+          "terms",
+          "headings",
+          "excerpted",
+          "model",
+          "dropped",
+          "unchecked",
+          "overview",
+          "idea_list",
+          "quiz",
+          "essays",
+          "glossary",
+          "citations",
+          "markdown"
+        ],
+        "title": "NotesOut"
+      },
+      "NotesSummary": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "collection_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Collection Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "focus": {
+            "type": "string",
+            "title": "Focus"
+          },
+          "sources": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Sources"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "ideas": {
+            "type": "integer",
+            "title": "Ideas"
+          },
+          "questions": {
+            "type": "integer",
+            "title": "Questions"
+          },
+          "terms": {
+            "type": "integer",
+            "title": "Terms"
+          },
+          "headings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Headings"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "collection_id",
+          "title",
+          "focus",
+          "sources",
+          "created_at",
+          "ideas",
+          "questions",
+          "terms",
+          "headings"
+        ],
+        "title": "NotesSummary"
+      },
+      "Playhead": {
+        "properties": {
+          "slide_ordinal": {
+            "type": "integer",
+            "title": "Slide Ordinal",
+            "default": 0
+          },
+          "line_id": {
+            "type": "string",
+            "title": "Line Id",
+            "description": "Empty before the first line starts",
+            "default": ""
+          },
+          "offset_ms": {
+            "type": "integer",
+            "title": "Offset Ms",
+            "default": 0
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "idle",
+              "playing",
+              "paused",
+              "finished"
+            ],
+            "title": "State",
+            "default": "idle"
+          }
+        },
+        "type": "object",
+        "title": "Playhead"
+      },
+      "ResearchReq": {
+        "properties": {
+          "topic": {
+            "type": "string",
+            "maxLength": 400,
+            "minLength": 1,
+            "title": "Topic"
+          }
+        },
+        "type": "object",
+        "required": [
+          "topic"
+        ],
+        "title": "ResearchReq"
+      },
+      "Retitle": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Title"
+          }
+        },
+        "type": "object",
+        "required": [
+          "title"
+        ],
+        "title": "Retitle"
+      },
+      "RunCommand": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "description": "A command name from /api/commands"
+          },
+          "arg": {
+            "type": "string",
+            "maxLength": 2000,
+            "title": "Arg",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "RunCommand"
+      },
+      "Say": {
+        "properties": {
+          "text": {
+            "type": "string",
+            "maxLength": 8000,
+            "minLength": 1,
+            "title": "Text"
+          }
+        },
+        "type": "object",
+        "required": [
+          "text"
+        ],
+        "title": "Say"
+      },
+      "SearchReq": {
+        "properties": {
+          "query": {
+            "type": "string",
+            "maxLength": 400,
+            "minLength": 1,
+            "title": "Query"
+          }
+        },
+        "type": "object",
+        "required": [
+          "query"
+        ],
+        "title": "SearchReq"
+      },
+      "SessionDetail": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "collection_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Collection Id"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "slides",
+              "audio"
+            ],
+            "title": "Kind"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "preparing",
+              "ready",
+              "failed"
+            ],
+            "title": "State"
+          },
+          "failure": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Failure",
+            "description": "Why it failed, in a sentence; null unless failed"
+          },
+          "parts": {
+            "type": "integer",
+            "title": "Parts",
+            "description": "Slides of a deck, chapters of an audio overview"
+          },
+          "speakers": {
+            "type": "integer",
+            "title": "Speakers"
+          },
+          "audio_format": {
+            "type": "string",
+            "title": "Audio Format",
+            "description": "An audio overview's format; empty for a deck"
+          },
+          "duration_ms": {
+            "type": "integer",
+            "title": "Duration Ms",
+            "description": "Measured narration length; 0 before it is voiced"
+          },
+          "pinned": {
+            "type": "boolean",
+            "title": "Pinned"
+          },
+          "spent_usd": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spent Usd"
+          },
+          "spent_known": {
+            "type": "boolean",
+            "title": "Spent Known",
+            "description": "False when a call of the build could not be priced"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "waiting": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Waiting",
+            "description": "Why a preparing output has not started, in a sentence: its build is queued and no worker is running. Null otherwise"
+          },
+          "style": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Style"
+          },
+          "speaker_list": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Speaker List",
+            "description": "Speakers with their voices"
+          },
+          "slides": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Slides",
+            "description": "The parts with their narration lines"
+          },
+          "audio": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audio",
+            "description": "Format, length, focus and minutes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "collection_id",
+          "kind",
+          "title",
+          "description",
+          "state",
+          "failure",
+          "parts",
+          "speakers",
+          "audio_format",
+          "duration_ms",
+          "pinned",
+          "spent_usd",
+          "spent_known",
+          "created_at",
+          "style",
+          "speaker_list",
+          "slides",
+          "audio"
+        ],
+        "title": "SessionDetail"
+      },
+      "SessionEstimate": {
+        "properties": {
+          "total_low_usd": {
+            "type": "number",
+            "title": "Total Low Usd"
+          },
+          "total_typical_usd": {
+            "type": "number",
+            "title": "Total Typical Usd"
+          },
+          "total_high_usd": {
+            "type": "number",
+            "title": "Total High Usd"
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/CostLine"
+            },
+            "type": "array",
+            "title": "Lines"
+          },
+          "assumptions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Assumptions"
+          },
+          "sources": {
+            "type": "integer",
+            "title": "Sources"
+          },
+          "source_chars": {
+            "type": "integer",
+            "title": "Source Chars"
+          },
+          "slides": {
+            "type": "integer",
+            "title": "Slides",
+            "description": "Slides, or an audio overview's chapters"
+          },
+          "speakers": {
+            "type": "integer",
+            "title": "Speakers"
+          },
+          "style": {
+            "type": "string",
+            "title": "Style"
+          },
+          "slides_tier": {
+            "type": "string",
+            "title": "Slides Tier",
+            "description": "The model that writes the slides"
+          },
+          "priced_at": {
+            "type": "string",
+            "title": "Priced At",
+            "description": "When the prices were read, RFC 3339"
+          },
+          "minutes": {
+            "type": "integer",
+            "title": "Minutes"
+          },
+          "limit_usd": {
+            "type": "number",
+            "title": "Limit Usd",
+            "description": "The spending limit; 0 is none"
+          },
+          "over_limit": {
+            "type": "boolean",
+            "title": "Over Limit",
+            "description": "The high estimate is over the limit: a build is refused"
+          }
+        },
+        "type": "object",
+        "required": [
+          "total_low_usd",
+          "total_typical_usd",
+          "total_high_usd",
+          "lines",
+          "assumptions",
+          "sources",
+          "source_chars",
+          "slides",
+          "speakers",
+          "style",
+          "slides_tier",
+          "priced_at",
+          "minutes",
+          "limit_usd",
+          "over_limit"
+        ],
+        "title": "SessionEstimate",
+        "description": "What a build would cost, step by step: every input measured, every\noutput a low / typical / high range."
+      },
+      "SessionPatch": {
+        "properties": {
+          "title": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "pinned": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pinned"
+          }
+        },
+        "type": "object",
+        "title": "SessionPatch"
+      },
+      "SessionSummary": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "collection_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Collection Id"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "slides",
+              "audio"
+            ],
+            "title": "Kind"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "preparing",
+              "ready",
+              "failed"
+            ],
+            "title": "State"
+          },
+          "failure": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Failure",
+            "description": "Why it failed, in a sentence; null unless failed"
+          },
+          "parts": {
+            "type": "integer",
+            "title": "Parts",
+            "description": "Slides of a deck, chapters of an audio overview"
+          },
+          "speakers": {
+            "type": "integer",
+            "title": "Speakers"
+          },
+          "audio_format": {
+            "type": "string",
+            "title": "Audio Format",
+            "description": "An audio overview's format; empty for a deck"
+          },
+          "duration_ms": {
+            "type": "integer",
+            "title": "Duration Ms",
+            "description": "Measured narration length; 0 before it is voiced"
+          },
+          "pinned": {
+            "type": "boolean",
+            "title": "Pinned"
+          },
+          "spent_usd": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spent Usd"
+          },
+          "spent_known": {
+            "type": "boolean",
+            "title": "Spent Known",
+            "description": "False when a call of the build could not be priced"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "waiting": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Waiting",
+            "description": "Why a preparing output has not started, in a sentence: its build is queued and no worker is running. Null otherwise"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "collection_id",
+          "kind",
+          "title",
+          "description",
+          "state",
+          "failure",
+          "parts",
+          "speakers",
+          "audio_format",
+          "duration_ms",
+          "pinned",
+          "spent_usd",
+          "spent_known",
+          "created_at"
+        ],
+        "title": "SessionSummary"
+      },
+      "SetValue": {
+        "properties": {
+          "value": {
+            "type": "string",
+            "title": "Value",
+            "description": "Empty resets it to the default"
+          }
+        },
+        "type": "object",
+        "required": [
+          "value"
+        ],
+        "title": "SetValue"
+      },
+      "Setting": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "tab": {
+            "type": "string",
+            "title": "Tab"
+          },
+          "group": {
+            "type": "string",
+            "title": "Group"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "help": {
+            "type": "string",
+            "title": "Help"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind",
+            "description": "choice, number, toggle or text; a model is text"
+          },
+          "value": {
+            "type": "string",
+            "title": "Value",
+            "description": "The override in force for this person; empty means the default applies"
+          },
+          "default": {
+            "type": "string",
+            "title": "Default",
+            "description": "What applies when value is empty: for a user setting, the instance's value when one is set, else the studio's default"
+          },
+          "options": {
+            "items": {
+              "$ref": "#/components/schemas/SettingOption"
+            },
+            "type": "array",
+            "title": "Options"
+          },
+          "suggestions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Suggestions",
+            "description": "Values a text setting offers; a model's tested ids"
+          },
+          "min": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min"
+          },
+          "max": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max"
+          },
+          "unit": {
+            "type": "string",
+            "title": "Unit"
+          },
+          "advanced": {
+            "type": "boolean",
+            "title": "Advanced"
+          },
+          "model": {
+            "type": "boolean",
+            "title": "Model"
+          },
+          "price": {
+            "type": "string",
+            "title": "Price",
+            "description": "The price of the model in force; empty when unknown"
+          },
+          "scope": {
+            "type": "string",
+            "title": "Scope",
+            "description": "instance: set for everyone; user: each person's own"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "tab",
+          "group",
+          "label",
+          "help",
+          "kind",
+          "value",
+          "default",
+          "options",
+          "suggestions",
+          "unit",
+          "advanced",
+          "model",
+          "price",
+          "scope"
+        ],
+        "title": "Setting"
+      },
+      "SettingOption": {
+        "properties": {
+          "value": {
+            "type": "string",
+            "title": "Value"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "hint": {
+            "type": "string",
+            "title": "Hint",
+            "description": "A model's price; empty when unknown or not a model"
+          }
+        },
+        "type": "object",
+        "required": [
+          "value",
+          "label",
+          "hint"
+        ],
+        "title": "SettingOption"
+      },
+      "SettingTab": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "note": {
+            "type": "string",
+            "title": "Note"
+          },
+          "advanced": {
+            "type": "boolean",
+            "title": "Advanced"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "label",
+          "note",
+          "advanced"
+        ],
+        "title": "SettingTab"
+      },
+      "SettingsOut": {
+        "properties": {
+          "tabs": {
+            "items": {
+              "$ref": "#/components/schemas/SettingTab"
+            },
+            "type": "array",
+            "title": "Tabs"
+          },
+          "settings": {
+            "items": {
+              "$ref": "#/components/schemas/Setting"
+            },
+            "type": "array",
+            "title": "Settings"
+          }
+        },
+        "type": "object",
+        "required": [
+          "tabs",
+          "settings"
+        ],
+        "title": "SettingsOut"
+      },
+      "ShareCard": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "collection_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Collection Id"
+          },
+          "mine": {
+            "type": "boolean",
+            "title": "Mine",
+            "description": "The person asking shared it, so they can edit or stop it"
+          },
+          "shared_by": {
+            "type": "string",
+            "title": "Shared By",
+            "description": "The sharer's display name; empty when they have none"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title",
+            "description": "The collection's current title"
+          },
+          "note": {
+            "type": "string",
+            "title": "Note"
+          },
+          "cover_version": {
+            "type": "string",
+            "title": "Cover Version",
+            "description": "Load the cover from /api/shares/{id}/cover with it as `v`"
+          },
+          "terms": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Terms",
+            "description": "The cover's terms"
+          },
+          "sources": {
+            "type": "integer",
+            "title": "Sources",
+            "description": "0 when sources are not included"
+          },
+          "decks": {
+            "type": "integer",
+            "title": "Decks"
+          },
+          "audios": {
+            "type": "integer",
+            "title": "Audios"
+          },
+          "maps": {
+            "type": "integer",
+            "title": "Maps"
+          },
+          "notes": {
+            "type": "integer",
+            "title": "Notes"
+          },
+          "reuses": {
+            "type": "integer",
+            "title": "Reuses"
+          },
+          "allow_edits": {
+            "type": "boolean",
+            "title": "Allow Edits",
+            "description": "A copy made now is the reuser's to change and share again; else it is read-only"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "collection_id",
+          "mine",
+          "shared_by",
+          "title",
+          "note",
+          "cover_version",
+          "terms",
+          "sources",
+          "decks",
+          "audios",
+          "maps",
+          "notes",
+          "reuses",
+          "allow_edits",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "ShareCard",
+        "description": "A share as the feed shows it. Counts are of what it includes and is\nstill there."
+      },
+      "ShareOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "collection_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Collection Id"
+          },
+          "include_sources": {
+            "type": "boolean",
+            "title": "Include Sources"
+          },
+          "outputs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Outputs",
+            "description": "Output keys, `session:<id>` (a deck or an audio overview), `mindmap:<id>` or `notes:<id>`, in the order the owner picked them. One deleted since stays here and is skipped wherever the share is read"
+          },
+          "note": {
+            "type": "string",
+            "title": "Note",
+            "description": "The owner's note, at most 280 characters; empty when none"
+          },
+          "reuses": {
+            "type": "integer",
+            "title": "Reuses",
+            "description": "How many times it was reused"
+          },
+          "allow_edits": {
+            "type": "boolean",
+            "title": "Allow Edits",
+            "description": "Copies made from it are their reuser's to change and share again; when false each copy is read-only. A change applies to copies made after it"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At",
+            "description": "The last time it was set: the feed's newest order"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "collection_id",
+          "include_sources",
+          "outputs",
+          "note",
+          "reuses",
+          "allow_edits",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "ShareOut",
+        "description": "A share as its owner sets it."
+      },
+      "SharePatch": {
+        "properties": {
+          "include_sources": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Include Sources"
+          },
+          "outputs": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array",
+                "maxItems": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Outputs"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "allow_edits": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Allow Edits"
+          }
+        },
+        "type": "object",
+        "title": "SharePatch"
+      },
+      "ShareSet": {
+        "properties": {
+          "include_sources": {
+            "type": "boolean",
+            "title": "Include Sources"
+          },
+          "outputs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 500,
+            "title": "Outputs",
+            "description": "Ready outputs: `session:<id>` (a deck or an audio overview), `mindmap:<id>` or `notes:<id>`"
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 2000,
+            "title": "Note",
+            "description": "Trimmed and cut to 280 characters",
+            "default": ""
+          },
+          "allow_edits": {
+            "type": "boolean",
+            "title": "Allow Edits",
+            "description": "Let people change their copies and share them again; otherwise each copy is read-only",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "include_sources"
+        ],
+        "title": "ShareSet"
+      },
+      "ShareView": {
+        "properties": {
+          "card": {
+            "$ref": "#/components/schemas/ShareCard"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/SourceOut"
+            },
+            "type": "array",
+            "title": "Sources",
+            "description": "Empty when the sources are not included"
+          },
+          "outputs": {
+            "items": {
+              "$ref": "#/components/schemas/SharedOutput"
+            },
+            "type": "array",
+            "title": "Outputs",
+            "description": "In the order the owner picked them"
+          }
+        },
+        "type": "object",
+        "required": [
+          "card",
+          "sources",
+          "outputs"
+        ],
+        "title": "ShareView",
+        "description": "One shared collection as a visitor sees it."
+      },
+      "SharedItem": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key",
+            "description": "The output key, as in the share's outputs"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "slides",
+              "audio",
+              "mindmap",
+              "notes"
+            ],
+            "title": "Kind"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id",
+            "description": "Read it at /api/shares/{share_id}/{sessions|mindmaps|notes}/{id}; a deck or audio overview plays at /ui/play/{id}?share={share_id}"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "parts": {
+            "type": "integer",
+            "title": "Parts",
+            "description": "Slides of a deck, chapters of an audio overview; else 0"
+          },
+          "duration_ms": {
+            "type": "integer",
+            "title": "Duration Ms",
+            "description": "Narration length; 0 before it is voiced, or for a map"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At",
+            "description": "When it was made: the newest order"
+          },
+          "share_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Share Id"
+          },
+          "collection_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Collection Id"
+          },
+          "collection_title": {
+            "type": "string",
+            "title": "Collection Title",
+            "description": "Its collection's current title"
+          },
+          "cover_version": {
+            "type": "string",
+            "title": "Cover Version",
+            "description": "Load its collection's cover from /api/shares/{share_id}/cover with it as `v`"
+          },
+          "shared_by": {
+            "type": "string",
+            "title": "Shared By",
+            "description": "The sharer's display name; empty when they have none"
+          },
+          "mine": {
+            "type": "boolean",
+            "title": "Mine",
+            "description": "The person asking shared it"
+          },
+          "reuses": {
+            "type": "integer",
+            "title": "Reuses",
+            "description": "How many times its share was reused: the reused order"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "kind",
+          "id",
+          "title",
+          "parts",
+          "duration_ms",
+          "created_at",
+          "share_id",
+          "collection_id",
+          "collection_title",
+          "cover_version",
+          "shared_by",
+          "mine",
+          "reuses"
+        ],
+        "title": "SharedItem",
+        "description": "One output a share includes, as Discover lists it on its own: to play\nor read without opening its collection first."
+      },
+      "SharedItems": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SharedItem"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "next_offset": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Offset",
+            "description": "Ask again with it as `offset` for the next page; null on the last"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "next_offset"
+        ],
+        "title": "SharedItems",
+        "description": "One page of Discover's items."
+      },
+      "SharedOutput": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key",
+            "description": "The output key, as in the share's outputs"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "slides",
+              "audio",
+              "mindmap",
+              "notes"
+            ],
+            "title": "Kind"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id",
+            "description": "Read it at /api/shares/{share}/{sessions|mindmaps|notes}/{id}"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "parts": {
+            "type": "integer",
+            "title": "Parts",
+            "description": "Slides of a deck, chapters of an audio overview; else 0"
+          },
+          "duration_ms": {
+            "type": "integer",
+            "title": "Duration Ms",
+            "description": "Narration length; 0 before it is voiced, or for a map"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "kind",
+          "id",
+          "title",
+          "parts",
+          "duration_ms",
+          "created_at"
+        ],
+        "title": "SharedOutput"
+      },
+      "SourceOut": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "description": "Stable within its collection; address the source by it"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "url",
+              "text",
+              "file",
+              "research"
+            ],
+            "title": "Kind"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "url": {
+            "type": "string",
+            "title": "Url",
+            "description": "Where it was read from; empty for a note, a file or a report"
+          },
+          "chars": {
+            "type": "integer",
+            "title": "Chars",
+            "description": "Length of the readable text"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "kind",
+          "title",
+          "url",
+          "chars",
+          "created_at"
+        ],
+        "title": "SourceOut"
+      },
+      "SourceText": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "description": "Stable within its collection; address the source by it"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "url",
+              "text",
+              "file",
+              "research"
+            ],
+            "title": "Kind"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "url": {
+            "type": "string",
+            "title": "Url",
+            "description": "Where it was read from; empty for a note, a file or a report"
+          },
+          "chars": {
+            "type": "integer",
+            "title": "Chars",
+            "description": "Length of the readable text"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text",
+            "description": "The source verbatim, as Markdown"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "kind",
+          "title",
+          "url",
+          "chars",
+          "created_at",
+          "text"
+        ],
+        "title": "SourceText"
+      },
+      "Style": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "blurb": {
+            "type": "string",
+            "title": "Blurb"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "label",
+          "blurb"
+        ],
+        "title": "Style"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      },
+      "WebHit": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "url": {
+            "type": "string",
+            "title": "Url"
+          },
+          "snippet": {
+            "type": "string",
+            "title": "Snippet"
+          }
+        },
+        "type": "object",
+        "required": [
+          "title",
+          "url",
+          "snippet"
+        ],
+        "title": "WebHit"
+      }
+    }
+  }
+}
