@@ -1,0 +1,487 @@
+{
+ "components": {
+  "schemas": {
+   "Citation": {
+    "description": "One passage an answer drew on, numbered as the answer numbers it.",
+    "properties": {
+     "excerpt": {
+      "description": "the passage itself",
+      "type": "string"
+     },
+     "n": {
+      "description": "the number in the answer's text: [1], [2]",
+      "type": "integer"
+     },
+     "name": {
+      "description": "the source's file name, as source_list names it",
+      "type": "string"
+     },
+     "title": {
+      "type": "string"
+     },
+     "url": {
+      "description": "where the source was read from; empty for a note or a research report",
+      "type": "string"
+     }
+    },
+    "required": [
+     "n",
+     "name",
+     "title",
+     "url",
+     "excerpt"
+    ],
+    "type": "object"
+   },
+   "DeepResearchReq": {
+    "properties": {
+     "sid": {
+      "description": "a collection's cid, from collection_create",
+      "type": "string"
+     },
+     "topic": {
+      "description": "what to research, in plain words",
+      "type": "string"
+     }
+    },
+    "required": [
+     "sid",
+     "topic"
+    ],
+    "type": "object"
+   },
+   "Source": {
+    "description": "One source that is part of a collection.",
+    "properties": {
+     "chars": {
+      "description": "length of the readable text",
+      "type": "integer"
+     },
+     "name": {
+      "description": "the stored file name; pass it to source_remove",
+      "type": "string"
+     },
+     "title": {
+      "description": "the page or note title",
+      "type": "string"
+     },
+     "url": {
+      "description": "where it was read from; empty for a pasted note or a research report",
+      "type": "string"
+     }
+    },
+    "required": [
+     "name",
+     "title",
+     "url",
+     "chars"
+    ],
+    "type": "object"
+   },
+   "SourceAddFileReq": {
+    "properties": {
+     "data_base64": {
+      "description": "the file's bytes in standard base64; at most 25 MB before encoding",
+      "type": "string"
+     },
+     "name": {
+      "description": "the file's name with its extension, which picks how it is read: pdf, docx, pptx, xlsx, md, markdown, txt or csv",
+      "type": "string"
+     },
+     "sid": {
+      "description": "a collection's cid, from collection_create",
+      "type": "string"
+     }
+    },
+    "required": [
+     "sid",
+     "name",
+     "data_base64"
+    ],
+    "type": "object"
+   },
+   "SourceAddResult": {
+    "description": "The outcome of reading one page or keeping one note.",
+    "properties": {
+     "chars": {
+      "description": "readable text kept; a few hundred means a thin page",
+      "type": "integer"
+     },
+     "error": {
+      "description": "why it was NOT added (unreadable, blocked, refused); empty when ok",
+      "type": "string"
+     },
+     "ok": {
+      "description": "true when it was added as a source",
+      "type": "boolean"
+     },
+     "title": {
+      "type": "string"
+     },
+     "url": {
+      "description": "the page asked for; empty for a note or a file",
+      "type": "string"
+     }
+    },
+    "required": [
+     "url",
+     "ok",
+     "title",
+     "chars",
+     "error"
+    ],
+    "type": "object"
+   },
+   "SourceAddTextReq": {
+    "properties": {
+     "sid": {
+      "description": "a collection's cid, from collection_create",
+      "type": "string"
+     },
+     "text": {
+      "description": "the note itself, in plain text or Markdown; at least a paragraph",
+      "type": "string"
+     },
+     "title": {
+      "description": "a name for it; the first words of the text when absent",
+      "type": "string"
+     }
+    },
+    "required": [
+     "sid",
+     "text"
+    ],
+    "type": "object"
+   },
+   "SourceAddUrlsReq": {
+    "properties": {
+     "sid": {
+      "description": "a collection's cid, from collection_create",
+      "type": "string"
+     },
+     "urls": {
+      "description": "up to 8 http(s) links; each is opened in a real browser and read",
+      "items": {
+       "type": "string"
+      },
+      "type": "array"
+     }
+    },
+    "required": [
+     "sid",
+     "urls"
+    ],
+    "type": "object"
+   },
+   "SourceAddUrlsResult": {
+    "properties": {
+     "added": {
+      "description": "how many became sources",
+      "type": "integer"
+     },
+     "results": {
+      "description": "one per url, in order, failures included",
+      "items": {
+       "$ref": "#/components/schemas/SourceAddResult"
+      },
+      "type": "array"
+     }
+    },
+    "required": [
+     "added",
+     "results"
+    ],
+    "type": "object"
+   },
+   "SourceAskReq": {
+    "properties": {
+     "question": {
+      "description": "in the person's words",
+      "type": "string"
+     },
+     "sid": {
+      "description": "a collection's cid, from collection_create",
+      "type": "string"
+     },
+     "sources": {
+      "description": "source names from source_list; every source when absent",
+      "items": {
+       "type": "string"
+      },
+      "type": "array"
+     }
+    },
+    "required": [
+     "sid",
+     "question"
+    ],
+    "type": "object"
+   },
+   "SourceAskResult": {
+    "properties": {
+     "answer": {
+      "description": "Markdown, with [n] markers after the claims",
+      "type": "string"
+     },
+     "citations": {
+      "description": "only the ones the answer cites, in order of first use",
+      "items": {
+       "$ref": "#/components/schemas/Citation"
+      },
+      "type": "array"
+     }
+    },
+    "required": [
+     "answer",
+     "citations"
+    ],
+    "type": "object"
+   },
+   "SourceListResult": {
+    "properties": {
+     "sources": {
+      "items": {
+       "$ref": "#/components/schemas/Source"
+      },
+      "type": "array"
+     }
+    },
+    "required": [
+     "sources"
+    ],
+    "type": "object"
+   },
+   "SourceRemoveReq": {
+    "properties": {
+     "name": {
+      "description": "a source name from source_list",
+      "type": "string"
+     },
+     "sid": {
+      "description": "a collection's cid",
+      "type": "string"
+     }
+    },
+    "required": [
+     "sid",
+     "name"
+    ],
+    "type": "object"
+   },
+   "WebSearchHit": {
+    "properties": {
+     "snippet": {
+      "type": "string"
+     },
+     "title": {
+      "type": "string"
+     },
+     "url": {
+      "description": "pass the best ones to source_add_urls",
+      "type": "string"
+     }
+    },
+    "required": [
+     "title",
+     "url",
+     "snippet"
+    ],
+    "type": "object"
+   },
+   "WebSearchResult": {
+    "properties": {
+     "hits": {
+      "items": {
+       "$ref": "#/components/schemas/WebSearchHit"
+      },
+      "type": "array"
+     }
+    },
+    "required": [
+     "hits"
+    ],
+    "type": "object"
+   }
+  }
+ },
+ "info": {
+  "description": "Gather the material a collection's decks, audio overviews, mind maps and notes are made from: search the web, add pages, notes or files, check what is there, and ask what it says.",
+  "title": "SourcesService",
+  "version": "0.1.0"
+ },
+ "methods": [
+  {
+   "description": "Start a new, untitled collection to collect sources in (the same as collection_create with no title). Returns its cid: pass it as sid to every source_* call, and as collection to session_build.",
+   "name": "draft_create",
+   "paramStructure": "by-name",
+   "params": [],
+   "result": {
+    "name": "result",
+    "schema": {
+     "type": "string"
+    }
+   }
+  },
+  {
+   "description": "Read web pages into a collection as sources. Each result says whether that page was added and, if not, why; replace a failed page with another search result.",
+   "name": "source_add_urls",
+   "paramStructure": "by-name",
+   "params": [
+    {
+     "name": "req",
+     "required": true,
+     "schema": {
+      "$ref": "#/components/schemas/SourceAddUrlsReq"
+     }
+    }
+   ],
+   "result": {
+    "name": "result",
+    "schema": {
+     "$ref": "#/components/schemas/SourceAddUrlsResult"
+    }
+   }
+  },
+  {
+   "description": "Add a pasted note or any text you already have to a collection as a source.",
+   "name": "source_add_text",
+   "paramStructure": "by-name",
+   "params": [
+    {
+     "name": "req",
+     "required": true,
+     "schema": {
+      "$ref": "#/components/schemas/SourceAddTextReq"
+     }
+    }
+   ],
+   "result": {
+    "name": "result",
+    "schema": {
+     "$ref": "#/components/schemas/SourceAddResult"
+    }
+   }
+  },
+  {
+   "description": "Add a document to a collection as a source: PDF, Word, PowerPoint, Excel, Markdown, text or CSV, sent as base64. It is read into text and titled by its file name; the result says why when it could not be read.",
+   "name": "source_add_file",
+   "paramStructure": "by-name",
+   "params": [
+    {
+     "name": "req",
+     "required": true,
+     "schema": {
+      "$ref": "#/components/schemas/SourceAddFileReq"
+     }
+    }
+   ],
+   "result": {
+    "name": "result",
+    "schema": {
+     "$ref": "#/components/schemas/SourceAddResult"
+    }
+   }
+  },
+  {
+   "description": "List the sources in a collection, to check what its outputs will be made from.",
+   "name": "source_list",
+   "paramStructure": "by-name",
+   "params": [
+    {
+     "name": "sid",
+     "required": true,
+     "schema": {
+      "type": "string"
+     }
+    }
+   ],
+   "result": {
+    "name": "result",
+    "schema": {
+     "$ref": "#/components/schemas/SourceListResult"
+    }
+   }
+  },
+  {
+   "description": "Remove one source from a collection by its name; false when there was no such source.",
+   "name": "source_remove",
+   "paramStructure": "by-name",
+   "params": [
+    {
+     "name": "req",
+     "required": true,
+     "schema": {
+      "$ref": "#/components/schemas/SourceRemoveReq"
+     }
+    }
+   ],
+   "result": {
+    "name": "result",
+    "schema": {
+     "type": "boolean"
+    }
+   }
+  },
+  {
+   "description": "Search the web and return result pages (title, url, snippet). Nothing is added: pass the best urls to source_add_urls.",
+   "name": "web_search",
+   "paramStructure": "by-name",
+   "params": [
+    {
+     "name": "query",
+     "required": true,
+     "schema": {
+      "type": "string"
+     }
+    }
+   ],
+   "result": {
+    "name": "result",
+    "schema": {
+     "$ref": "#/components/schemas/WebSearchResult"
+    }
+   }
+  },
+  {
+   "description": "Research a broad topic in depth (reads many pages; about a minute at Quick depth, a few at Standard, per the Web research depth setting) and add the written report to a collection as one source.",
+   "name": "deep_research",
+   "paramStructure": "by-name",
+   "params": [
+    {
+     "name": "req",
+     "required": true,
+     "schema": {
+      "$ref": "#/components/schemas/DeepResearchReq"
+     }
+    }
+   ],
+   "result": {
+    "name": "result",
+    "schema": {
+     "$ref": "#/components/schemas/SourceAddResult"
+    }
+   }
+  },
+  {
+   "description": "Answer a question from a collection's sources, citing the passages each claim rests on. Use it whenever the person asks what their material says.",
+   "name": "source_ask",
+   "paramStructure": "by-name",
+   "params": [
+    {
+     "name": "req",
+     "required": true,
+     "schema": {
+      "$ref": "#/components/schemas/SourceAskReq"
+     }
+    }
+   ],
+   "result": {
+    "name": "result",
+    "schema": {
+     "$ref": "#/components/schemas/SourceAskResult"
+    }
+   }
+  }
+ ],
+ "openrpc": "1.3.2"
+}

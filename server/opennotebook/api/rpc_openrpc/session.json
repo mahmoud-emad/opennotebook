@@ -1,0 +1,1379 @@
+{
+ "components": {
+  "schemas": {
+   "Aspect": {
+    "description": "Rendered slide dimensions. html slides are 1920x1080, png slides come back\n1376x768 (1.792:1, not 16:9), so a player mixing both letterboxes.",
+    "properties": {
+     "height": {
+      "type": "integer"
+     },
+     "width": {
+      "type": "integer"
+     }
+    },
+    "required": [
+     "width",
+     "height"
+    ],
+    "type": "object"
+   },
+   "AudioOverview": {
+    "description": "What makes a session an audio overview. See docs/audio-overview-spec.md.",
+    "properties": {
+     "focus": {
+      "description": "what the person asked it to centre on; empty when nothing",
+      "type": "string"
+     },
+     "format": {
+      "description": "\"deep_dive\" | \"brief\" | \"critique\" | \"debate\"",
+      "type": "string"
+     },
+     "length": {
+      "description": "\"shorter\" | \"default\" | \"longer\"",
+      "type": "string"
+     },
+     "minutes": {
+      "description": "about how long it was written to run",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "format",
+     "length",
+     "focus",
+     "minutes"
+    ],
+    "type": "object"
+   },
+   "Collection": {
+    "properties": {
+     "cid": {
+      "type": "string"
+     },
+     "created_ms": {
+      "type": "integer"
+     },
+     "pinned": {
+      "type": "boolean"
+     },
+     "title": {
+      "type": "string"
+     },
+     "title_auto": {
+      "type": "boolean"
+     },
+     "updated_ms": {
+      "description": "the last time a source or an output was added or changed",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "cid",
+     "title",
+     "title_auto",
+     "created_ms",
+     "updated_ms",
+     "pinned"
+    ],
+    "type": "object"
+   },
+   "CollectionCreateReq": {
+    "properties": {
+     "title": {
+      "description": "what the person called it; absent or empty and the studio names it from its sources",
+      "type": "string"
+     }
+    },
+    "required": [],
+    "type": "object"
+   },
+   "CollectionGetResult": {
+    "properties": {
+     "collection": {
+      "$ref": "#/components/schemas/CollectionSummary"
+     },
+     "found": {
+      "type": "boolean"
+     },
+     "outputs": {
+      "description": "its decks and audio overviews, newest first; maps and notes are mindmap_list / notes_list on the cid",
+      "items": {
+       "$ref": "#/components/schemas/SessionSummary"
+      },
+      "type": "array"
+     }
+    },
+    "required": [
+     "found",
+     "outputs"
+    ],
+    "type": "object"
+   },
+   "CollectionListResult": {
+    "properties": {
+     "collections": {
+      "description": "most recently updated first",
+      "items": {
+       "$ref": "#/components/schemas/CollectionSummary"
+      },
+      "type": "array"
+     }
+    },
+    "required": [
+     "collections"
+    ],
+    "type": "object"
+   },
+   "CollectionPinReq": {
+    "properties": {
+     "cid": {
+      "type": "string"
+     },
+     "pinned": {
+      "type": "boolean"
+     }
+    },
+    "required": [
+     "cid",
+     "pinned"
+    ],
+    "type": "object"
+   },
+   "CollectionRetitleReq": {
+    "properties": {
+     "cid": {
+      "type": "string"
+     },
+     "title": {
+      "description": "trimmed; empty hands the naming back to the studio",
+      "type": "string"
+     }
+    },
+    "required": [
+     "cid",
+     "title"
+    ],
+    "type": "object"
+   },
+   "CollectionSummary": {
+    "description": "A collection as a list shows it: the record and what is in it.",
+    "properties": {
+     "audios": {
+      "description": "audio overviews, any state",
+      "type": "integer"
+     },
+     "cid": {
+      "type": "string"
+     },
+     "cover_version": {
+      "type": "string"
+     },
+     "created_ms": {
+      "type": "integer"
+     },
+     "decks": {
+      "description": "narrated slide sessions, any state",
+      "type": "integer"
+     },
+     "failed": {
+      "type": "integer"
+     },
+     "maps": {
+      "type": "integer"
+     },
+     "notes": {
+      "type": "integer"
+     },
+     "pinned": {
+      "type": "boolean"
+     },
+     "preparing": {
+      "description": "decks and audio overviews still being made",
+      "type": "integer"
+     },
+     "sources": {
+      "description": "staged sources",
+      "type": "integer"
+     },
+     "title": {
+      "type": "string"
+     },
+     "title_auto": {
+      "type": "boolean"
+     },
+     "updated_ms": {
+      "type": "integer"
+     }
+    },
+    "required": [
+     "cid",
+     "title",
+     "title_auto",
+     "created_ms",
+     "updated_ms",
+     "pinned",
+     "sources",
+     "decks",
+     "audios",
+     "maps",
+     "notes",
+     "preparing",
+     "failed",
+     "cover_version"
+    ],
+    "type": "object"
+   },
+   "CostLine": {
+    "description": "One step of a build and what it costs. Every step is listed, free ones too.",
+    "properties": {
+     "calls_high": {
+      "type": "integer"
+     },
+     "calls_low": {
+      "type": "integer"
+     },
+     "calls_typical": {
+      "type": "integer"
+     },
+     "cost_high_usd": {
+      "type": "number"
+     },
+     "cost_low_usd": {
+      "type": "number"
+     },
+     "cost_typical_usd": {
+      "type": "number"
+     },
+     "detail": {
+      "description": "how the count was reached, in plain words",
+      "type": "string"
+     },
+     "free": {
+      "description": "runs locally or makes no call",
+      "type": "boolean"
+     },
+     "group": {
+      "description": "the phase: reading sources, script, slides, narration",
+      "type": "string"
+     },
+     "input_tokens": {
+      "description": "measured from the sources and prompts (typical case)",
+      "type": "integer"
+     },
+     "model": {
+      "description": "the model it calls; empty when it calls none",
+      "type": "string"
+     },
+     "output_tokens_high": {
+      "type": "integer"
+     },
+     "output_tokens_low": {
+      "type": "integer"
+     },
+     "output_tokens_typical": {
+      "type": "integer"
+     },
+     "price_in_per_million": {
+      "description": "USD per million input tokens",
+      "type": "number"
+     },
+     "price_out_per_million": {
+      "description": "USD per million output tokens",
+      "type": "number"
+     },
+     "step": {
+      "description": "what the step does, in a few words",
+      "type": "string"
+     },
+     "unpriced": {
+      "description": "the model has no price in the catalog; counted as 0",
+      "type": "boolean"
+     },
+     "via": {
+      "description": "which service makes the call, and through what",
+      "type": "string"
+     }
+    },
+    "required": [
+     "group",
+     "step",
+     "detail",
+     "model",
+     "via",
+     "calls_low",
+     "calls_typical",
+     "calls_high",
+     "input_tokens",
+     "output_tokens_low",
+     "output_tokens_typical",
+     "output_tokens_high",
+     "cost_low_usd",
+     "cost_typical_usd",
+     "cost_high_usd",
+     "free",
+     "unpriced"
+    ],
+    "type": "object"
+   },
+   "Cue": {
+    "description": "One subtitle-sized span within a line's audio. ALWAYS EMPTY in phase 1 — see\nthe phase 1 spec section 2. Declared so a later producer is not a schema\nchange; nothing populates it and no caller should expect content.",
+    "properties": {
+     "at_secs": {
+      "type": "number"
+     },
+     "end_secs": {
+      "type": "number"
+     },
+     "text": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "at_secs",
+     "end_secs",
+     "text"
+    ],
+    "type": "object"
+   },
+   "DeckRef": {
+    "description": "Separate from SlideRef because `deck_ref` used to be one with a permanently\nempty `slide`, which §4 called out as the same class of lie as a declared\nprotocol nothing serves — a field that is always empty teaches a reader to\nignore it, and a player addressing the deck by it gets nothing. §2 already\ndescribes this as \"collection + presentation\".",
+    "properties": {
+     "collection": {
+      "type": "string"
+     },
+     "presentation": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "collection",
+     "presentation"
+    ],
+    "type": "object"
+   },
+   "NarrationLine": {
+    "description": "`audio_path` is the studio's own local path and it is deliberately NOT what a\nplayer fetches: it is unreachable from a browser and it is an absolute path on\nthis box. `audio_url` beside it is the route that serves those bytes, and it\nis the field a player reads. Both are present because the path is what the\nprep job wrote and the url is what the surface exposes; a reader that wants\nbytes wants the url.",
+    "properties": {
+     "audio_path": {
+      "description": "studio-local path to the WAV; absent until synthesised",
+      "type": "string"
+     },
+     "audio_url": {
+      "description": "route that serves that WAV; absent until synthesised",
+      "type": "string"
+     },
+     "cues": {
+      "description": "empty in phase 1",
+      "items": {
+       "$ref": "#/components/schemas/Cue"
+      },
+      "type": "array"
+     },
+     "duration_ms": {
+      "description": "measured from the WAV header, never estimated",
+      "type": "integer"
+     },
+     "line_id": {
+      "type": "string"
+     },
+     "ordinal": {
+      "description": "explicit; never inferred from position in the list",
+      "type": "integer"
+     },
+     "speaker_id": {
+      "description": "REQUIRED, always, even in a one-speaker session",
+      "type": "string"
+     },
+     "text": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "line_id",
+     "speaker_id",
+     "ordinal",
+     "text",
+     "cues"
+    ],
+    "type": "object"
+   },
+   "PlaybackAtReq": {
+    "description": "The browser sends where it actually is rather than the studio inferring it from\na timer: the audio element is the only clock that knows what was really heard,\nand a studio-side timer would drift from it.",
+    "properties": {
+     "line_id": {
+      "type": "string"
+     },
+     "offset_ms": {
+      "type": "integer"
+     },
+     "sid": {
+      "type": "string"
+     },
+     "slide_ordinal": {
+      "type": "integer"
+     }
+    },
+    "required": [
+     "sid",
+     "slide_ordinal",
+     "line_id",
+     "offset_ms"
+    ],
+    "type": "object"
+   },
+   "Playhead": {
+    "description": "`offset_ms` is a FREE millisecond value inside `line_id`, not a line index.\n§5 requires pause at an arbitrary offset and requires the offset to be\nrecorded, because phase 2 pauses on a keypress mid-line; a player that can only\nstop between lines is one phase 2 rewrites. Building it now is a parameter,\nretrofitting it is a rewrite.",
+    "properties": {
+     "line_id": {
+      "description": "\"\" before the first line starts",
+      "type": "string"
+     },
+     "offset_ms": {
+      "description": "arbitrary, inside line_id",
+      "type": "integer"
+     },
+     "slide_ordinal": {
+      "type": "integer"
+     },
+     "state": {
+      "description": "\"idle\" | \"playing\" | \"paused\" | \"finished\"",
+      "type": "string"
+     }
+    },
+    "required": [
+     "slide_ordinal",
+     "line_id",
+     "offset_ms",
+     "state"
+    ],
+    "type": "object"
+   },
+   "Session": {
+    "description": "`speaker_count` is NOT a field. It is `speakers` length, and a stored count\ncan disagree with the speakers present — two fields describing one fact.",
+    "properties": {
+     "audio": {
+      "$ref": "#/components/schemas/AudioOverview",
+      "description": "present for an audio overview, which has chapters and no slides"
+     },
+     "collection": {
+      "type": "string"
+     },
+     "collection_name": {
+      "type": "string"
+     },
+     "collection_sid": {
+      "description": "unused, kept so older rows decode; a collection is deleted by name",
+      "type": "string"
+     },
+     "deck_ref": {
+      "$ref": "#/components/schemas/DeckRef"
+     },
+     "failure": {
+      "description": "reason a \"failed\" session failed, with its prep job sid",
+      "type": "string"
+     },
+     "prep_job_sid": {
+      "description": "the job that prepared this session",
+      "type": "string"
+     },
+     "sid": {
+      "description": "names the session directory and the memory collection too",
+      "type": "string"
+     },
+     "slides": {
+      "items": {
+       "$ref": "#/components/schemas/SessionSlide"
+      },
+      "type": "array"
+     },
+     "speakers": {
+      "items": {
+       "$ref": "#/components/schemas/Speaker"
+      },
+      "type": "array"
+     },
+     "spent_usd": {
+      "type": "number"
+     },
+     "state": {
+      "description": "\"preparing\" | \"ready\" | \"failed\"",
+      "type": "string"
+     },
+     "style": {
+      "description": "the slide style id a deck was built in; absent for an audio overview and older rows. A retry passes it back as `style`.",
+      "type": "string"
+     },
+     "title": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "sid",
+     "title",
+     "collection_name",
+     "speakers",
+     "slides",
+     "state"
+    ],
+    "type": "object"
+   },
+   "SessionAskReq": {
+    "properties": {
+     "question": {
+      "description": "what the listener wants to know, in their words",
+      "type": "string"
+     },
+     "sid": {
+      "description": "a built session",
+      "type": "string"
+     },
+     "slide_ordinal": {
+      "description": "the slide they were on (0-based), so the answer can start from it",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "sid",
+     "question"
+    ],
+    "type": "object"
+   },
+   "SessionAskResult": {
+    "properties": {
+     "answer": {
+      "description": "a short spoken-style answer grounded in the session's sources",
+      "type": "string"
+     }
+    },
+    "required": [
+     "answer"
+    ],
+    "type": "object"
+   },
+   "SessionBuildReq": {
+    "description": "A build from a collection's sources, with the studio's defaults for whatever is not\ngiven. The one call an agent needs after gathering sources.",
+    "properties": {
+     "audio_format": {
+      "description": "make an audio overview instead: \"deep_dive\", \"brief\", \"critique\" or \"debate\"",
+      "type": "string"
+     },
+     "audio_length": {
+      "description": "\"shorter\" | \"default\" | \"longer\"; the studio setting when absent",
+      "type": "string"
+     },
+     "collection": {
+      "description": "the collection (cid from collection_create) whose sources to build from",
+      "type": "string"
+     },
+     "focus": {
+      "description": "what to centre the audio overview on",
+      "type": "string"
+     },
+     "sid": {
+      "type": "string"
+     },
+     "slide_count": {
+      "description": "how many slides, 3 to 12 (outside is clamped); the studio setting when absent",
+      "type": "integer"
+     },
+     "speakers": {
+      "description": "1 for one narrator, 2 for a narrator and an expert in conversation; the studio setting when absent",
+      "type": "integer"
+     },
+     "style": {
+      "description": "a style id from styles_list; the studio setting when absent",
+      "type": "string"
+     },
+     "title": {
+      "description": "the output's title, a few words; absent, the collection's title, or \"Narrated slides\" / \"Audio overview\" while it has none",
+      "type": "string"
+     }
+    },
+    "required": [
+     "sid"
+    ],
+    "type": "object"
+   },
+   "SessionEstimateResult": {
+    "properties": {
+     "assumptions": {
+      "description": "what was measured, what was estimated, what is not included",
+      "items": {
+       "type": "string"
+      },
+      "type": "array"
+     },
+     "limit_usd": {
+      "description": "the studio's spending limit per session; 0 when there is none",
+      "type": "number"
+     },
+     "lines": {
+      "items": {
+       "$ref": "#/components/schemas/CostLine"
+      },
+      "type": "array"
+     },
+     "minutes": {
+      "description": "about how long the session's narration will run",
+      "type": "integer"
+     },
+     "over_limit": {
+      "description": "the high estimate is over the limit, so a build would be refused",
+      "type": "boolean"
+     },
+     "priced_at": {
+      "description": "when the prices were read, RFC 3339",
+      "type": "string"
+     },
+     "slides": {
+      "type": "integer"
+     },
+     "slides_tier": {
+      "description": "the model that writes the slides, e.g. anthropic/claude-haiku-4.5",
+      "type": "string"
+     },
+     "source_chars": {
+      "type": "integer"
+     },
+     "sources": {
+      "type": "integer"
+     },
+     "speakers": {
+      "type": "integer"
+     },
+     "style": {
+      "type": "string"
+     },
+     "total_high_usd": {
+      "type": "number"
+     },
+     "total_low_usd": {
+      "type": "number"
+     },
+     "total_typical_usd": {
+      "type": "number"
+     }
+    },
+    "required": [
+     "total_low_usd",
+     "total_typical_usd",
+     "total_high_usd",
+     "lines",
+     "assumptions",
+     "sources",
+     "source_chars",
+     "slides",
+     "speakers",
+     "style",
+     "slides_tier",
+     "priced_at",
+     "minutes",
+     "limit_usd",
+     "over_limit"
+    ],
+    "type": "object"
+   },
+   "SessionGetResult": {
+    "description": "`found` is the discriminator and it is separate from `session` on purpose.\nAbsence is a missing row, and a caller should never have to infer it from\nan empty value: read `found`, never the emptiness of `session`.",
+    "properties": {
+     "found": {
+      "description": "the discriminator; never infer absence from `session`",
+      "type": "boolean"
+     },
+     "session": {
+      "$ref": "#/components/schemas/Session"
+     }
+    },
+    "required": [
+     "found"
+    ],
+    "type": "object"
+   },
+   "SessionListResult": {
+    "properties": {
+     "sessions": {
+      "items": {
+       "$ref": "#/components/schemas/SessionSummary"
+      },
+      "type": "array"
+     }
+    },
+    "required": [
+     "sessions"
+    ],
+    "type": "object"
+   },
+   "SessionPinReq": {
+    "description": "Pinning, both directions. `pinned: false` unpins — not a separate method,\nbecause the button is a toggle and two methods would let the two drift.",
+    "properties": {
+     "pinned": {
+      "type": "boolean"
+     },
+     "sid": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "sid",
+     "pinned"
+    ],
+    "type": "object"
+   },
+   "SessionPrepareReq": {
+    "description": "This RETURNS as soon as the job row exists. Preparing a session takes minutes\n— 20 to 37 s per slide to render plus 4.4 to 5.7 s per line to synthesise —\nso it is a job with progress, never a request anyone waits on. Poll\nsession_get with the returned sid.",
+    "properties": {
+     "audio_format": {
+      "type": "string"
+     },
+     "audio_length": {
+      "description": "\"shorter\" | \"default\" | \"longer\"; absent takes the studio setting; a length the format does not offer becomes \"default\"",
+      "type": "string"
+     },
+     "collection": {
+      "type": "string"
+     },
+     "focus": {
+      "description": "what to centre the audio overview on, in the person's words",
+      "type": "string"
+     },
+     "research_topic": {
+      "type": "string"
+     },
+     "resource_dir": {
+      "description": "directory of user resources to ingest",
+      "type": "string"
+     },
+     "sid": {
+      "description": "must be unique per workspace: it names the session directory AND the memory collection",
+      "type": "string"
+     },
+     "slide_count": {
+      "description": "a deck's slides, 3 to 12 (outside is clamped); absent takes the studio setting. Ignored for an audio overview.",
+      "type": "integer"
+     },
+     "speakers": {
+      "description": "empty takes the voices from the studio settings, as session_build does",
+      "items": {
+       "$ref": "#/components/schemas/Speaker"
+      },
+      "type": "array"
+     },
+     "style": {
+      "type": "string"
+     },
+     "title": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "sid",
+     "title",
+     "resource_dir",
+     "speakers"
+    ],
+    "type": "object"
+   },
+   "SessionPrepareResult": {
+    "description": "What a prepare call returns. `accepted` says the job row was created, NOT that\nthe session prepared: read the session's `state` for that. Reaching\nsteps_total does not imply success either.",
+    "properties": {
+     "accepted": {
+      "type": "boolean"
+     },
+     "prep_job_sid": {
+      "description": "the job row the prep runs as",
+      "type": "string"
+     },
+     "sid": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "accepted",
+     "sid",
+     "prep_job_sid"
+    ],
+    "type": "object"
+   },
+   "SessionRetitleReq": {
+    "description": "Renaming. The title is the one thing in a session a person authored, and the\nmodel's guess at it is often wrong in a way only they can fix.",
+    "properties": {
+     "sid": {
+      "type": "string"
+     },
+     "title": {
+      "description": "trimmed; empty is refused rather than stored, since a session with",
+      "type": "string"
+     }
+    },
+    "required": [
+     "sid",
+     "title"
+    ],
+    "type": "object"
+   },
+   "SessionSlide": {
+    "description": "`slide_url` is the route that serves this slide's rendered HTML, the same way\n`audio_url` serves a line's WAV. The slide bytes are files under the deck\nroot, not part of this document; this route reads them on the caller's\nbehalf so a player needs no file access of its own.",
+    "properties": {
+     "aspect": {
+      "$ref": "#/components/schemas/Aspect"
+     },
+     "lines": {
+      "items": {
+       "$ref": "#/components/schemas/NarrationLine"
+      },
+      "type": "array"
+     },
+     "ordinal": {
+      "type": "integer"
+     },
+     "slide_ref": {
+      "$ref": "#/components/schemas/SlideRef"
+     },
+     "slide_url": {
+      "type": "string"
+     },
+     "title": {
+      "description": "the part's heading: the slide's title, or an audio overview's chapter",
+      "type": "string"
+     }
+    },
+    "required": [
+     "slide_ref",
+     "ordinal",
+     "aspect",
+     "slide_url",
+     "title",
+     "lines"
+    ],
+    "type": "object"
+   },
+   "SessionSummary": {
+    "description": "Listing sessions. Summaries rather than whole documents: a session carries\nevery line of narration and a list of them would be megabytes.",
+    "properties": {
+     "audio_format": {
+      "description": "an audio overview's format id; empty for a session",
+      "type": "string"
+     },
+     "collection": {
+      "type": "string"
+     },
+     "created_ms": {
+      "type": "integer"
+     },
+     "description": {
+      "type": "string"
+     },
+     "duration_ms": {
+      "description": "the narration's length, from its measured lines; 0 before it is synthesised",
+      "type": "integer"
+     },
+     "kind": {
+      "description": "\"session\" for a narrated slide session, \"audio\" for an audio overview",
+      "type": "string"
+     },
+     "pinned": {
+      "type": "boolean"
+     },
+     "sid": {
+      "type": "string"
+     },
+     "slide_count": {
+      "description": "slides of a session, chapters of an audio overview",
+      "type": "integer"
+     },
+     "speakers": {
+      "type": "integer"
+     },
+     "spent_known": {
+      "description": "false for a session prepared before spend was recorded, or not fully priced",
+      "type": "boolean"
+     },
+     "spent_usd": {
+      "type": "number"
+     },
+     "state": {
+      "type": "string"
+     },
+     "title": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "sid",
+     "title",
+     "state",
+     "slide_count",
+     "speakers",
+     "kind",
+     "audio_format",
+     "duration_ms",
+     "description",
+     "created_ms",
+     "pinned",
+     "collection",
+     "spent_usd",
+     "spent_known"
+    ],
+    "type": "object"
+   },
+   "SlideRef": {
+    "description": "Addresses one slide on disk: `<collection>/<presentation>/<slide>` under the\ndeck root, where `collection` is the session's deck directory.",
+    "properties": {
+     "collection": {
+      "type": "string"
+     },
+     "presentation": {
+      "type": "string"
+     },
+     "slide": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "collection",
+     "presentation",
+     "slide"
+    ],
+    "type": "object"
+   },
+   "Speaker": {
+    "properties": {
+     "display_name": {
+      "type": "string"
+     },
+     "role": {
+      "description": "free text; phase 1 does not interpret it",
+      "type": "string"
+     },
+     "speaker_id": {
+      "description": "unique within its session",
+      "type": "string"
+     },
+     "voice_id": {
+      "description": "a Kokoro voice id, e.g. af_bella, am_adam",
+      "type": "string"
+     }
+    },
+    "required": [
+     "speaker_id",
+     "voice_id",
+     "display_name",
+     "role"
+    ],
+    "type": "object"
+   }
+  }
+ },
+ "info": {
+  "description": "Narrated slide sessions: build one from gathered sources, follow the build, read, list and manage sessions, ask questions about one, and drive playback.",
+  "title": "SessionService",
+  "version": "0.1.0"
+ },
+ "methods": [
+  {
+   "description": "Start a collection: an empty set of sources to add to (see the sources tools, with the cid as sid) and build outputs from. The title is optional.",
+   "name": "collection_create",
+   "paramStructure": "by-name",
+   "params": [
+    {
+     "name": "req",
+     "required": true,
+     "schema": {
+      "$ref": "#/components/schemas/CollectionCreateReq"
+     }
+    }
+   ],
+   "result": {
+    "name": "result",
+    "schema": {
+     "$ref": "#/components/schemas/Collection"
+    }
+   }
+  },
+  {
+   "description": "Every collection, most recently updated first, with counts of its sources and outputs.",
+   "name": "collection_list",
+   "paramStructure": "by-name",
+   "params": [],
+   "result": {
+    "name": "result",
+    "schema": {
+     "$ref": "#/components/schemas/CollectionListResult"
+    }
+   }
+  },
+  {
+   "description": "One collection and its decks and audio overviews. Check `found` first.",
+   "name": "collection_get",
+   "paramStructure": "by-name",
+   "params": [
+    {
+     "name": "cid",
+     "required": true,
+     "schema": {
+      "type": "string"
+     }
+    }
+   ],
+   "result": {
+    "name": "result",
+    "schema": {
+     "$ref": "#/components/schemas/CollectionGetResult"
+    }
+   }
+  },
+  {
+   "description": "Rename a collection; an empty title lets the studio name it. False when there was no such collection.",
+   "name": "collection_retitle",
+   "paramStructure": "by-name",
+   "params": [
+    {
+     "name": "req",
+     "required": true,
+     "schema": {
+      "$ref": "#/components/schemas/CollectionRetitleReq"
+     }
+    }
+   ],
+   "result": {
+    "name": "result",
+    "schema": {
+     "type": "boolean"
+    }
+   }
+  },
+  {
+   "description": "Pin or unpin a collection. False when there was no such collection.",
+   "name": "collection_pin",
+   "paramStructure": "by-name",
+   "params": [
+    {
+     "name": "req",
+     "required": true,
+     "schema": {
+      "$ref": "#/components/schemas/CollectionPinReq"
+     }
+    }
+   ],
+   "result": {
+    "name": "result",
+    "schema": {
+     "type": "boolean"
+    }
+   }
+  },
+  {
+   "description": "Design the collection's cover again now, from what it holds, even if nothing changed. Returns once it is drawn; with covers off in Settings no model is asked. False when there was no such collection.",
+   "name": "collection_cover_refresh",
+   "paramStructure": "by-name",
+   "params": [
+    {
+     "name": "cid",
+     "required": true,
+     "schema": {
+      "type": "string"
+     }
+    }
+   ],
+   "result": {
+    "name": "result",
+    "schema": {
+     "type": "boolean"
+    }
+   }
+  },
+  {
+   "description": "Delete a collection with its sources and everything made from them: its decks and audio overviews as session_delete removes one, its maps and notes. A job still preparing one is stopped. False when there was no such collection.",
+   "name": "collection_delete",
+   "paramStructure": "by-name",
+   "params": [
+    {
+     "name": "cid",
+     "required": true,
+     "schema": {
+      "type": "string"
+     }
+    }
+   ],
+   "result": {
+    "name": "result",
+    "schema": {
+     "type": "boolean"
+    }
+   }
+  },
+  {
+   "description": "Build a narrated slide session or an audio overview from a collection's sources: pass `collection` and an empty sid, and call it as often as you like for more outputs. Takes minutes; poll session_get with the returned sid until state is ready or failed.",
+   "name": "session_build",
+   "paramStructure": "by-name",
+   "params": [
+    {
+     "name": "req",
+     "required": true,
+     "schema": {
+      "$ref": "#/components/schemas/SessionBuildReq"
+     }
+    }
+   ],
+   "result": {
+    "name": "result",
+    "schema": {
+     "$ref": "#/components/schemas/SessionPrepareResult"
+    }
+   }
+  },
+  {
+   "description": "One session in full: state (preparing, ready, failed), title, slides and every narration line. Check `found` first.",
+   "name": "session_get",
+   "paramStructure": "by-name",
+   "params": [
+    {
+     "name": "sid",
+     "required": true,
+     "schema": {
+      "type": "string"
+     }
+    }
+   ],
+   "result": {
+    "name": "result",
+    "schema": {
+     "$ref": "#/components/schemas/SessionGetResult"
+    }
+   }
+  },
+  {
+   "description": "Every session, newest first, as summaries (sid, title, state, slide count). Use session_get for the full content.",
+   "name": "session_list",
+   "paramStructure": "by-name",
+   "params": [],
+   "result": {
+    "name": "result",
+    "schema": {
+     "$ref": "#/components/schemas/SessionListResult"
+    }
+   }
+  },
+  {
+   "description": "What session_build would cost with the same arguments, before running it: every step, its model, tokens and a low/typical/high price in USD. Makes no model call.",
+   "name": "session_estimate",
+   "paramStructure": "by-name",
+   "params": [
+    {
+     "name": "req",
+     "required": true,
+     "schema": {
+      "$ref": "#/components/schemas/SessionBuildReq"
+     }
+    }
+   ],
+   "result": {
+    "name": "result",
+    "schema": {
+     "$ref": "#/components/schemas/SessionEstimateResult"
+    }
+   }
+  },
+  {
+   "description": "Ask a question about a built session and get a short answer grounded in its sources.",
+   "name": "session_ask",
+   "paramStructure": "by-name",
+   "params": [
+    {
+     "name": "req",
+     "required": true,
+     "schema": {
+      "$ref": "#/components/schemas/SessionAskReq"
+     }
+    }
+   ],
+   "result": {
+    "name": "result",
+    "schema": {
+     "$ref": "#/components/schemas/SessionAskResult"
+    }
+   }
+  },
+  {
+   "description": "Low-level build with every parameter explicit (speakers with voices, a resource directory on the server). Prefer session_build.",
+   "name": "session_prepare",
+   "paramStructure": "by-name",
+   "params": [
+    {
+     "name": "req",
+     "required": true,
+     "schema": {
+      "$ref": "#/components/schemas/SessionPrepareReq"
+     }
+    }
+   ],
+   "result": {
+    "name": "result",
+    "schema": {
+     "$ref": "#/components/schemas/SessionPrepareResult"
+    }
+   }
+  },
+  {
+   "description": "Delete a session (a deck or an audio overview): its row, then its deck, audio and memory collection, best effort. A prep still running is stopped. False when there was no such session.",
+   "name": "session_delete",
+   "paramStructure": "by-name",
+   "params": [
+    {
+     "name": "sid",
+     "required": true,
+     "schema": {
+      "type": "string"
+     }
+    }
+   ],
+   "result": {
+    "name": "result",
+    "schema": {
+     "type": "boolean"
+    }
+   }
+  },
+  {
+   "description": "Rename a session. False when there was no such session.",
+   "name": "session_retitle",
+   "paramStructure": "by-name",
+   "params": [
+    {
+     "name": "req",
+     "required": true,
+     "schema": {
+      "$ref": "#/components/schemas/SessionRetitleReq"
+     }
+    }
+   ],
+   "result": {
+    "name": "result",
+    "schema": {
+     "type": "boolean"
+    }
+   }
+  },
+  {
+   "description": "Pin or unpin a session in the gallery. False when there was no such session.",
+   "name": "session_pin",
+   "paramStructure": "by-name",
+   "params": [
+    {
+     "name": "req",
+     "required": true,
+     "schema": {
+      "$ref": "#/components/schemas/SessionPinReq"
+     }
+    }
+   ],
+   "result": {
+    "name": "result",
+    "schema": {
+     "type": "boolean"
+    }
+   }
+  },
+  {
+   "description": "Where a session's playback is now: slide, line and offset, playing or paused.",
+   "name": "playback_get",
+   "paramStructure": "by-name",
+   "params": [
+    {
+     "name": "sid",
+     "required": true,
+     "schema": {
+      "type": "string"
+     }
+    }
+   ],
+   "result": {
+    "name": "result",
+    "schema": {
+     "$ref": "#/components/schemas/Playhead"
+    }
+   }
+  },
+  {
+   "description": "Start or resume playback at a position.",
+   "name": "playback_play",
+   "paramStructure": "by-name",
+   "params": [
+    {
+     "name": "req",
+     "required": true,
+     "schema": {
+      "$ref": "#/components/schemas/PlaybackAtReq"
+     }
+    }
+   ],
+   "result": {
+    "name": "result",
+    "schema": {
+     "$ref": "#/components/schemas/Playhead"
+    }
+   }
+  },
+  {
+   "description": "Pause playback, recording the exact position.",
+   "name": "playback_pause",
+   "paramStructure": "by-name",
+   "params": [
+    {
+     "name": "req",
+     "required": true,
+     "schema": {
+      "$ref": "#/components/schemas/PlaybackAtReq"
+     }
+    }
+   ],
+   "result": {
+    "name": "result",
+    "schema": {
+     "$ref": "#/components/schemas/Playhead"
+    }
+   }
+  },
+  {
+   "description": "For players: report the current position while playing.",
+   "name": "playback_progress",
+   "paramStructure": "by-name",
+   "params": [
+    {
+     "name": "req",
+     "required": true,
+     "schema": {
+      "$ref": "#/components/schemas/PlaybackAtReq"
+     }
+    }
+   ],
+   "result": {
+    "name": "result",
+    "schema": {
+     "$ref": "#/components/schemas/Playhead"
+    }
+   }
+  },
+  {
+   "description": "For players: the last line of the last slide has ended.",
+   "name": "playback_finish",
+   "paramStructure": "by-name",
+   "params": [
+    {
+     "name": "sid",
+     "required": true,
+     "schema": {
+      "type": "string"
+     }
+    }
+   ],
+   "result": {
+    "name": "result",
+    "schema": {
+     "$ref": "#/components/schemas/Playhead"
+    }
+   }
+  }
+ ],
+ "openrpc": "1.3.2"
+}

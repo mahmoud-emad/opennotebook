@@ -14,6 +14,7 @@ from opennotebook.api import (
     media,
     mindmaps,
     notes,
+    rpc,
     sessions,
     settings,
     shares,
@@ -57,6 +58,9 @@ def create_app() -> FastAPI:
         shares,
     ):
         app.include_router(module.router)
+    # DEPRECATED: the old JSON-RPC API, for one release after cutover; delete
+    # this line with api/rpc.py, api/rpc_methods.py and api/rpc_openrpc/.
+    app.include_router(rpc.router)
     return app
 
 

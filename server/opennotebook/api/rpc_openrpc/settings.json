@@ -1,0 +1,272 @@
+{
+ "components": {
+  "schemas": {
+   "Setting": {
+    "properties": {
+     "advanced": {
+      "description": "shown in a collapsed Advanced section",
+      "type": "boolean"
+     },
+     "default": {
+      "type": "string"
+     },
+     "group": {
+      "description": "a heading inside the tab, e.g. \"Writing\"; empty for none",
+      "type": "string"
+     },
+     "help": {
+      "type": "string"
+     },
+     "key": {
+      "description": "pass to settings_set",
+      "type": "string"
+     },
+     "kind": {
+      "description": "choice, number, toggle or text",
+      "type": "string"
+     },
+     "label": {
+      "type": "string"
+     },
+     "max": {
+      "type": "integer"
+     },
+     "min": {
+      "description": "bounds when kind is number",
+      "type": "integer"
+     },
+     "model": {
+      "type": "boolean"
+     },
+     "options": {
+      "description": "the allowed values when kind is choice; the tested models when `model`",
+      "items": {
+       "$ref": "#/components/schemas/SettingOption"
+      },
+      "type": "array"
+     },
+     "price": {
+      "description": "the price of the model in effect, as an option's hint; empty when unknown",
+      "type": "string"
+     },
+     "tab": {
+      "description": "the tab label it sits on, one of SettingsGetResult.tabs",
+      "type": "string"
+     },
+     "unit": {
+      "description": "what a number counts, \"slides\" or \"min\"; empty for none",
+      "type": "string"
+     },
+     "value": {
+      "description": "current value; empty means the default applies",
+      "type": "string"
+     }
+    },
+    "required": [
+     "key",
+     "tab",
+     "group",
+     "label",
+     "help",
+     "kind",
+     "value",
+     "default",
+     "options",
+     "unit",
+     "advanced",
+     "model",
+     "price"
+    ],
+    "type": "object"
+   },
+   "SettingOption": {
+    "properties": {
+     "hint": {
+      "description": "a model's price, e.g. \"$1 / $5 per M tokens\"; empty when unknown or not a model",
+      "type": "string"
+     },
+     "label": {
+      "type": "string"
+     },
+     "value": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "value",
+     "label",
+     "hint"
+    ],
+    "type": "object"
+   },
+   "SettingSetReq": {
+    "properties": {
+     "key": {
+      "description": "a key from settings_get",
+      "type": "string"
+     },
+     "value": {
+      "description": "the new value; empty resets it to the default",
+      "type": "string"
+     }
+    },
+    "required": [
+     "key",
+     "value"
+    ],
+    "type": "object"
+   },
+   "SettingSetResult": {
+    "properties": {
+     "note": {
+      "type": "string"
+     },
+     "setting": {
+      "$ref": "#/components/schemas/Setting"
+     }
+    },
+    "required": [
+     "setting",
+     "note"
+    ],
+    "type": "object"
+   },
+   "SettingTab": {
+    "description": "One tab of the settings dialog, in display order.",
+    "properties": {
+     "advanced": {
+      "description": "drawn collapsed until opened",
+      "type": "boolean"
+     },
+     "id": {
+      "description": "stable, for links: defaults, voices, language, conversation, costs, models",
+      "type": "string"
+     },
+     "label": {
+      "description": "what Setting.tab holds",
+      "type": "string"
+     },
+     "note": {
+      "description": "a line shown above the tab's rows; empty for none",
+      "type": "string"
+     }
+    },
+    "required": [
+     "id",
+     "label",
+     "note",
+     "advanced"
+    ],
+    "type": "object"
+   },
+   "SettingsGetResult": {
+    "properties": {
+     "settings": {
+      "items": {
+       "$ref": "#/components/schemas/Setting"
+      },
+      "type": "array"
+     },
+     "tabs": {
+      "items": {
+       "$ref": "#/components/schemas/SettingTab"
+      },
+      "type": "array"
+     }
+    },
+    "required": [
+     "tabs",
+     "settings"
+    ],
+    "type": "object"
+   },
+   "Style": {
+    "properties": {
+     "blurb": {
+      "description": "what it looks like, in a few words",
+      "type": "string"
+     },
+     "id": {
+      "description": "pass as `style` to session_build",
+      "type": "string"
+     },
+     "label": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "id",
+     "label",
+     "blurb"
+    ],
+    "type": "object"
+   },
+   "StylesListResult": {
+    "properties": {
+     "styles": {
+      "items": {
+       "$ref": "#/components/schemas/Style"
+      },
+      "type": "array"
+     }
+    },
+    "required": [
+     "styles"
+    ],
+    "type": "object"
+   }
+  }
+ },
+ "info": {
+  "description": "Read and change the studio's defaults, and list the slide styles a session can be built in.",
+  "title": "SettingsService",
+  "version": "0.1.0"
+ },
+ "methods": [
+  {
+   "description": "Every studio setting with its current value, default and allowed values.",
+   "name": "settings_get",
+   "paramStructure": "by-name",
+   "params": [],
+   "result": {
+    "name": "result",
+    "schema": {
+     "$ref": "#/components/schemas/SettingsGetResult"
+    }
+   }
+  },
+  {
+   "description": "Change one studio setting; an empty value resets it to its default. Refused when the key or value is not allowed, or a model id the AI endpoint does not list.",
+   "name": "settings_set",
+   "paramStructure": "by-name",
+   "params": [
+    {
+     "name": "req",
+     "required": true,
+     "schema": {
+      "$ref": "#/components/schemas/SettingSetReq"
+     }
+    }
+   ],
+   "result": {
+    "name": "result",
+    "schema": {
+     "$ref": "#/components/schemas/SettingSetResult"
+    }
+   }
+  },
+  {
+   "description": "The slide styles a session can be built in; pass an id as `style` to session_build.",
+   "name": "styles_list",
+   "paramStructure": "by-name",
+   "params": [],
+   "result": {
+    "name": "result",
+    "schema": {
+     "$ref": "#/components/schemas/StylesListResult"
+    }
+   }
+  }
+ ],
+ "openrpc": "1.3.2"
+}

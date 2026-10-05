@@ -1,0 +1,397 @@
+{
+ "components": {
+  "schemas": {
+   "MindMap": {
+    "properties": {
+     "created_ms": {
+      "type": "integer"
+     },
+     "dropped": {
+      "description": "nodes removed because the sources never mention them",
+      "type": "integer"
+     },
+     "excerpted": {
+      "description": "the sources were too long to send whole and were cut to excerpts",
+      "type": "boolean"
+     },
+     "focus": {
+      "description": "what the person asked it to centre on; empty when nothing",
+      "type": "string"
+     },
+     "id": {
+      "description": "a UUID, the map's own address; maps made before UUIDs keep their m<digits> id",
+      "type": "string"
+     },
+     "model": {
+      "type": "string"
+     },
+     "node_count": {
+      "type": "integer"
+     },
+     "root": {
+      "$ref": "#/components/schemas/MindNode"
+     },
+     "sid": {
+      "description": "the collection (cid) whose sources it maps",
+      "type": "string"
+     },
+     "sources": {
+      "description": "the source names it was built from, as source_list names them",
+      "items": {
+       "type": "string"
+      },
+      "type": "array"
+     },
+     "title": {
+      "description": "the root's name, until somebody renames the map",
+      "type": "string"
+     },
+     "unchecked": {
+      "description": "the check against the sources did not run: the map is not in English",
+      "type": "boolean"
+     }
+    },
+    "required": [
+     "id",
+     "sid",
+     "title",
+     "focus",
+     "sources",
+     "excerpted",
+     "model",
+     "created_ms",
+     "node_count",
+     "dropped",
+     "unchecked",
+     "root"
+    ],
+    "type": "object"
+   },
+   "MindMapCreateReq": {
+    "properties": {
+     "focus": {
+      "description": "a topic to centre the map on, in the person's words",
+      "type": "string"
+     },
+     "sid": {
+      "description": "a collection's cid, from collection_create",
+      "type": "string"
+     },
+     "sources": {
+      "description": "source names from source_list; every source when absent",
+      "items": {
+       "type": "string"
+      },
+      "type": "array"
+     }
+    },
+    "required": [
+     "sid"
+    ],
+    "type": "object"
+   },
+   "MindMapEstimate": {
+    "description": "What mindmap_create would cost, before it runs. One model call over the\nsources' whole text; a second one only when the first map is too thin.",
+    "properties": {
+     "chars": {
+      "description": "readable text across the sources",
+      "type": "integer"
+     },
+     "cost_high_usd": {
+      "description": "two calls, when the first map comes back too thin",
+      "type": "number"
+     },
+     "cost_usd": {
+      "description": "one call, the usual case",
+      "type": "number"
+     },
+     "input_tokens": {
+      "description": "estimated at four characters a token, prompt included",
+      "type": "integer"
+     },
+     "model": {
+      "type": "string"
+     },
+     "output_tokens": {
+      "description": "a typical map; the measured ones ran 20 to 75 nodes",
+      "type": "integer"
+     },
+     "priced": {
+      "description": "false when the price catalog had no price for the model; the costs are then 0",
+      "type": "boolean"
+     },
+     "sources": {
+      "type": "integer"
+     }
+    },
+    "required": [
+     "sources",
+     "chars",
+     "model",
+     "input_tokens",
+     "output_tokens",
+     "cost_usd",
+     "cost_high_usd",
+     "priced"
+    ],
+    "type": "object"
+   },
+   "MindMapListResult": {
+    "properties": {
+     "maps": {
+      "description": "newest first",
+      "items": {
+       "$ref": "#/components/schemas/MindMapSummary"
+      },
+      "type": "array"
+     }
+    },
+    "required": [
+     "maps"
+    ],
+    "type": "object"
+   },
+   "MindMapRef": {
+    "properties": {
+     "id": {
+      "type": "string"
+     },
+     "sid": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "sid",
+     "id"
+    ],
+    "type": "object"
+   },
+   "MindMapRetitleReq": {
+    "properties": {
+     "id": {
+      "type": "string"
+     },
+     "sid": {
+      "type": "string"
+     },
+     "title": {
+      "description": "the new name, trimmed; empty is refused",
+      "type": "string"
+     }
+    },
+    "required": [
+     "sid",
+     "id",
+     "title"
+    ],
+    "type": "object"
+   },
+   "MindMapSummary": {
+    "properties": {
+     "created_ms": {
+      "type": "integer"
+     },
+     "focus": {
+      "type": "string"
+     },
+     "id": {
+      "type": "string"
+     },
+     "node_count": {
+      "type": "integer"
+     },
+     "shape": {
+      "description": "how many subtopics each main topic has, in order: the outline of the tree, for a cover",
+      "items": {
+       "type": "integer"
+      },
+      "type": "array"
+     },
+     "sid": {
+      "description": "the collection (cid) whose sources it maps",
+      "type": "string"
+     },
+     "sources": {
+      "items": {
+       "type": "string"
+      },
+      "type": "array"
+     },
+     "title": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "id",
+     "sid",
+     "title",
+     "focus",
+     "node_count",
+     "created_ms",
+     "sources",
+     "shape"
+    ],
+    "type": "object"
+   },
+   "MindNode": {
+    "properties": {
+     "children": {
+      "description": "empty on a leaf",
+      "items": {
+       "$ref": "#/components/schemas/MindNode"
+      },
+      "type": "array"
+     },
+     "name": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "name",
+     "children"
+    ],
+    "type": "object"
+   }
+  }
+ },
+ "info": {
+  "description": "Mind maps of a collection's sources: the topics they cover as a tree, to see the whole of the material and pick what to ask about.",
+  "title": "MindMapService",
+  "version": "0.1.0"
+ },
+ "methods": [
+  {
+   "description": "Map the topics a collection's sources cover. Reads every source whole; takes a few seconds. Ask about a topic with source_ask.",
+   "name": "mindmap_create",
+   "paramStructure": "by-name",
+   "params": [
+    {
+     "name": "req",
+     "required": true,
+     "schema": {
+      "$ref": "#/components/schemas/MindMapCreateReq"
+     }
+    }
+   ],
+   "result": {
+    "name": "result",
+    "schema": {
+     "$ref": "#/components/schemas/MindMap"
+    }
+   }
+  },
+  {
+   "description": "What mindmap_create would cost for a collection, before running it. Makes no model call.",
+   "name": "mindmap_estimate",
+   "paramStructure": "by-name",
+   "params": [
+    {
+     "name": "sid",
+     "required": true,
+     "schema": {
+      "type": "string"
+     }
+    }
+   ],
+   "result": {
+    "name": "result",
+    "schema": {
+     "$ref": "#/components/schemas/MindMapEstimate"
+    }
+   }
+  },
+  {
+   "description": "The mind maps of a collection, newest first, as summaries. Use mindmap_get for the tree.",
+   "name": "mindmap_list",
+   "paramStructure": "by-name",
+   "params": [
+    {
+     "name": "sid",
+     "required": true,
+     "schema": {
+      "type": "string"
+     }
+    }
+   ],
+   "result": {
+    "name": "result",
+    "schema": {
+     "$ref": "#/components/schemas/MindMapListResult"
+    }
+   }
+  },
+  {
+   "description": "Every mind map of every collection, newest first, as summaries.",
+   "name": "mindmap_list_all",
+   "paramStructure": "by-name",
+   "params": [],
+   "result": {
+    "name": "result",
+    "schema": {
+     "$ref": "#/components/schemas/MindMapListResult"
+    }
+   }
+  },
+  {
+   "description": "One mind map in full, tree included.",
+   "name": "mindmap_get",
+   "paramStructure": "by-name",
+   "params": [
+    {
+     "name": "req",
+     "required": true,
+     "schema": {
+      "$ref": "#/components/schemas/MindMapRef"
+     }
+    }
+   ],
+   "result": {
+    "name": "result",
+    "schema": {
+     "$ref": "#/components/schemas/MindMap"
+    }
+   }
+  },
+  {
+   "description": "Delete a mind map. False when there was no such map.",
+   "name": "mindmap_delete",
+   "paramStructure": "by-name",
+   "params": [
+    {
+     "name": "req",
+     "required": true,
+     "schema": {
+      "$ref": "#/components/schemas/MindMapRef"
+     }
+    }
+   ],
+   "result": {
+    "name": "result",
+    "schema": {
+     "type": "boolean"
+    }
+   }
+  },
+  {
+   "description": "Rename a mind map. False when there was no such map.",
+   "name": "mindmap_retitle",
+   "paramStructure": "by-name",
+   "params": [
+    {
+     "name": "req",
+     "required": true,
+     "schema": {
+      "$ref": "#/components/schemas/MindMapRetitleReq"
+     }
+    }
+   ],
+   "result": {
+    "name": "result",
+    "schema": {
+     "type": "boolean"
+    }
+   }
+  }
+ ],
+ "openrpc": "1.3.2"
+}
