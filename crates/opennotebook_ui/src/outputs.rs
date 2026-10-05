@@ -96,7 +96,7 @@ pub(crate) async fn retry_prep(
     Ok(match gone {
         Ok(_) => None,
         Err(e) => Some(format!(
-            "It started again, but the failed one could not be removed: {}",
+            "It started again, but the failed one could not be removed. {}",
             clean_rpc_error(&e.to_string())
         )),
     })
@@ -134,29 +134,28 @@ pub(crate) fn prep_failure_text(raw: &str) -> (String, String) {
     }
 
     let low = raw.to_ascii_lowercase();
-    let plain =
-        if low.contains("quota exhausted") || low.contains("more credits") || low.contains("402") {
-            "The image service has run out of credit, so the slides could not be drawn. \
-         Top up the account and try again."
-        } else if low.contains("name conflict") && low.contains("theme") {
-            "That visual style could not be applied. Pick a different style and try again."
-        } else if low.contains("no extracted pairs")
-            || low.contains("q&a door is empty")
-            || low.contains("not a bot")
-        {
-            "Your sources could not be read. A link behind a sign-in or a bot check saves \
+    // The AI provider's failures read the same here as everywhere else.
+    let plain = if let Some(say) = crate::errors::known(raw) {
+        say
+    } else if low.contains("name conflict") && low.contains("theme") {
+        "That visual style could not be applied. Pick a different style and try again."
+    } else if low.contains("no extracted pairs")
+        || low.contains("q&a door is empty")
+        || low.contains("not a bot")
+    {
+        "Your sources could not be read. A link behind a sign-in or a bot check saves \
          the warning page instead of the document, so try a direct link or paste the \
          text in."
-        } else if low.contains("timed out") || low.contains("timeout") {
-            "The slides took too long to draw and this was stopped. Trying again \
+    } else if low.contains("timed out") || low.contains("timeout") {
+        "The slides took too long to draw and this was stopped. Trying again \
          with fewer slides usually works."
-        } else if low.contains("rendered") || low.contains("nothing rendered") {
-            "The slides could not be drawn, so there is no deck to narrate. Your sources \
+    } else if low.contains("rendered") || low.contains("nothing rendered") {
+        "The slides could not be drawn, so there is no deck to narrate. Your sources \
          are kept: try again, or change them."
-        } else {
-            "Something went wrong while making this. Your sources are kept, so you \
+    } else {
+        "Something went wrong while making this. Your sources are kept, so you \
          can try again or change them."
-        };
+    };
 
     (plain.to_string(), raw.to_string())
 }
@@ -477,7 +476,7 @@ pub(crate) fn SessionRow(
                         // older outputs never did, and say nothing.
                         if s.spent_known {
                             " · "
-                            span { title: "Model calls this build made; excludes indexing by the memory service",
+                            span { title: "What the model calls for this build cost, indexing its sources included",
                                 "Spent {usd(s.spent_usd)}"
                             }
                         }
@@ -514,7 +513,7 @@ pub(crate) fn SessionRow(
                                 match retry_prep(&sid, &title, &mint_sid(&[])).await {
                                     Ok(None) => {}
                                     Ok(Some(note)) => report(note),
-                                    Err(e) => report(format!("It could not be started again: {e}")),
+                                    Err(e) => report(format!("It could not be started again. {e}")),
                                 }
                                 retrying.set(false);
                                 on_changed.call(());

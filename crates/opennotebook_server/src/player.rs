@@ -386,9 +386,9 @@ mod tests {
 
     #[test]
     fn the_page_never_hard_codes_an_unprefixed_api_path() {
-        // The page is served behind a router at
-        // `/<node>/<service>/api/session/player`. An absolute `/api/session`
-        // loses the prefix and every call 404s — which is exactly what happened
+        // A reverse proxy may mount the studio under a prefix, in front of
+        // `/api/session/player`. An absolute `/api/session` loses the prefix
+        // and every call 404s — which is exactly what happened
         // the first time the page was loaded in a browser, and what no
         // route-by-route probe could catch, because the probes supplied the
         // prefix themselves.
@@ -467,7 +467,7 @@ mod tests {
 
     #[test]
     fn the_composer_uses_icons_not_emoji() {
-        // Every other surface of the studio draws from Bootstrap Icons. An emoji is not
+        // The studio app draws from Bootstrap Icons. An emoji is not
         // an icon: the OS picks the glyph, so it never matches the design and
         // it looks different on every machine.
         for icon in ["bi-mic-fill", "bi-send-fill", "bi-x-lg"] {
@@ -615,7 +615,7 @@ mod tests {
         );
         // Said on screen, not only to a console nobody has open.
         assert!(
-            PAGE.contains("appendMsg(bubble({") && PAGE.contains("Voice detection is not loaded"),
+            PAGE.contains("appendMsg(bubble({") && PAGE.contains("Voice detection did not load"),
             "a degraded detector must be visible to the listener"
         );
         // force-cache would let a 404 cached from before this route existed pin

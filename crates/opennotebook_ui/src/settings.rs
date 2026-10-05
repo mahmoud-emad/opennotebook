@@ -5,7 +5,8 @@
 //! from `opennotebook_session::settings::CATALOGUE`, so this page carries no
 //! second copy of the list. Every change saves the moment it is made, as
 //! ChatGPT's and Claude's settings do; there is no Save button to forget.
-//! Values live in the secret store.
+//! Values live in `settings.toml` in the studio's data directory, and an
+//! environment variable overrides any of them.
 //!
 //! The settings are read once per page into a context ([`Settings`]) so the
 //! app's contextual hints ("5 slides · about 5 min · Host and Expert") cost
@@ -219,10 +220,18 @@ impl SettingsDoc {
     }
 }
 
+/// What a reply the page cannot parse is called: the studio and this page
+/// are from different builds, most likely.
+const UNREADABLE: &str = "The studio's answer could not be read. Reload the page and try again.";
+
 async fn settings_load() -> Result<SettingsDoc, String> {
     let txt = get_text(&format!("{}/settings", api_base())).await?;
-    let doc: SettingsDoc = serde_json::from_str(&txt).map_err(|e| e.to_string())?;
-    if doc.ok { Ok(doc) } else { Err(doc.error) }
+    let doc: SettingsDoc = serde_json::from_str(&txt).map_err(|_| UNREADABLE.to_string())?;
+    if doc.ok {
+        Ok(doc)
+    } else {
+        Err(crate::errors::readable(&doc.error))
+    }
 }
 
 // ── the page's copy, shared ─────────────────────────────────────────────────
@@ -425,16 +434,16 @@ pub(crate) fn SettingsDialog(on_close: EventHandler<()>) -> Element {
             let body = serde_json::json!({ "key": key, "value": value }).to_string();
             let res = post_json(&format!("{}/settings", api_base()), &body).await;
             let outcome = res.and_then(|txt| {
-                let v: serde_json::Value = serde_json::from_str(&txt).map_err(|e| e.to_string())?;
+                let v: serde_json::Value =
+                    serde_json::from_str(&txt).map_err(|_| UNREADABLE.to_string())?;
                 if v["ok"].as_bool() == Some(true) {
                     let item = serde_json::from_value::<SettingItem>(v["item"].clone())
-                        .map_err(|e| e.to_string())?;
+                        .map_err(|_| UNREADABLE.to_string())?;
                     Ok((item, v["note"].as_str().unwrap_or("").to_string()))
                 } else {
-                    Err(v["error"]
-                        .as_str()
-                        .unwrap_or("the studio refused it")
-                        .to_string())
+                    Err(crate::errors::readable(
+                        v["error"].as_str().unwrap_or("the studio refused it"),
+                    ))
                 }
             });
             let st = match outcome {

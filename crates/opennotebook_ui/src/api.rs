@@ -33,20 +33,13 @@ pub(crate) fn api_base() -> String {
 
 /// One browser-fetch client per RPC domain, at `<service root><path>`.
 ///
-/// `new_at` is the browser-fetch constructor, symmetric to the native
-/// `connect_http_at`: it takes the full endpoint and appends nothing. The
-/// native one does not exist on wasm32 because its transport resolves socket
-/// paths through the shared core library, which is not reachable here.
+/// `new_at` is the browser-fetch constructor: it takes the full endpoint and
+/// appends nothing.
 ///
 /// Each also has a host twin that only has to compile. This crate is a browser
-/// bundle and `dx build --target wasm32` is the only build that produces
-/// anything usable, but `lab build` resolves `crates/opennotebook_ui` as its own
-/// workspace root (deliberately: a wasm crate cannot share a target directory
-/// with the native crates), fails to match it against its own `[[services]]`
-/// entry, and cargo-builds it for the host as an ordinary binary. That host
-/// build used to fail on `new_at`, which is wasm-only, and took the whole
-/// `lab build opennotebook` down with it while the server crate beside it was
-/// green. There is no meaningful native behaviour to give it: the service root
+/// bundle and `dx build` for wasm32 is the only build that produces anything
+/// usable, but `cargo test` and `cargo clippy` build it for the host too, and
+/// `new_at` is wasm-only. There is no meaningful native behaviour to give it: the service root
 /// is derived from `location.pathname`, which does not exist outside a
 /// browser, so the host twin returns the reason instead.
 macro_rules! browser_client {
@@ -88,20 +81,13 @@ pub(crate) fn still_there(found: bool) -> Result<(), String> {
     if found {
         Ok(())
     } else {
-        Err("it is no longer there".to_string())
+        Err("It is no longer there. Reload the page to see what is.".to_string())
     }
 }
 
 /// An RPC error as a sentence somebody can act on.
 pub(crate) fn clean_rpc_error(e: &str) -> String {
-    // The wire form is `RPC error -32602: <message>`; only the message is for a
-    // person, and the commonest one here is worth rewording entirely.
-    let msg = e.rsplit(": ").next().unwrap_or(e);
-    if msg.contains("no sources") {
-        "Add a source first: a link, a note, or a topic to research.".to_string()
-    } else {
-        msg.to_string()
-    }
+    crate::errors::readable(e)
 }
 
 /// The largest file a source upload takes, in MB: the server's
@@ -147,22 +133,27 @@ async fn fetch(url: &str, body: Body<'_>) -> Result<web_sys::Response, String> {
         }
     }
     let req = web_sys::Request::new_with_str_and_init(url, &opts)
-        .map_err(|_| "bad request".to_string())?;
+        .map_err(|_| crate::errors::readable("network error"))?;
     if matches!(body, Body::Json(_)) {
         req.headers().set("Content-Type", "application/json").ok();
     }
-    let w = web_sys::window().ok_or("no window")?;
+    let w = web_sys::window().ok_or_else(|| crate::errors::readable("network error"))?;
     let resp = wasm_bindgen_futures::JsFuture::from(w.fetch_with_request(&req))
         .await
-        .map_err(|_| "network error".to_string())?;
-    resp.dyn_into().map_err(|_| "not a response".to_string())
+        .map_err(|_| crate::errors::readable("network error"))?;
+    resp.dyn_into()
+        .map_err(|_| crate::errors::readable("network error"))
 }
+
+/// What a reply that cannot be read is called.
+const UNREADABLE: &str = "The studio's answer could not be read. Reload the page and try again.";
 
 /// A response's whole body as text.
 async fn text_of(resp: &web_sys::Response) -> Result<String, String> {
-    let txt = wasm_bindgen_futures::JsFuture::from(resp.text().map_err(|_| "no body".to_string())?)
-        .await
-        .map_err(|_| "unreadable body".to_string())?;
+    let txt =
+        wasm_bindgen_futures::JsFuture::from(resp.text().map_err(|_| UNREADABLE.to_string())?)
+            .await
+            .map_err(|_| UNREADABLE.to_string())?;
     Ok(txt.as_string().unwrap_or_default())
 }
 
@@ -171,7 +162,7 @@ fn ok_or_status(resp: web_sys::Response) -> Result<web_sys::Response, String> {
     if resp.ok() {
         Ok(resp)
     } else {
-        Err(format!("HTTP {}", resp.status()))
+        Err(crate::errors::readable(&format!("HTTP {}", resp.status())))
     }
 }
 
@@ -200,9 +191,9 @@ pub(crate) async fn post_file(url: &str, file: &web_sys::File) -> Result<String,
         .and_then(|v| v["error"].as_str().map(str::to_string))
         .filter(|e| !e.trim().is_empty());
     Err(match (why, resp.status()) {
-        (Some(e), _) => e,
-        (None, 413) => format!("the file is larger than {UPLOAD_MAX_MB} MB"),
-        (None, n) => format!("HTTP {n}"),
+        (Some(e), _) => crate::errors::readable(&e),
+        (None, 413) => format!("The file is larger than {UPLOAD_MAX_MB} MB."),
+        (None, n) => crate::errors::readable(&format!("HTTP {n}")),
     })
 }
 

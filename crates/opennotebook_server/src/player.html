@@ -389,7 +389,7 @@ __ICONS__
 
       <div id="prep">
         <div id="prep-card">
-          <div id="stage-name">waiting for the prep job…</div>
+          <div id="stage-name">Getting ready…</div>
           <div id="bar" class="idle"><div id="fill"></div></div>
           <div id="prep-sub"></div>
         </div>
@@ -484,13 +484,11 @@ const BUILD = "__BUILD__";
 
 // The API base is derived from THIS page's own URL, never hard-coded.
 //
-// The page is reached through a reverse proxy at
-// `/<node>/<service>/api/session/player`, so an absolute `/api/session` drops
-// the `/local/opennotebook` prefix and every call 404s. Found by loading the page
-// in a real browser: every route answered when called with the prefix, and the
-// page itself was the only thing that did not use one. Stripping the trailing
-// `/player` gives the right base whether the page is served through the router,
-// through the gateway, or straight off the socket.
+// The studio serves it at `/api/session/player`, but a reverse proxy in front
+// may mount the whole studio under a prefix, and an absolute `/api/session`
+// would drop that prefix so every call 404s. That happened once, and only a
+// real browser caught it. Stripping the trailing `/player` gives the right
+// base however the page is reached.
 const API = location.pathname.replace(/\/player\/?$/, "");
 
 const $ = (id) => document.getElementById(id);
@@ -531,10 +529,9 @@ const cur = () => (idx >= 0 && idx < flat.length ? flat[idx] : null);
 // ── session ──────────────────────────────────────────────────────────────────
 async function loadSession() {
   const r = await rpc("session_get", { sid: SID });
-  // `found` is the discriminator. the store returns key_type "none" with an empty
-  // value for a missing key, so absence and an empty document are
-  // indistinguishable by value one layer down; this surface separates them and
-  // the page reads the field rather than testing `session` for emptiness.
+  // `found` is the discriminator: a missing session and an empty document are
+  // different answers, so the page reads the field rather than testing
+  // `session` for emptiness.
   if (!r.found) return null;
   session = r.session;
   AUDIO = !!session.audio;
@@ -822,6 +819,55 @@ function stepSlide(dir) {
 // The slide's own aspect decides the box; the iframe is laid out at the slide's
 // native pixel size and scaled to fit. Nothing here assumes 16:9 — a PNG deck
 // arrives 1376x768 and gets its own box.
+// Any failure as a sentence the listener can act on. The same wording as the
+// studio app's `errors.rs`, kept in step with it: a provider's JSON, a wire
+// prefix or a browser's exception name is never shown as it came. The raw
+// error still goes to the console, for whoever is debugging.
+const KNOWN_ERRORS = [
+  [["no sources"], "Add a source first: a link, a note, or a topic to research."],
+  [["out of credit", "insufficient credit", "insufficient_quota", "credit balance", "more credits",
+    "quota exhausted", "exceeded your current quota", "http 402"],
+   "The AI account is out of credit, so nothing can be read or made right now. Add credit at openrouter.ai/settings/credits, then try again."],
+  [["refused the key", "invalid api key", "no auth credentials", "missing authentication", "http 401"],
+   "The AI provider refused the studio's API key. Check the key, then try again."],
+  [["rate limited", "too many requests", "http 429"],
+   "The AI provider is busy right now. Wait a moment and try again."],
+  [["is the model id right", "model not found", "no endpoints found", "not a valid model"],
+   "The AI model chosen in Settings is not available. Pick another one in Settings › Models."],
+  [["provider is unavailable", "upstream", "bad gateway", "service unavailable", "gateway timeout"],
+   "The AI provider is not answering right now. Try again in a minute."],
+  [["network error", "failed to fetch", "networkerror", "load failed", "connection refused"],
+   "The studio cannot be reached. Check your connection and that the studio is running, then try again."],
+];
+function readable(e) {
+  let m = String(e && e.message ? e.message : e || "").trim();
+  if (e) console.warn("opennotebook:", e);
+  const rpc = m.indexOf("RPC error");
+  if (rpc >= 0) { const c = m.indexOf(": ", rpc); if (c >= 0) m = m.slice(c + 2); }
+  const low = m.toLowerCase();
+  for (const [keys, sayIt] of KNOWN_ERRORS) if (keys.some((k) => low.includes(k))) return sayIt;
+  const code = /^HTTP (\d{3})$/.exec(m);
+  if (code) {
+    const n = Number(code[1]);
+    if (n === 404) return "That is no longer there. Reload the page and try again.";
+    if (n === 408 || n === 504) return "The studio took too long to answer. Try again.";
+    if (n >= 500) return "The studio ran into a problem. Try again; if it keeps happening, restart the studio.";
+    return "The studio refused that request. Reload the page and try again.";
+  }
+  const brace = m.indexOf("{");
+  if (brace >= 0) {
+    let inner = null;
+    try { const v = JSON.parse(m.slice(brace)); inner = (v.error && v.error.message) || v.message || null; } catch (_) {}
+    const before = m.slice(0, brace).trim().replace(/:$/, "").trim();
+    m = inner ? (before ? `${before}: ${inner}` : inner) : before;
+  }
+  m = m.replace(/\s+/g, " ").trim();
+  if (!m) return "Something went wrong. Try again.";
+  if (m.length > 220) m = m.slice(0, 220).replace(/\s+\S*$/, "").replace(/[,;: ]+$/, "") + "…";
+  m = m[0].toUpperCase() + m.slice(1);
+  return /[\w)`]$/.test(m) ? m + "." : m;
+}
+
 // One place to tell the listener something went wrong. Silence is the failure
 // mode this player is most prone to, so it needs a voice of its own.
 function say(msg) {
@@ -840,7 +886,8 @@ audio.addEventListener("error", () => {
   // played is worth a word.
   if (!e || e.code === 1 /* MEDIA_ERR_ABORTED */) return;
   if (!audio.src) return;
-  say(`Audio failed (code ${e.code}) for ${audio.src.split("line=")[1] || "this line"}.`);
+  console.warn(`opennotebook: audio failed (code ${e.code}) for`, audio.src);
+  say("This part could not be played. Press play to try again; if it keeps failing, reload the page.");
   playing = false;
   buttons();
 });
@@ -977,7 +1024,8 @@ async function startAt(i, offsetMs) {
       // audio being unreachable and needs a different sentence.
       say("The browser blocked playback. Press play again.");
     } else {
-      say(`Cannot play ${c.line.line_id}: ${e && e.message ? e.message : e}`);
+      console.warn(`opennotebook: cannot play ${c.line.line_id}:`, e);
+      say("This part could not be played. Press play to try again; if it keeps failing, reload the page.");
     }
     playing = false;
     buttons();
@@ -1554,9 +1602,9 @@ function vadDegraded(why) {
   appendMsg(bubble({
     who: "Studio",
     cls: "err",
-    text: `Voice detection is not loaded, so the microphone is falling back to a loudness `
-        + `threshold. In a room with any background noise the turn may not send on its own. `
-        + `Reason: ${why}.`,
+    text: `Voice detection did not load, so the microphone listens for loudness instead. `
+        + `In a noisy room your question may not send on its own: press send when you are done. `
+        + `Reloading the page usually brings it back.`,
   }));
 }
 
@@ -1881,7 +1929,17 @@ async function askStart() {
     await micStart();
   } catch (e) {
     turnBusy = false; micButtons("idle"); buttons();
-    micState(`microphone refused: ${e && e.message ? e.message : e}`);
+    console.warn("opennotebook: microphone:", e);
+    const name = e && e.name;
+    micState(
+      name === "NotAllowedError" || name === "SecurityError"
+        ? "The microphone is blocked. Allow it for this page in the browser's address bar, then try again."
+        : name === "NotFoundError" || name === "OverconstrainedError"
+          ? "No microphone was found. Connect one, then try again."
+          : name === "NotReadableError"
+            ? "The microphone is in use by another app. Close it there, then try again."
+            : "The microphone could not be started. Reload the page and try again."
+    );
     return;
   }
   // Capturing already, but ARMED for nothing. The empty "You" bubble with its
@@ -2146,7 +2204,7 @@ async function askSend() {
       // before they did, the way a transcript of a real conversation would.
     } else {
     if (!answerMsg) dropEmptyTurn();
-    appendMsg(bubble({ who: "Studio", text: `could not answer: ${e && e.message ? e.message : e}`, cls: "err" }));
+    appendMsg(bubble({ who: "Studio", text: `I could not answer that. ${readable(e)}`, cls: "err" }));
     micState("");
     }
   } finally {
@@ -2268,8 +2326,8 @@ es.addEventListener("session.state", async (e) => {
   }
   if (st === "failed") {
     $("prep").hidden = false;
-    $("stage-name").textContent = "prep failed";
-    $("prep-sub").textContent = "check the job list";
+    $("stage-name").textContent = "This could not be made";
+    $("prep-sub").textContent = "Go back to the studio to see why, then try again.";
     // A sweeping bar on a dead job is the page claiming work is happening.
     $("bar").classList.remove("idle");
     $("fill").style.width = "0%";
@@ -2291,7 +2349,7 @@ const PHASE_LABEL = {
 es.addEventListener("prep.progress", (e) => {
   const p = JSON.parse(e.data);
   $("stage-name").textContent = PHASE_LABEL[p.step] || p.step || "starting";
-  // steps_total 0 is the job runner's own "this job does not report", not "no
+  // steps_total 0 is the job saying "this job does not report", not "no
   // phases". A 0% bar there would be a claim; the sweep is the absence of one.
   const known = p.steps_total > 0;
   $("bar").classList.toggle("idle", !known);
