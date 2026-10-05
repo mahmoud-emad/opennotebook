@@ -29,7 +29,7 @@ mod rank;
 
 pub use embed::{Embedder, OpenAiEmbedder};
 pub use error::MemoryError;
-pub use qa::{DEFAULT_QA_MODEL, QaModel, dimension_description};
+pub use qa::{DEFAULT_QA_MODEL, MAX_WINDOWS_PER_DOC, QaModel, dimension_description, windows_for};
 
 /// The embedding model, read like any setting (environment, then
 /// `settings.toml`). Empty, the default, means full-text search only. Any model
@@ -314,7 +314,8 @@ impl Memory {
     }
 
     /// Extract Q&A pairs from `docs` along `dimensions`, one model call per
-    /// document and dimension, and store them. Returns how many were stored.
+    /// document, dimension and window of a long document ([`windows_for`]),
+    /// and store them. Returns how many were stored.
     pub async fn qa_extract(
         &self,
         workspace: &str,

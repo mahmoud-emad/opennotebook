@@ -148,7 +148,7 @@ async fn indexing_a_document_again_replaces_it() {
 }
 
 /// A model that answers every extraction with two pairs naming the dimension,
-/// and records each system prompt it was sent.
+/// and records each request it was sent.
 async fn mock_model() -> (QaModel, Arc<Mutex<Vec<Value>>>) {
     let seen = Arc::new(Mutex::new(Vec::new()));
     let log = seen.clone();
@@ -157,8 +157,8 @@ async fn mock_model() -> (QaModel, Arc<Mutex<Vec<Value>>>) {
         post(move |Json(body): Json<Value>| {
             let log = log.clone();
             async move {
-                let system = body["messages"][0]["content"].as_str().unwrap_or("").to_string();
-                let dim = system
+                let request = body["messages"][1]["content"].as_str().unwrap_or("").to_string();
+                let dim = request
                     .lines()
                     .find_map(|l| l.strip_prefix("Dimension: "))
                     .unwrap_or("?")
@@ -201,12 +201,12 @@ async fn pairs_are_extracted_per_document_and_dimension_and_searchable() {
         let seen = seen.lock().unwrap();
         assert_eq!(seen.len(), 4);
         assert_eq!(seen[0]["response_format"]["type"], "json_schema");
-        assert!(
-            seen[0]["messages"][0]["content"]
-                .as_str()
-                .unwrap()
-                .contains(dimension_description("technology"))
-        );
+        assert!(seen[0]["temperature"].as_f64().unwrap() <= 0.3);
+        assert!(seen[0]["max_tokens"].as_u64().is_some());
+        // The dimension and its focus are in the request, the source after them.
+        let request = seen[0]["messages"][1]["content"].as_str().unwrap();
+        assert!(request.contains(dimension_description("technology")));
+        assert!(request.contains("The scheduler picks the next process"));
     }
 
     let all = m.qa_list("ws", "c").await.unwrap();
@@ -224,5 +224,40 @@ async fn pairs_are_extracted_per_document_and_dimension_and_searchable() {
     m.qa_extract("ws", "c", &docs, &dims, &model).await.unwrap();
     assert_eq!(m.qa_list("ws", "c").await.unwrap().len(), 8);
     assert!(m.delete_collection("ws", "c").await.unwrap());
+    assert!(m.qa_list("ws", "c").await.unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn one_failed_call_fails_the_whole_extraction_and_stores_nothing() {
+    // Answers the dimension `business` with prose instead of JSON.
+    let app = Router::new().route(
+        "/v1/chat/completions",
+        post(|Json(body): Json<Value>| async move {
+            let request = body["messages"][1]["content"].as_str().unwrap_or("");
+            let content = if request.contains("Dimension: business") {
+                "Sorry, I cannot help with that.".to_string()
+            } else {
+                json!({ "pairs": [{ "question": "Q?", "answer": "A." }] }).to_string()
+            };
+            Json(json!({ "choices": [{ "message": { "content": content } }] }))
+        }),
+    );
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    let model = QaModel {
+        provider: opennotebook_ai::Provider::new(format!("http://{addr}/v1"), None),
+        model: "m".into(),
+    };
+    let m = memory(None).await;
+    let dims = vec!["technology".to_string(), "business".to_string()];
+    let err = m
+        .qa_extract("ws", "c", &sources(), &dims, &model)
+        .await
+        .unwrap_err();
+    assert!(
+        matches!(&err, MemoryError::Extract { dimension, .. } if dimension == "business"),
+        "{err}"
+    );
     assert!(m.qa_list("ws", "c").await.unwrap().is_empty());
 }

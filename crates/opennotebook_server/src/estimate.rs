@@ -3,9 +3,11 @@
 //! A build pays for model calls at the AI endpoint (OpenRouter by default),
 //! all made through `opennotebook_ai`. Mapped from the code on 2026-10-03:
 //!
-//! - **opennotebook_memory**, while importing the sources: one Q&A-extraction
-//!   call per source file per dimension (4), on `openai/gpt-4o-mini`, each
-//!   reading the WHOLE file. The search index is full-text by default and
+//! - **opennotebook_memory**, while importing the sources: Q&A-extraction
+//!   calls per source file per dimension (4), on `openai/gpt-4o-mini`: one for
+//!   a file up to 32,000 characters, else one per window of it
+//!   (`opennotebook_memory::windows_for`, at most six), together reading the
+//!   whole file. The search index is full-text by default and
 //!   free; embeddings, when an embedding model is set, are not estimated.
 //! - **opennotebook** (this crate): the outline, the narration script and its
 //!   edit pass on the script model, and the slides, written as HTML a batch of
@@ -31,13 +33,19 @@ use std::collections::HashMap;
 /// Characters per token, for English prose.
 const CHARS_PER_TOKEN: f64 = 4.0;
 
-/// Q&A extraction: opennotebook_memory's four dimensions, each one call per file.
+/// Q&A extraction: the four dimensions the pipeline asks opennotebook_memory
+/// for, each one call per window of each file.
 pub const QA_DIMENSIONS: u64 = 4;
-pub const QA_MODEL: &str = "openai/gpt-4o-mini";
-/// Its system prompt plus the JSON schema, measured from the prompt source.
-const QA_PROMPT_TOKENS: u64 = 350;
-/// Up to ten pairs, each answer at least two sentences. The call is capped at
-/// 4000; a full ten pairs is about 1000, an empty dimension almost nothing.
+pub const QA_MODEL: &str = opennotebook_memory::DEFAULT_QA_MODEL;
+/// What every call sends besides the source: the system prompt, the JSON
+/// schema and the request's header (dimension, focus, budget), measured from
+/// the prompt source.
+const QA_PROMPT_TOKENS: u64 = 650;
+/// Up to ten pairs per file and dimension, each with a one-to-three-sentence
+/// answer and a short quote. The call is capped at 3000; a full ten pairs is
+/// about 1000, an empty dimension almost nothing. A file read in several
+/// windows asks each for its share, at least four, so it writes somewhat
+/// more in all: see `qa_out_share`.
 /// Not measured yet: the calls are recorded in the spend ledger, which is
 /// where a measurement would come from.
 const QA_OUT: Range = Range::new(250, 1000, 1800);
@@ -183,6 +191,16 @@ fn grouped(n: u64) -> String {
     out
 }
 
+/// What one of `windows` calls on a file writes, from what a single call
+/// reading the whole file writes (`full`): the pairs it is asked for, a tenth
+/// of the file's ten each but never fewer than four, at the same length each.
+fn qa_out_share(full: u64, windows: u64) -> u64 {
+    if windows <= 1 {
+        return full;
+    }
+    full * 10u64.div_ceil(windows).max(4) / 10
+}
+
 fn tokens(chars: u64) -> u64 {
     (chars as f64 / CHARS_PER_TOKEN).ceil() as u64
 }
@@ -325,19 +343,30 @@ pub fn estimate(inp: &Inputs, prices: &Prices) -> Estimate {
     }
 
     // ── reading the sources (opennotebook_memory) ───────────────────────────
-    // One call per file per dimension, each reading the whole file, so input
-    // and output are summed file by file rather than averaged.
+    // A call per window of each file per dimension, the windows together
+    // reading the whole file, so input and output are summed file by file
+    // rather than averaged. Characters stand in for the bytes the windows are
+    // cut by; for English text they are the same. A source over about 570,000
+    // characters is sampled rather than read whole, so its input is
+    // overstated here, which errs on the safe side of the spending limit.
+    let qa_windows = |c: u64| opennotebook_memory::windows_for(c as usize) as u64;
+    let qa_calls: u64 =
+        inp.source_chars.iter().map(|c| qa_windows(*c)).sum::<u64>() * QA_DIMENSIONS;
     let qa_in: u64 = inp
         .source_chars
         .iter()
-        .map(|c| (tokens(*c) + QA_PROMPT_TOKENS) * QA_DIMENSIONS)
+        .map(|c| (tokens(*c) + QA_PROMPT_TOKENS * qa_windows(*c)) * QA_DIMENSIONS)
         .sum();
     let qa_out = inp.source_chars.iter().fold(Range::exact(0), |acc, c| {
-        let cap = (2 * tokens(*c)).max(QA_OUT_FLOOR);
+        let n = qa_windows(*c);
+        // Each window writes its share of the pairs, and no more than twice
+        // what it read.
+        let cap = (2 * tokens(*c / n)).max(QA_OUT_FLOOR);
+        let per = |full: u64| qa_out_share(full, n).min(cap) * n * QA_DIMENSIONS;
         Range::new(
-            acc.low + QA_OUT.low.min(cap) * QA_DIMENSIONS,
-            acc.typical + QA_OUT.typical.min(cap) * QA_DIMENSIONS,
-            acc.high + QA_OUT.high.min(cap) * QA_DIMENSIONS,
+            acc.low + per(QA_OUT.low),
+            acc.typical + per(QA_OUT.typical),
+            acc.high + per(QA_OUT.high),
         )
     });
     lines.push(totals_line(
@@ -345,13 +374,13 @@ pub fn estimate(inp: &Inputs, prices: &Prices) -> Estimate {
         GROUP_SOURCES,
         "Question & answer extraction",
         format!(
-            "{files} source{} × {QA_DIMENSIONS} kinds of question, each reading the whole source; \
-             these calls are included in recorded spend",
+            "{files} source{} × {QA_DIMENSIONS} kinds of question, each reading the whole source \
+             (a long one in parts); these calls are included in recorded spend",
             if files == 1 { "" } else { "s" }
         ),
         QA_MODEL,
         "opennotebook_memory · OpenRouter",
-        Range::exact(files * QA_DIMENSIONS),
+        Range::exact(qa_calls),
         Range::exact(qa_in),
         qa_out,
     ));
@@ -753,8 +782,23 @@ mod tests {
         i.source_chars = vec![44_000, 12_000];
         let e = estimate(&i, &prices());
         let qa = &e.lines[0];
-        assert_eq!(qa.calls, Range::exact(8));
-        assert_eq!(qa.input_tokens, (11_000 + 350) * 4 + (3_000 + 350) * 4);
+        // The 44,000-character file is read in two windows, the other in one.
+        assert_eq!(qa.calls, Range::exact((2 + 1) * 4));
+        assert_eq!(qa.input_tokens, (11_000 + 2 * 650) * 4 + (3_000 + 650) * 4);
+        // Two windows ask for five pairs each, so write what one call would.
+        assert_eq!(qa.output_tokens.typical, 1000 * 4 + 1000 * 4);
+    }
+
+    #[test]
+    fn a_very_long_file_is_read_in_at_most_six_windows() {
+        let mut i = inputs();
+        i.source_chars = vec![1_000_000];
+        let e = estimate(&i, &prices());
+        let qa = step(&e, "Question & answer extraction");
+        let windows = opennotebook_memory::MAX_WINDOWS_PER_DOC as u64;
+        assert_eq!(qa.calls, Range::exact(windows * 4));
+        // Six windows ask for four pairs each: 24 where one call asks for 10.
+        assert_eq!(qa.output_tokens.typical, 1000 * 24 / 10 * 4);
     }
 
     #[test]
