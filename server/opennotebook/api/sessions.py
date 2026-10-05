@@ -2,14 +2,16 @@
 Build one, estimate it, follow it, read it, rename, pin, delete, and keep its
 playback position."""
 
+import asyncio
 import json
+import logging
 import uuid
 from collections.abc import AsyncIterator
 from datetime import datetime
 from decimal import Decimal
 from typing import Any, Literal
 
-from fastapi import APIRouter, BackgroundTasks, Request
+from fastapi import APIRouter, BackgroundTasks, Query, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import delete, select, text
@@ -18,17 +20,21 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from opennotebook import jobs, storage
 from opennotebook.ai import client
-from opennotebook.api.deps import Db, Me, not_yet
+from opennotebook.api.deps import Db, Me
 from opennotebook.auth import current_user
 from opennotebook.build import narrate, pipeline, slides
 from opennotebook.db.models import Job, Playback, Session
 from opennotebook.db.session import sessionmaker
-from opennotebook.domain import collections, sessions
+from opennotebook.domain import collections, sessions, voice
 from opennotebook.domain import sessions_estimate as est
+from opennotebook.domain import settings as st
 from opennotebook.domain.sessions_events import SESSION_CHANNEL_SQL, stream
 from opennotebook.errors import Problem, not_found
 from opennotebook.jobs.app import PREP_LOCK, PREP_QUEUE
 from opennotebook.jobs.tasks import PREP_TASK
+from opennotebook.speech import vad
+
+log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api", tags=["outputs"])
 
@@ -503,8 +509,80 @@ async def get_job(job_id: uuid.UUID, s: Db, me: Me) -> JobOut:
     return JobOut.of(j)
 
 
-@router.post("/sessions/{sid}/voice")
-async def voice_ask(sid: uuid.UUID, s: Db, me: Me) -> None:
-    """Ask a question aloud while listening; the answer streams back as audio."""
-    await _one(s, me.id, sid)
-    raise not_yet()
+def _sse(frames: AsyncIterator[voice.Frame]) -> StreamingResponse:
+    async def body() -> AsyncIterator[str]:
+        async for name, data in frames:
+            yield f"event: {name}\ndata: {data}\n\n"
+
+    return StreamingResponse(
+        body(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+async def _once(*frames: voice.Frame) -> AsyncIterator[voice.Frame]:
+    for f in frames:
+        yield f
+
+
+@router.post(
+    "/sessions/{sid}/voice",
+    response_class=StreamingResponse,
+    responses={200: {"content": {"text/event-stream": {}}, "description": "Server-sent events"}},
+    openapi_extra={
+        "requestBody": {
+            "required": True,
+            "description": "The question, recorded: a WAV, 16-bit PCM mono at any rate",
+            "content": {"audio/wav": {"schema": {"type": "string", "format": "binary"}}},
+        }
+    },
+)
+async def voice_ask(
+    sid: uuid.UUID,
+    request: Request,
+    slide: int = Query(default=0, description="The part the playhead was on"),
+    line: str = Query(default="", description="The line under the playhead; empty before one"),
+    offset_ms: int = Query(default=0, description="How far into that line it was"),
+) -> StreamingResponse:
+    """Ask a question aloud while listening to one of your outputs. The
+    answer comes back as server-sent events in the voice of whoever was
+    talking: `speaker`, then `said` with its `audio` (base64 PCM16, 24 kHz
+    mono), `hold`/`hold_audio` while a slow answer is prepared, `heard` (what
+    the question was heard as) or `heard_failed`, and `done`. A recording
+    with no speech in it is answered `silent` and costs nothing; a question
+    that cannot be answered is a `failed` with the reason."""
+    # Signed in and checked on a session of its own, closed before the
+    # stream starts: the stream lasts as long as the answer, and holds no
+    # transaction. Yours only: a share's viewer is not charged for a model
+    # call on someone else's output, and the player says so before asking.
+    async with sessionmaker()() as s, s.begin():
+        me = await current_user(request, s)
+        o = await _one(s, me.id, sid)
+        values = await st.values(s, me.id)
+    wav = bytearray()
+    async for chunk in request.stream():
+        wav += chunk
+        if len(wav) > voice.MAX_UPLOAD_BYTES:
+            return _sse(_once(voice.failed(voice.TOO_LONG)))
+    if not wav:
+        return _sse(_once(voice.failed(voice.NO_AUDIO)))
+    # The silence gate, in front of the model call, so silence is never
+    # billed. The transcript cannot be that gate: speech-to-text returns
+    # `{"text":""}` byte for byte for silence, for noise and for speech it
+    # could not resolve, and it arrives in parallel with the answer, so by
+    # the time it could tell, the answer model has been called and billed.
+    # This runs on the same bytes the model would have received, before it
+    # receives them.
+    try:
+        a = await asyncio.to_thread(vad.analyze_wav, bytes(wav))
+    except (vad.NotAudio, vad.DetectorMissing) as e:
+        if isinstance(e, vad.DetectorMissing):
+            log.error("voice: %s", e)
+        return _sse(_once(voice.failed(e.sentence)))
+    if a.is_silent:
+        return _sse(_once(voice.silent(a)))
+    if not client.ai().has_key:
+        return _sse(_once(voice.failed(voice.NO_KEY)))
+    at = voice.At(slide=slide, line=line, offset_ms=offset_ms)
+    return _sse(voice.turn(voice.prepare(o, values, at, bytes(wav), a.speech_ms)))

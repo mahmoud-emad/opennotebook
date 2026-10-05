@@ -11,6 +11,10 @@ dependencies = [
     # The openai SDK's own fork of httpx; the AI client uses it directly.
     "httpx2==2.13.1",
     "lxml==6.1.3",
+    # The silence gate: Silero VAD (MIT, bundled in speech/silero/) on
+    # onnxruntime (MIT), the same runtime version the page uses.
+    "numpy==2.5.3",
+    "onnxruntime==1.30.0",
     "openai==3.24.0",
     "openpyxl==3.1.5",
     "pdfplumber==0.11.10",
