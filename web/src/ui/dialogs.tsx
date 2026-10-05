@@ -111,6 +111,8 @@ export function CostDialog({
   onClose,
   onRetry,
   onBuild,
+  facts,
+  verb = "Build",
 }: {
   est: Estimate | null;
   audio: string | null;
@@ -119,6 +121,11 @@ export function CostDialog({
   onClose: () => void;
   onRetry: () => void;
   onBuild: () => void;
+  /** Facts to show instead of a build's slides, voices and style: a map's or
+   * notes' sources and model. */
+  facts?: string[];
+  /** What the button does: "Build" a deck or audio, "Make" a map or notes. */
+  verb?: string;
 }) {
   const [prices, setPrices] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -130,12 +137,14 @@ export function CostDialog({
     else groups.push([l.group, [l]]);
   }
   const buildLabel = !est
-    ? "Start building"
+    ? verb === "Build"
+      ? "Start building"
+      : `${verb} it`
     : anyUnpriced(est)
-      ? "Build (cost unknown)"
+      ? `${verb} (cost unknown)`
       : est.total_typical_usd > 0
-        ? `Build for about ${usd(est.total_typical_usd)}`
-        : "Build (free)";
+        ? `${verb} for about ${usd(est.total_typical_usd)}`
+        : `${verb} (free)`;
   return (
     <>
       <div className="set-veil" onClick={onClose} />
@@ -180,21 +189,31 @@ export function CostDialog({
                 </div>
               </div>
               <div className="est-facts">
-                {audio ? (
-                  <span className="est-fact">{audio}</span>
+                {facts ? (
+                  facts.map((f) => (
+                    <span key={f} className="est-fact">
+                      {f}
+                    </span>
+                  ))
                 ) : (
-                  <span className="est-fact">{est.slides} slides</span>
-                )}
-                {est.minutes > 0 && <span className="est-fact">about {est.minutes} minutes</span>}
-                <span className="est-fact">{est.speakers === 1 ? "1 voice" : `${est.speakers} voices`}</span>
-                <span className="est-fact">
-                  {est.sources === 1 ? "1 source" : `${est.sources} sources`}
-                  {` · ${countShort(est.source_chars)} characters`}
-                </span>
-                {!audio && (
                   <>
-                    <span className="est-fact">{styleLabel(est.style)} style</span>
-                    <span className="est-fact">slides by {modelName(est.slides_tier)}</span>
+                    {audio ? (
+                      <span className="est-fact">{audio}</span>
+                    ) : (
+                      <span className="est-fact">{est.slides} slides</span>
+                    )}
+                    {est.minutes > 0 && <span className="est-fact">about {est.minutes} minutes</span>}
+                    <span className="est-fact">{est.speakers === 1 ? "1 voice" : `${est.speakers} voices`}</span>
+                    <span className="est-fact">
+                      {est.sources === 1 ? "1 source" : `${est.sources} sources`}
+                      {` · ${countShort(est.source_chars)} characters`}
+                    </span>
+                    {!audio && (
+                      <>
+                        <span className="est-fact">{styleLabel(est.style)} style</span>
+                        <span className="est-fact">slides by {modelName(est.slides_tier)}</span>
+                      </>
+                    )}
                   </>
                 )}
               </div>
@@ -263,7 +282,7 @@ export function CostDialog({
         <div className="est-foot">
           <span className="est-fine">
             An estimate, not a quote: you pay for what the models actually use.
-            {est && ` Prices as of ${est.priced_at.slice(0, 10)}.`}
+            {est && est.priced_at !== "" && ` Prices as of ${est.priced_at.slice(0, 10)}.`}
           </span>
           <div className="est-actions">
             <button onClick={onClose}>Close</button>

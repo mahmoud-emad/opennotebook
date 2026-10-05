@@ -132,11 +132,30 @@ export type MindMapSummary = {
 
 export type MindMap = MindMapSummary & { dropped: number; excerpted: boolean; root: MindNode };
 
-/** What a map or notes would cost: one call over the sources. */
-export type QuickEstimate = { priced: boolean; cost_usd: number; model: string; input_tokens: number };
+/** What a map or notes would cost: one call over the sources, two at most
+ * when the first answer comes back too thin. */
+export type QuickEstimate = {
+  priced: boolean;
+  cost_usd: number;
+  cost_high_usd: number;
+  model: string;
+  input_tokens: number;
+  output_tokens: number;
+  sources: number;
+  chars: number;
+};
 
 function quickOf(v: Record<string, unknown>): QuickEstimate {
-  return { priced: v.priced === true, cost_usd: num(v.cost_usd), model: str(v.model), input_tokens: num(v.input_tokens) };
+  return {
+    priced: v.priced === true,
+    cost_usd: num(v.cost_usd),
+    cost_high_usd: num(v.cost_high_usd),
+    model: str(v.model),
+    input_tokens: num(v.input_tokens),
+    output_tokens: num(v.output_tokens),
+    sources: num(v.sources),
+    chars: num(v.chars),
+  };
 }
 
 function mapSummaryOf(m: Rest.MindMapSummary): MindMapSummary {

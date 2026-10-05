@@ -33,9 +33,10 @@ import {
   type CollectionSummary,
   type SessionSummary,
 } from "./api";
-import { buildOutput, estimateOutput, researchTopic, type BuildReq, type Picks } from "./api-studio";
+import { buildOutput, estimateOutput, researchTopic, type BuildReq, type Picks, type QuickEstimate } from "./api-studio";
 import { AskTab, THREAD_ID, askSources, send, useChatState, type ChatState, type ChatMade } from "./chat";
-import { CostDialog, LimitNote, anyUnpriced, countShort, usd, usdRange, usdRangeSpoken, type Estimate } from "./dialogs";
+import { CostDialog, LimitNote, type Estimate } from "./dialogs";
+import { EstimateBanner, quickEstimate, quickFacts } from "./cost";
 import { Cover, collTitle, coverPending } from "./home";
 import { Icon } from "./Icon";
 import { MindMapView, coveringMap, estimateMap, loadMaps, makeMap, newMapState } from "./mindmap";
@@ -1373,7 +1374,34 @@ export function CollectionPage(props: CollectionPageProps) {
           }}
         />
       )}
-      {estOpen && (
+      {estOpen && (kindNow === "mindmap" || kindNow === "notes") && (
+        <CostDialog
+          est={(() => {
+            const q = kindNow === "mindmap" ? mmEst : ntEst;
+            return q?.priced ? quickEstimate(q, kindNow, "") : null;
+          })()}
+          facts={(() => {
+            const q = kindNow === "mindmap" ? mmEst : ntEst;
+            return q ? quickFacts(q) : [];
+          })()}
+          verb="Make"
+          audio={null}
+          loading={kindNow === "mindmap" ? mmEstLoading : ntEstLoading}
+          err={
+            (kindNow === "mindmap" ? mmEstLoading : ntEstLoading) ||
+            (kindNow === "mindmap" ? mmEst : ntEst)?.priced
+              ? ""
+              : "the price of its model could not be read."
+          }
+          onClose={() => setEstOpen(false)}
+          onRetry={() => void (kindNow === "mindmap" ? estimateMap(cid, S.mm) : estimateNotes(cid, S.nt))}
+          onBuild={() => {
+            setEstOpen(false);
+            A.generate(kindNow);
+          }}
+        />
+      )}
+      {estOpen && kindNow !== "mindmap" && kindNow !== "notes" && (
         <CostDialog
           est={est}
           audio={kindNow === "audio" ? audioDesc(audioFormat, audioLength) : null}
@@ -1460,7 +1488,7 @@ function Options({
   estErr: string;
   estLoading: boolean;
   /** A map's or notes' estimate: whether it is on its way, and it, if priced. */
-  quick: [boolean, { cost_usd: number; model: string; input_tokens: number } | null];
+  quick: [boolean, QuickEstimate | null];
   genErr: string;
   generating: boolean;
   /** A map or notes of this kind is being made. */
@@ -1628,49 +1656,15 @@ function Options({
         </>
       )}
 
-      {/* What it costs, said before the click. Off in Settings, it is not
-          said at all; over the limit is said below either way. */}
-      {build ? (
-        showCost &&
-        !overLimit && (
-          <div className="est-banner" role="status" aria-label="Estimated cost">
-            <span className="est-i" aria-hidden="true">
-              <Icon name="info-circle" />
-            </span>
-            <div className="est-bt">
-              {estLoading && est === null ? (
-                <span className="dim">Working out the cost…</span>
-              ) : est !== null ? (
-                <>
-                  <span>Estimated </span>
-                  <strong aria-label={`${usdRangeSpoken(est.total_low_usd, est.total_high_usd)} US dollars`}>
-                    {usdRange(est.total_low_usd, est.total_high_usd)}
-                  </strong>
-                  {anyUnpriced(est)
-                    ? ", not counting a model with no price, so the real cost is unknown."
-                    : est.limit_usd > 0
-                      ? ` · within your ${usd(est.limit_usd)} limit.`
-                      : "."}
-                </>
-              ) : estErr !== "" ? (
-                <span className="dim">The cost could not be estimated.</span>
-              ) : null}
-            </div>
-          </div>
-        )
-      ) : (
-        <p className="opt-cost">
-          {qLoading && priced === null ? (
-            <span className="dim">Working out the cost…</span>
-          ) : priced !== null ? (
-            <span
-              title={`${priced.model}, one call over about ${countShort(priced.input_tokens)} tokens of your sources`}
-            >
-              About <strong>{usd(priced.cost_usd)}</strong>
-              {k === "mindmap" ? ", a few seconds." : ", under a minute."}
-            </span>
-          ) : null}
-        </p>
+      {/* What it costs, said before the click, the same way for every tool.
+          Off in Settings, it is not said at all; over the limit is said below
+          either way. */}
+      {showCost && !overLimit && (
+        <EstimateBanner
+          est={build ? est : priced !== null ? quickEstimate(priced, k === "mindmap" ? "mindmap" : "notes", "") : null}
+          loading={build ? estLoading : qLoading}
+          failed={build ? estErr !== "" : !qLoading && priced === null}
+        />
       )}
       {/* Over the limit is said whether or not costs are shown: it is not a
           note about cost but the reason Generate is off. */}
@@ -1681,11 +1675,9 @@ function Options({
         </div>
       )}
       <div className="opts-a">
-        {build && (
-          <button title="Every step and what it costs, before you start" onClick={onEstimate}>
-            Estimate cost
-          </button>
-        )}
+        <button title="Every step and what it costs, before you start" onClick={onEstimate}>
+          Estimate cost
+        </button>
         <span className="grow" />
         <button className="ghost" onClick={() => S.chosen.set(null)}>
           Cancel
