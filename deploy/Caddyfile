@@ -1,0 +1,59 @@
+# OpenNotebook in front of the world: the web app under /ui/, the api under
+# /api/. With DOMAIN set (in deploy/.env) Caddy gets a certificate for it and
+# serves HTTPS on 443, sending 80 there; without it the studio is plain HTTP
+# on :80, for a machine on a private network. compose.yaml turns DOMAIN into
+# SITE_ADDRESS, since Caddy reads an empty variable as an empty address.
+
+{$SITE_ADDRESS::80} {
+	# The bare address and /ui both go to the app.
+	redir / /ui/ 308
+	redir /ui /ui/ 308
+
+	# The api. Its paths start with /api already, so nothing is stripped.
+	# flush_interval -1 sends every byte on at once: progress and the chat
+	# agent stream as server-sent events, and a buffer would hold them back.
+	handle /api/* {
+		# JSON is compressed; event streams are left alone, so nothing waits
+		# for a compression block to fill.
+		encode {
+			gzip
+			match {
+				header Content-Type application/json*
+			}
+		}
+		reverse_proxy api:8000 {
+			flush_interval -1
+		}
+	}
+
+	# The web app, built to web/dist and copied to /srv/ui.
+	handle /ui/* {
+		root * /srv
+		encode zstd gzip
+
+		# Vite names every file it builds after its content (index-B3x9_kQa.js),
+		# so a name never points at other bytes: keep them a year. Everything
+		# else, index.html above all, is checked on every load, so a new
+		# release shows on the next reload.
+		@hashed path_regexp ^/ui/assets/[^/]+-[A-Za-z0-9_-]{8}\.[a-z0-9]+$
+		@unhashed not path_regexp ^/ui/assets/[^/]+-[A-Za-z0-9_-]{8}\.[a-z0-9]+$
+		header @hashed Cache-Control "public, max-age=31536000, immutable"
+		header @unhashed Cache-Control "no-cache"
+
+		# Any address in the app that is not a file is a screen the app draws
+		# itself (/ui/my-collections, /ui/c/…), so it gets index.html and a
+		# reload works. A missing file under assets/ stays a 404, so a stale
+		# script tag never receives HTML.
+		@screen {
+			not path /ui/assets/*
+			not file
+		}
+		rewrite @screen /ui/index.html
+
+		file_server
+	}
+
+	handle {
+		error 404
+	}
+}

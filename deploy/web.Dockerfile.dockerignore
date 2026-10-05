@@ -1,0 +1,9 @@
+# The web image needs the app's sources and the Caddyfile.
+*
+!web
+web/node_modules
+web/dist
+web/e2e
+web/test-results
+web/playwright-report
+!deploy/Caddyfile

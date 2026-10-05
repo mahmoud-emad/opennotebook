@@ -13,3 +13,5 @@ node_modules/
 web/dist/
 *.tsbuildinfo
 .env
+web/test-results/
+web/playwright-report/

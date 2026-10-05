@@ -1,0 +1,9 @@
+# The server image needs the package, its lock and the migrations: nothing
+# else from the repository (the Rust build output alone is tens of GB).
+*
+!server/pyproject.toml
+!server/uv.lock
+!server/README.md
+!server/alembic.ini
+!server/opennotebook
+**/__pycache__

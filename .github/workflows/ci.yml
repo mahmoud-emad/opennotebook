@@ -1,0 +1,88 @@
+# The checks `make check` runs, on every push and pull request: the server
+# (format, lint, types, tests against Postgres with pgvector) and the web app
+# (lint, tests, the build with its first-screen size budget). The Rust system
+# in crates/ is not built here; it is on its way out.
+#
+# The end-to-end suite (web/e2e, `make e2e`) is not run here yet: it needs the
+# whole stack up. See docs/stack-migration-plan.md, phase 4.
+
+name: CI
+
+on:
+  push:
+  pull_request:
+
+# A newer push to the same branch replaces a run still going.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  server:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: server
+    services:
+      # The same Postgres as deploy/compose.yaml. The tests migrate it from
+      # empty and create the vector extension themselves.
+      postgres:
+        image: pgvector/pgvector:0.8.7-pg18-trixie
+        env:
+          POSTGRES_USER: opennotebook
+          POSTGRES_PASSWORD: opennotebook
+          POSTGRES_DB: opennotebook_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U opennotebook -d opennotebook_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgresql://opennotebook:opennotebook@localhost:5432/opennotebook_test
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: astral-sh/setup-uv@v10.2.0
+        with:
+          version: "0.12.23"
+          enable-cache: true
+          cache-dependency-glob: server/uv.lock
+      - name: Install
+        run: uv sync --frozen
+      - name: Format
+        run: uv run ruff format --check .
+      - name: Lint
+        run: uv run ruff check .
+      - name: Types
+        run: uv run pyright
+      - name: Tests
+        run: uv run pytest -q
+
+  web:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: pnpm/action-setup@v6.1.0
+        with:
+          version: "12.9.1"
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version: "24.21.0"
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: Lint
+        run: pnpm lint
+      - name: Tests
+        run: pnpm test
+      # Includes the type check and the first screen's size budget.
+      - name: Build
+        run: pnpm build

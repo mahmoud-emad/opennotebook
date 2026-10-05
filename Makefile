@@ -1,7 +1,8 @@
 UI_DIR := crates/opennotebook_ui
 
 .PHONY: all build build-server build-ui run lint fmt test clean \
-	dev migrate api-client check check-server check-web fmt-new
+	dev migrate api-client check check-server check-web fmt-new \
+	up down e2e
 
 # The new stack (docs/stack-migration-plan.md): FastAPI in server/, the React
 # app in web/. Database settings come from DATABASE_URL and TEST_DATABASE_URL,
@@ -81,3 +82,24 @@ check-web:
 
 fmt-new:
 	cd server && $(UV) run ruff format . && $(UV) run ruff check --fix .
+
+# ── Production and end-to-end ─────────────────────────────────────────────────
+
+# The production stack in deploy/: Caddy, the api, the worker, Postgres.
+# Settings come from deploy/.env (copy deploy/.env.example).
+# The dev database's DATABASE_URL, exported above, is kept out: compose would
+# take it over deploy/.env and point the containers at the wrong Postgres.
+COMPOSE ?= env -u DATABASE_URL -u TEST_DATABASE_URL docker compose -f deploy/compose.yaml
+
+## up: build and start the production stack in the background
+up:
+	@test -f deploy/.env || { echo "deploy/.env is missing: copy deploy/.env.example and fill it in"; exit 1; }
+	$(COMPOSE) up -d --build
+
+## down: stop the production stack; its data volumes are kept
+down:
+	$(COMPOSE) down
+
+## e2e: the Playwright suite against a running studio (make dev); E2E_URL picks another
+e2e:
+	cd web && $(PNPM) e2e
