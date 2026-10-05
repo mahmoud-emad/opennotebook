@@ -183,6 +183,16 @@ async def make_notes(cid: uuid.UUID, body: MakeReq, s: Db, me: Me) -> NotesOut:
     hint = docs[0].title if len(docs) == 1 else "Study notes"
     focus = body.focus.strip() or None
     model = await config.value(s, me.id, config.NOTES_MODEL_KEY)
+    # Checked against the spending limit before any model call, like a build.
+    reading.refuse_over_limit(
+        await reading.estimate(
+            docs,
+            model,
+            lambda chars: (tokens_in(chars), OUTPUT_TOKENS),
+            await reading.limit_of(s, me.id),
+        ),
+        "Study notes of these sources",
+    )
     rule = config.language_rule(await config.value(s, me.id, config.LANGUAGE_KEY))
     try:
         async with (
@@ -227,7 +237,12 @@ async def estimate_notes(cid: uuid.UUID, s: Db, me: Me) -> Estimate:
     await collections.summary(s, me.id, cid)
     docs = await reading.read_docs(s, me.id, cid, None)
     model = await config.value(s, me.id, config.NOTES_MODEL_KEY)
-    return await reading.estimate(docs, model, lambda chars: (tokens_in(chars), OUTPUT_TOKENS))
+    return await reading.estimate(
+        docs,
+        model,
+        lambda chars: (tokens_in(chars), OUTPUT_TOKENS),
+        await reading.limit_of(s, me.id),
+    )
 
 
 @router.get("/{nid}")

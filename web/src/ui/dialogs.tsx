@@ -88,15 +88,26 @@ export type Estimate = {
 export const anyUnpriced = (e: Estimate) => e.lines.some((l) => l.unpriced);
 
 /** Why a build over the spending limit would be refused, and what to change. */
-export function limitLead(e: Estimate, audio: boolean): string {
-  const fewer = audio ? "a shorter length" : "fewer slides, a shorter length";
+export function limitLead(e: Estimate, audio: boolean, fix?: string): string {
+  const fewer = fix ?? (audio ? "a shorter length" : "fewer slides, a shorter length");
   return `This could cost up to ${usdUp(e.total_high_usd)}, over your ${usd(e.limit_usd)} limit. Use ${fewer}, or raise the limit in `;
 }
 
-export function LimitNote({ e, audio, className }: { e: Estimate; audio: boolean; className: string }) {
+export function LimitNote({
+  e,
+  audio,
+  className,
+  fix,
+}: {
+  e: Estimate;
+  audio: boolean;
+  className: string;
+  /** What to change instead of the build's own advice: "fewer sources". */
+  fix?: string;
+}) {
   return (
     <div className={className} role="alert">
-      {limitLead(e, audio)}
+      {limitLead(e, audio, fix)}
       <SettingsLink tab="costs" />.
     </div>
   );

@@ -978,7 +978,10 @@ async def mindmap_create(c: Ctx, p: MakeIn) -> dict[str, Any]:
 @method("mindmap", "mindmap_estimate", SidParam)
 async def mindmap_estimate(c: Ctx, p: SidParam) -> dict[str, Any]:
     cid = _id(p.sid, "That collection")
-    return (await mindmaps_api.estimate_mindmap(cid, c.s, c.me)).model_dump()
+    # The old shape: the limit fields came later, with the REST API.
+    return (await mindmaps_api.estimate_mindmap(cid, c.s, c.me)).model_dump(
+        exclude={"limit_usd", "over_limit"}
+    )
 
 
 @method("mindmap", "mindmap_list", SidParam)
@@ -1080,7 +1083,10 @@ async def notes_create(c: Ctx, p: MakeIn) -> dict[str, Any]:
 @method("notes", "notes_estimate", SidParam)
 async def notes_estimate(c: Ctx, p: SidParam) -> dict[str, Any]:
     cid = _id(p.sid, "That collection")
-    return (await notes_api.estimate_notes(cid, c.s, c.me)).model_dump()
+    # The old shape: the limit fields came later, with the REST API.
+    return (await notes_api.estimate_notes(cid, c.s, c.me)).model_dump(
+        exclude={"limit_usd", "over_limit"}
+    )
 
 
 @method("notes", "notes_list", SidParam)

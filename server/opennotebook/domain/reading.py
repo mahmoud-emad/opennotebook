@@ -3,6 +3,7 @@ study notes are made from. A port of `read_docs` in the Rust server's
 `sources_impl.rs`, and of the price of one such call (`estimate_live.rs`).
 """
 
+import math
 import uuid
 from collections.abc import Callable
 
@@ -65,10 +66,17 @@ class Estimate(BaseModel):
     cost_usd: float = Field(description="The typical cost; 0 when the model has no price")
     cost_high_usd: float = Field(description="Twice the typical cost: a second attempt")
     priced: bool = Field(description="False when the model's price is not known")
+    limit_usd: float = Field(default=0.0, description="The spending limit; 0 is none")
+    over_limit: bool = Field(
+        default=False, description="The high estimate is over the limit: making it is refused"
+    )
 
 
 async def estimate(
-    docs: list[NamedDoc], model: str, tokens: Callable[[int], tuple[int, int]]
+    docs: list[NamedDoc],
+    model: str,
+    tokens: Callable[[int], tuple[int, int]],
+    limit: float = 0.0,
 ) -> Estimate:
     """The price of one call over `docs` on `model`, `tokens` giving the
     tokens in and out for so many characters of text. The high end is two
@@ -86,4 +94,27 @@ async def estimate(
         cost_usd=one,
         cost_high_usd=2 * one,
         priced=price is not None,
+        limit_usd=limit,
+        over_limit=limit > 0 and 2 * one > limit,
     )
+
+
+async def limit_of(s: AsyncSession, owner: uuid.UUID) -> float:
+    """The person's spending limit per thing made, in USD; 0 when there is
+    none. Every tool is checked against it, not only builds."""
+    from opennotebook.domain import settings as st
+
+    return st.parse_limit(await st.value(s, owner, st.MAX_BUILD_USD_KEY)) or 0.0
+
+
+def refuse_over_limit(e: Estimate, what: str) -> None:
+    """Refuse making something whose HIGH estimate is over the limit, as a
+    build is refused: the limit is a promise about the most a thing costs.
+    An unpriced model is not refused; there is nothing to compare."""
+    if e.priced and e.over_limit:
+        high = math.ceil(e.cost_high_usd * 100.0 - 1e-6) / 100.0
+        raise Problem(
+            422,
+            f"{what} could cost up to ${high:.2f}, over your ${e.limit_usd:.2f} limit. "
+            "Use fewer sources, or raise the limit in Settings › Costs & limits.",
+        )

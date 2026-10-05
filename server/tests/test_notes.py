@@ -375,3 +375,22 @@ async def test_nobody_else_can_write_notes_of_a_collection(
     assert r.status_code == 404
     r = await client.get(f"/api/collections/{cid}/notes/estimate", headers=them)
     assert r.status_code == 404
+
+
+async def test_the_spending_limit_is_checked_before_any_model_call(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    install(monkeypatch)
+    cid = await _collection(client)
+    await add_note(client, cid, MOSHI)
+    # Every tool is checked against the limit, not only builds.
+    monkeypatch.setenv("OPENNOTEBOOK_MAX_BUILD_USD", "0.0000001")
+    e = (await client.get(f"/api/collections/{cid}/notes/estimate")).json()
+    assert e["limit_usd"] == pytest.approx(0.0000001) and e["over_limit"]
+    r = await client.post(f"/api/collections/{cid}/notes", json={})
+    assert r.status_code == 422
+    assert r.json()["detail"].startswith("Study notes of these sources could cost up to $")
+    assert "Settings › Costs & limits" in r.json()["detail"]
+    monkeypatch.setenv("OPENNOTEBOOK_MAX_BUILD_USD", "5")
+    e = (await client.get(f"/api/collections/{cid}/notes/estimate")).json()
+    assert e["limit_usd"] == 5 and not e["over_limit"]

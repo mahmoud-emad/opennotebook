@@ -6,8 +6,8 @@ import { anyUnpriced, usd, usdRange, usdRangeSpoken, type Estimate } from "./dia
 import { Icon } from "./Icon";
 import { modelName } from "./settings";
 
-/** "Estimated $0.057 – $0.15 · within your $0.50 limit." The limit is named
- * only where it is checked, which is a build's. */
+/** "Estimated $0.057 – $0.15 · within your $0.50 limit." Every tool is
+ * checked against the limit, so every tool names it. */
 export function EstimateBanner({ est, loading, failed }: { est: Estimate | null; loading: boolean; failed: boolean }) {
   return (
     <div className="est-banner" role="status" aria-label="Estimated cost">
@@ -79,9 +79,9 @@ export function quickEstimate(q: QuickEstimate, what: "mindmap" | "notes", price
     slides_tier: "",
     priced_at: pricedAt,
     minutes: 0,
-    // Maps and notes have no spending limit to check against.
-    limit_usd: 0,
-    over_limit: false,
+    // Checked against the same spending limit as a build.
+    limit_usd: q.limit_usd,
+    over_limit: q.over_limit,
   };
 }
 

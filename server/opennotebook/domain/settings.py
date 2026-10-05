@@ -505,8 +505,8 @@ CATALOGUE: tuple[Def, ...] = (
         MAX_BUILD_USD_KEY,
         TAB_COSTS,
         "Spending limit per output",
-        "A deck or audio overview whose highest estimate is over this is refused before it "
-        "starts. Mind maps and notes cost under a cent and are not limited.",
+        "Anything you make whose highest estimate is over this is refused before it starts: "
+        "decks, audio overviews, mind maps and notes.",
         choice(
             ("0.25", "$0.25"),
             ("0.50", "$0.50"),

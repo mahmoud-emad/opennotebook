@@ -1503,6 +1503,10 @@ function Options({
   const deck = k === "session" ? deckSummary(cfg, nSrc) : null;
   const offered = offeredLengths(audioFormat);
   const [qLoading, priced] = quick;
+  // A map's or notes' estimate in a build's shape, so every tool is said and
+  // checked against the limit the same way.
+  const shownEst = build ? est : priced !== null ? quickEstimate(priced, k === "mindmap" ? "mindmap" : "notes", "") : null;
+  const over = build ? overLimit : !!shownEst?.over_limit;
   return (
     <div className="opts" role="region" aria-label={`${outputLabel[k]} options`}>
       <div className="opts-h">
@@ -1659,16 +1663,23 @@ function Options({
       {/* What it costs, said before the click, the same way for every tool.
           Off in Settings, it is not said at all; over the limit is said below
           either way. */}
-      {showCost && !overLimit && (
+      {showCost && !over && (
         <EstimateBanner
-          est={build ? est : priced !== null ? quickEstimate(priced, k === "mindmap" ? "mindmap" : "notes", "") : null}
+          est={shownEst}
           loading={build ? estLoading : qLoading}
           failed={build ? estErr !== "" : !qLoading && priced === null}
         />
       )}
       {/* Over the limit is said whether or not costs are shown: it is not a
           note about cost but the reason Generate is off. */}
-      {build && est?.over_limit && <LimitNote e={est} audio={k === "audio"} className="opt-err" />}
+      {shownEst?.over_limit && (
+        <LimitNote
+          e={shownEst}
+          audio={k === "audio"}
+          fix={build ? undefined : "fewer sources"}
+          className="opt-err"
+        />
+      )}
       {genErr !== "" && (
         <div className="opt-err" role="alert">
           {genErr}
@@ -1684,7 +1695,7 @@ function Options({
         </button>
         <button
           className="primary"
-          disabled={generating || (build && overLimit) || making}
+          disabled={generating || over || making}
           onClick={() => onGenerate(k)}
         >
           {generating ? "Starting…" : `Generate ${outputLabel[k].toLowerCase()}`}

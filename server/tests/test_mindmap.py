@@ -391,3 +391,22 @@ async def test_nobody_else_can_map_a_collection(
     assert r.status_code == 404
     r = await client.post(f"/api/collections/{uuid.uuid4()}/mindmaps", json={})
     assert r.status_code == 404
+
+
+async def test_the_spending_limit_is_checked_before_any_model_call(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    install(monkeypatch)
+    cid = await _collection(client)
+    await add_note(client, cid, REEFS)
+    # Every tool is checked against the limit, not only builds.
+    monkeypatch.setenv("OPENNOTEBOOK_MAX_BUILD_USD", "0.0000001")
+    e = (await client.get(f"/api/collections/{cid}/mindmaps/estimate")).json()
+    assert e["limit_usd"] == pytest.approx(0.0000001) and e["over_limit"]
+    r = await client.post(f"/api/collections/{cid}/mindmaps", json={})
+    assert r.status_code == 422
+    assert r.json()["detail"].startswith("A mind map of these sources could cost up to $")
+    assert "Settings › Costs & limits" in r.json()["detail"]
+    monkeypatch.setenv("OPENNOTEBOOK_MAX_BUILD_USD", "5")
+    e = (await client.get(f"/api/collections/{cid}/mindmaps/estimate")).json()
+    assert e["limit_usd"] == 5 and not e["over_limit"]

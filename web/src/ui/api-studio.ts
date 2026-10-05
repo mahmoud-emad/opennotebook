@@ -143,6 +143,9 @@ export type QuickEstimate = {
   output_tokens: number;
   sources: number;
   chars: number;
+  /** The spending limit it is checked against; 0 when there is none. */
+  limit_usd: number;
+  over_limit: boolean;
 };
 
 function quickOf(v: Record<string, unknown>): QuickEstimate {
@@ -155,6 +158,8 @@ function quickOf(v: Record<string, unknown>): QuickEstimate {
     output_tokens: num(v.output_tokens),
     sources: num(v.sources),
     chars: num(v.chars),
+    limit_usd: num(v.limit_usd),
+    over_limit: v.over_limit === true,
   };
 }
 

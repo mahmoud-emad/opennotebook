@@ -11,6 +11,8 @@ const q = {
   output_tokens: 900,
   sources: 3,
   chars: 48000,
+  limit_usd: 0.5,
+  over_limit: false,
 };
 
 afterEach(cleanup);
@@ -21,20 +23,19 @@ describe("the cost of a tool", () => {
     expect([e.total_low_usd, e.total_high_usd]).toEqual([0.0004, 0.0008]);
     expect(e.lines).toHaveLength(1);
     expect(e.lines[0]!.calls_high).toBe(2);
-    // No limit is checked for a map, so none is named.
-    expect(e.limit_usd).toBe(0);
+    // A map is checked against the same limit as a build.
+    expect([e.limit_usd, e.over_limit]).toEqual([0.5, false]);
     expect(quickFacts(q)).toEqual(["3 sources · 48,000 characters", "by Gemini 2.5 Flash Lite"]);
   });
 
-  it("says a map's cost the same way as a build's, without a limit", () => {
+  it("says a map's cost the same way as a build's, limit included", () => {
     render(<EstimateBanner est={quickEstimate(q, "notes", "")} loading={false} failed={false} />);
-    expect(screen.getByRole("status").textContent).toBe("Estimated $0.00040 – $0.00080.");
+    expect(screen.getByRole("status").textContent).toBe("Estimated $0.00040 – $0.00080 · within your $0.50 limit.");
   });
 
-  it("names the limit only where one is checked", () => {
-    const build = { ...quickEstimate(q, "notes", ""), limit_usd: 0.5 };
-    render(<EstimateBanner est={build} loading={false} failed={false} />);
-    expect(screen.getByRole("status").textContent).toContain("within your $0.50 limit.");
+  it("names no limit when there is none", () => {
+    render(<EstimateBanner est={quickEstimate({ ...q, limit_usd: 0 }, "notes", "")} loading={false} failed={false} />);
+    expect(screen.getByRole("status").textContent).toBe("Estimated $0.00040 – $0.00080.");
   });
 
   it("says when it is working the cost out, and when it could not", () => {
