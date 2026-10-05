@@ -182,6 +182,7 @@ export const readSource = <ThrowOnError extends boolean = false>(options: Option
  * Web Search
  *
  * Search the web. Nothing is added: pass the best links to add_sources.
+ * A few seconds; charged to the person like any model call.
  */
 export const webSearch = <ThrowOnError extends boolean = false>(options: Options<WebSearchData, ThrowOnError>): RequestResult<WebSearchResponses, WebSearchErrors, ThrowOnError> => (options.client ?? client).post<WebSearchResponses, WebSearchErrors, ThrowOnError>({
     url: '/api/search',
@@ -335,9 +336,23 @@ export const getJob = <ThrowOnError extends boolean = false>(options: Options<Ge
 /**
  * Voice Ask
  *
- * Ask a question aloud while listening; the answer streams back as audio.
+ * Ask a question aloud while listening to one of your outputs. The
+ * answer comes back as server-sent events in the voice of whoever was
+ * talking: `speaker`, then `said` with its `audio` (base64 PCM16, 24 kHz
+ * mono), `hold`/`hold_audio` while a slow answer is prepared, `heard` (what
+ * the question was heard as) or `heard_failed`, and `done`. A recording
+ * with no speech in it is answered `silent` and costs nothing; a question
+ * that cannot be answered is a `failed` with the reason.
  */
-export const voiceAsk = <ThrowOnError extends boolean = false>(options: Options<VoiceAskData, ThrowOnError>): RequestResult<VoiceAskResponses, VoiceAskErrors, ThrowOnError> => (options.client ?? client).post<VoiceAskResponses, VoiceAskErrors, ThrowOnError>({ url: '/api/sessions/{sid}/voice', ...options });
+export const voiceAsk = <ThrowOnError extends boolean = false>(options: Options<VoiceAskData, ThrowOnError, unknown>): Promise<ServerSentEventsResult<VoiceAskResponses>> => (options.client ?? client).sse.post<VoiceAskResponses, VoiceAskErrors, ThrowOnError>({
+    bodySerializer: null,
+    url: '/api/sessions/{sid}/voice',
+    ...options,
+    headers: {
+        'Content-Type': 'audio/wav',
+        ...options.headers
+    }
+});
 
 /**
  * Line Audio
@@ -508,10 +523,13 @@ export const readChat = <ThrowOnError extends boolean = false>(options: Options<
 /**
  * Say
  *
- * Send a message. The answer streams back as server-sent events: thinking,
- * step, step_note, step_done, source, reply, state. The turn is kept.
+ * Send a message. The agent answers as server-sent events: thinking,
+ * step, step_note, step_done, source, reply, build, state. It may read
+ * pages into the sources, research, answer from the sources with
+ * citations, and start a build; a read-only copy can be asked, and
+ * refuses the rest. The turn is kept.
  */
-export const say = <ThrowOnError extends boolean = false>(options: Options<SayData, ThrowOnError>): RequestResult<SayResponses, SayErrors, ThrowOnError> => (options.client ?? client).post<SayResponses, SayErrors, ThrowOnError>({
+export const say = <ThrowOnError extends boolean = false>(options: Options<SayData, ThrowOnError, unknown>): Promise<ServerSentEventsResult<SayResponses>> => (options.client ?? client).sse.post<SayResponses, SayErrors, ThrowOnError>({
     url: '/api/collections/{cid}/chat',
     ...options,
     headers: {
@@ -523,9 +541,10 @@ export const say = <ThrowOnError extends boolean = false>(options: Options<SayDa
 /**
  * Run Command
  *
- * Run a `/` command. It streams the same events a message does.
+ * Run a `/` command. It streams the same events a message does, and is
+ * kept like one. `/clear` clears the conversation and streams `cleared`.
  */
-export const runCommand = <ThrowOnError extends boolean = false>(options: Options<RunCommandData, ThrowOnError>): RequestResult<RunCommandResponses, RunCommandErrors, ThrowOnError> => (options.client ?? client).post<RunCommandResponses, RunCommandErrors, ThrowOnError>({
+export const runCommand = <ThrowOnError extends boolean = false>(options: Options<RunCommandData, ThrowOnError, unknown>): Promise<ServerSentEventsResult<RunCommandResponses>> => (options.client ?? client).sse.post<RunCommandResponses, RunCommandErrors, ThrowOnError>({
     url: '/api/collections/{cid}/chat/commands',
     ...options,
     headers: {

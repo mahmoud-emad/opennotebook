@@ -739,7 +739,7 @@
           "sources"
         ],
         "summary": "Web Search",
-        "description": "Search the web. Nothing is added: pass the best links to add_sources.",
+        "description": "Search the web. Nothing is added: pass the best links to add_sources.\nA few seconds; charged to the person like any model call.",
         "operationId": "web_search",
         "requestBody": {
           "content": {
@@ -1338,7 +1338,7 @@
           "outputs"
         ],
         "summary": "Voice Ask",
-        "description": "Ask a question aloud while listening; the answer streams back as audio.",
+        "description": "Ask a question aloud while listening to one of your outputs. The\nanswer comes back as server-sent events in the voice of whoever was\ntalking: `speaker`, then `said` with its `audio` (base64 PCM16, 24 kHz\nmono), `hold`/`hold_audio` while a slow answer is prepared, `heard` (what\nthe question was heard as) or `heard_failed`, and `done`. A recording\nwith no speech in it is answered `silent` and costs nothing; a question\nthat cannot be answered is a `failed` with the reason.",
         "operationId": "voice_ask",
         "parameters": [
           {
@@ -1350,15 +1350,49 @@
               "format": "uuid",
               "title": "Sid"
             }
+          },
+          {
+            "name": "slide",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "description": "The part the playhead was on",
+              "default": 0,
+              "title": "Slide"
+            },
+            "description": "The part the playhead was on"
+          },
+          {
+            "name": "line",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "The line under the playhead; empty before one",
+              "default": "",
+              "title": "Line"
+            },
+            "description": "The line under the playhead; empty before one"
+          },
+          {
+            "name": "offset_ms",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "description": "How far into that line it was",
+              "default": 0,
+              "title": "Offset Ms"
+            },
+            "description": "How far into that line it was"
           }
         ],
         "responses": {
           "200": {
-            "description": "Successful Response",
+            "description": "Server-sent events",
             "content": {
-              "application/json": {
-                "schema": {}
-              }
+              "text/event-stream": {}
             }
           },
           "422": {
@@ -1368,6 +1402,18 @@
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "description": "The question, recorded: a WAV, 16-bit PCM mono at any rate",
+          "content": {
+            "audio/wav": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
               }
             }
           }
@@ -2429,7 +2475,7 @@
           "chat"
         ],
         "summary": "Say",
-        "description": "Send a message. The answer streams back as server-sent events: thinking,\nstep, step_note, step_done, source, reply, state. The turn is kept.",
+        "description": "Send a message. The agent answers as server-sent events: thinking,\nstep, step_note, step_done, source, reply, build, state. It may read\npages into the sources, research, answer from the sources with\ncitations, and start a build; a read-only copy can be asked, and\nrefuses the rest. The turn is kept.",
         "operationId": "say",
         "parameters": [
           {
@@ -2455,11 +2501,9 @@
         },
         "responses": {
           "200": {
-            "description": "Successful Response",
+            "description": "Server-sent events",
             "content": {
-              "application/json": {
-                "schema": {}
-              }
+              "text/event-stream": {}
             }
           },
           "422": {
@@ -2481,7 +2525,7 @@
           "chat"
         ],
         "summary": "Run Command",
-        "description": "Run a `/` command. It streams the same events a message does.",
+        "description": "Run a `/` command. It streams the same events a message does, and is\nkept like one. `/clear` clears the conversation and streams `cleared`.",
         "operationId": "run_command",
         "parameters": [
           {
@@ -2507,11 +2551,9 @@
         },
         "responses": {
           "200": {
-            "description": "Successful Response",
+            "description": "Server-sent events",
             "content": {
-              "application/json": {
-                "schema": {}
-              }
+              "text/event-stream": {}
             }
           },
           "422": {
@@ -4356,7 +4398,7 @@
             },
             "type": "array",
             "title": "Steps",
-            "description": "The work lines shown under an answer"
+            "description": "The work lines shown under an answer: id, kind, text, detail, note and status (ok, bad)"
           },
           "citations": {
             "items": {
@@ -4887,6 +4929,64 @@
       },
       "RunCommand": {
         "properties": {
+          "output": {
+            "type": "string",
+            "enum": [
+              "",
+              "session",
+              "audio",
+              "mindmap",
+              "notes"
+            ],
+            "title": "Output",
+            "description": "What a build makes when the person names no kind; empty is slides",
+            "default": ""
+          },
+          "style": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Style",
+            "description": "A deck's style, from /api/styles"
+          },
+          "audio_format": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "deep_dive",
+                  "brief",
+                  "critique",
+                  "debate"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audio Format"
+          },
+          "audio_length": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "shorter",
+                  "default",
+                  "longer"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audio Length"
+          },
           "name": {
             "type": "string",
             "title": "Name",
@@ -4896,6 +4996,13 @@
             "type": "string",
             "maxLength": 2000,
             "title": "Arg",
+            "default": ""
+          },
+          "text": {
+            "type": "string",
+            "maxLength": 8000,
+            "title": "Text",
+            "description": "What the conversation keeps as said; /name arg when empty",
             "default": ""
           }
         },
@@ -4907,11 +5014,75 @@
       },
       "Say": {
         "properties": {
+          "output": {
+            "type": "string",
+            "enum": [
+              "",
+              "session",
+              "audio",
+              "mindmap",
+              "notes"
+            ],
+            "title": "Output",
+            "description": "What a build makes when the person names no kind; empty is slides",
+            "default": ""
+          },
+          "style": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Style",
+            "description": "A deck's style, from /api/styles"
+          },
+          "audio_format": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "deep_dive",
+                  "brief",
+                  "critique",
+                  "debate"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audio Format"
+          },
+          "audio_length": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "shorter",
+                  "default",
+                  "longer"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audio Length"
+          },
           "text": {
             "type": "string",
             "maxLength": 8000,
             "minLength": 1,
             "title": "Text"
+          },
+          "research": {
+            "type": "boolean",
+            "title": "Research",
+            "description": "Whether the agent may search and research the web; off, it reads only the links it is given",
+            "default": true
           }
         },
         "type": "object",

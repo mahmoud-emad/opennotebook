@@ -685,7 +685,7 @@ export type Message = {
     /**
      * Steps
      *
-     * The work lines shown under an answer
+     * The work lines shown under an answer: id, kind, text, detail, note and status (ok, bad)
      */
     steps: Array<{
         [key: string]: unknown;
@@ -1062,6 +1062,26 @@ export type Retitle = {
  */
 export type RunCommand = {
     /**
+     * Output
+     *
+     * What a build makes when the person names no kind; empty is slides
+     */
+    output?: '' | 'session' | 'audio' | 'mindmap' | 'notes';
+    /**
+     * Style
+     *
+     * A deck's style, from /api/styles
+     */
+    style?: string | null;
+    /**
+     * Audio Format
+     */
+    audio_format?: 'deep_dive' | 'brief' | 'critique' | 'debate' | null;
+    /**
+     * Audio Length
+     */
+    audio_length?: 'shorter' | 'default' | 'longer' | null;
+    /**
      * Name
      *
      * A command name from /api/commands
@@ -1071,6 +1091,12 @@ export type RunCommand = {
      * Arg
      */
     arg?: string;
+    /**
+     * Text
+     *
+     * What the conversation keeps as said; /name arg when empty
+     */
+    text?: string;
 };
 
 /**
@@ -1078,9 +1104,35 @@ export type RunCommand = {
  */
 export type Say = {
     /**
+     * Output
+     *
+     * What a build makes when the person names no kind; empty is slides
+     */
+    output?: '' | 'session' | 'audio' | 'mindmap' | 'notes';
+    /**
+     * Style
+     *
+     * A deck's style, from /api/styles
+     */
+    style?: string | null;
+    /**
+     * Audio Format
+     */
+    audio_format?: 'deep_dive' | 'brief' | 'critique' | 'debate' | null;
+    /**
+     * Audio Length
+     */
+    audio_length?: 'shorter' | 'default' | 'longer' | null;
+    /**
      * Text
      */
     text: string;
+    /**
+     * Research
+     *
+     * Whether the agent may search and research the web; off, it reads only the links it is given
+     */
+    research?: boolean;
 };
 
 /**
@@ -2891,14 +2943,36 @@ export type GetJobResponses = {
 export type GetJobResponse = GetJobResponses[keyof GetJobResponses];
 
 export type VoiceAskData = {
-    body?: never;
+    /**
+     * The question, recorded: a WAV, 16-bit PCM mono at any rate
+     */
+    body: Blob | File;
     path: {
         /**
          * Sid
          */
         sid: string;
     };
-    query?: never;
+    query?: {
+        /**
+         * Slide
+         *
+         * The part the playhead was on
+         */
+        slide?: number;
+        /**
+         * Line
+         *
+         * The line under the playhead; empty before one
+         */
+        line?: string;
+        /**
+         * Offset Ms
+         *
+         * How far into that line it was
+         */
+        offset_ms?: number;
+    };
     url: '/api/sessions/{sid}/voice';
 };
 
@@ -2913,7 +2987,7 @@ export type VoiceAskError = VoiceAskErrors[keyof VoiceAskErrors];
 
 export type VoiceAskResponses = {
     /**
-     * Successful Response
+     * Server-sent events
      */
     200: unknown;
 };
@@ -3627,7 +3701,7 @@ export type SayError = SayErrors[keyof SayErrors];
 
 export type SayResponses = {
     /**
-     * Successful Response
+     * Server-sent events
      */
     200: unknown;
 };
@@ -3655,7 +3729,7 @@ export type RunCommandError = RunCommandErrors[keyof RunCommandErrors];
 
 export type RunCommandResponses = {
     /**
-     * Successful Response
+     * Server-sent events
      */
     200: unknown;
 };
