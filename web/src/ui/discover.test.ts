@@ -3,7 +3,6 @@ import { sharedFacts, sharedSrc } from "./discover";
 
 const out = (kind: string, slides: number, ms: number) => ({ kind, slide_count: slides, duration_ms: ms });
 
-// Ported from the old app's discover.rs tests.
 describe("a shared collection", () => {
   it("says what a shared output is", () => {
     expect(sharedFacts(out("session", 6, 0))).toBe("6 slides");

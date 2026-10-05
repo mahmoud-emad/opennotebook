@@ -19,7 +19,6 @@ import {
   sessionOf,
   slideKind,
   soundsUnfinished,
-  sseFrames,
   stepTarget,
   toWav,
   tocLine,
@@ -28,6 +27,7 @@ import {
   voiceName,
   type Msg,
 } from "./playerModel";
+import { sseFrames } from "./sse";
 
 const line = (id: string, spk: string, ms: number | null, text = `Line ${id}.`, ordinal?: number) => ({
   line_id: id,

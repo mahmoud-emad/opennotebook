@@ -58,7 +58,7 @@ describe("slash commands", () => {
 // ── a turn, against a server that streams ────────────────────────────────────
 
 function chat(): ChatState {
-  return { cid: "c1", msgs: store(greeting()), talking: store(false), thinking: store(false), stick: store(true) };
+  return { cid: "c1", msgs: store(greeting()), talking: store(false), thinking: store(false), stick: store(true), loading: store(false), life: store<AbortSignal | undefined>(undefined) };
 }
 
 /** A server that answers every POST with these events, and keeps what it was
@@ -134,7 +134,8 @@ describe("a turn", () => {
     const st = chat();
     st.msgs.set((v) => [...v, { ...v[0]!, who: "You", me: true, text: "old" }]);
     await send(st, "/clear", PICKS, () => {}, () => {});
-    expect(st.msgs.get()).toEqual(greeting());
+    const text = (m: { who: string; text: string }) => [m.who, m.text];
+    expect(st.msgs.get().map(text)).toEqual(greeting().map(text));
   });
 
   it("asks from a map with the question shown as it was asked", async () => {

@@ -10,6 +10,7 @@ import {
   CollectionCard,
   ListError,
   NewCard,
+  PageSkel,
   SkelGrid,
   collTitle,
   coverPending,
@@ -20,7 +21,6 @@ import {
 import { Icon } from "./Icon";
 import { EMPTY, ORDER, PICKS, PickBar, keep, start } from "./pick";
 import { follow, routeFromLocation, routeUrl, sameView, setNav, setRoute, type Open, type View } from "./routes";
-import { SettingsDialog } from "./SettingsDialog";
 import { GENERAL, SETTINGS, keys, openSettings, reloadSettings, settingValue } from "./settings";
 import { FLASH, NOTICE, SNACK, SNACK_MS, snack, type Output } from "./shell";
 import { useStore } from "./store";
@@ -28,8 +28,10 @@ import { useStore } from "./store";
 // The collection page, the map and the notes load when a collection is first
 // opened, so the first screen stays small.
 const CollectionPage = lazy(() =>
-  import("./CollectionPage").then((m) => ({ default: m.CollectionPage })),
+  import("./collection/CollectionPage").then((m) => ({ default: m.CollectionPage })),
 );
+// Settings load the first time they are opened: most visits never open them.
+const SettingsDialog = lazy(() => import("./SettingsDialog").then((m) => ({ default: m.SettingsDialog })));
 // The player is a page of its own, loaded when an output is first played.
 const PlayerPage = lazy(() => import("./player").then((m) => ({ default: m.PlayerPage })));
 
@@ -92,9 +94,14 @@ export function App() {
     return () => clearTimeout(t);
   }, [snackS]);
 
+  // Which read of the list is the latest: a poll and a reload after a delete
+  // can cross, and the older answer must not put back what was deleted.
+  const reloadSeq = useRef(0);
   const reload = useCallback(async () => {
+    const my = ++reloadSeq.current;
     try {
       const got = await listCollections();
+      if (my !== reloadSeq.current) return;
       setCollections(got);
       setLoadErr("");
       // Best effort: a card says only "Reused" until this answers, and keeps
@@ -102,12 +109,14 @@ export function App() {
       if (got.some((c) => c.reused_from !== "")) {
         try {
           const feed = await shareFeed("", "newest");
+          if (my !== reloadSeq.current) return;
           setOrigins(Object.fromEntries(feed.map((s) => [s.share_id, collTitle(s.title)])));
         } catch {
           // The cards say "Reused from a shared collection" instead.
         }
       }
     } catch (e) {
+      if (my !== reloadSeq.current) return;
       setLoadErr(errText(e));
     }
     // Set even when the call failed, or skeletons would spin forever.
@@ -207,11 +216,11 @@ export function App() {
     listRef.current = collections;
   }, [collections]);
   useEffect(() => {
-    let live = true;
+    const stop = new AbortController();
     void (async () => {
-      while (live) {
-        await sleep(5000);
-        if (!live) return;
+      while (!stop.signal.aborted) {
+        await sleep(5000, stop.signal);
+        if (stop.signal.aborted) return;
         const v = viewRef.current;
         const doc = SETTINGS.get().doc;
         const autoName = settingValue(doc, keys.AUTO_NAME) !== "off";
@@ -225,9 +234,7 @@ export function App() {
         if (v.kind === "mine" && moving) await reload();
       }
     })();
-    return () => {
-      live = false;
-    };
+    return () => stop.abort();
   }, [reload]);
 
   const openColl = (cid: string) => {
@@ -257,7 +264,7 @@ export function App() {
   // The player has no top bar of the app's: it is a full page with its own.
   if (view.kind === "play")
     return (
-      <Suspense fallback={null}>
+      <Suspense fallback={<PageSkel />}>
         <PlayerPage key={`${view.sid}|${view.share ?? ""}`} sid={view.sid} share={view.share} />
       </Suspense>
     );
@@ -416,11 +423,16 @@ export function App() {
           </button>
         </div>
       )}
-      {settings.open !== null && <SettingsDialog onClose={() => void reloadSettings()} />}
+      {settings.open !== null && (
+        // The veil at once, so the click is answered while the dialog loads.
+        <Suspense fallback={<div className="set-veil" />}>
+          <SettingsDialog onClose={() => void reloadSettings()} />
+        </Suspense>
+      )}
       <AskDialog />
 
       {view.kind === "collection" && (
-        <Suspense fallback={<main />}>
+        <Suspense fallback={<PageSkel />}>
         <CollectionPage
           // Keyed on the collection, so opening another mounts a fresh page.
           key={view.cid}

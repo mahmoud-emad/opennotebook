@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { MindMapSummary } from "./api-studio";
-import { coveringMap, fileStem } from "./mindmap";
+import { fileStem } from "./common";
+import { coveringMap } from "./mindmap";
 
 // Ported from the old app's mindmap.rs tests.
 describe("mind maps", () => {

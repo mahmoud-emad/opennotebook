@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { citeGroups, mdToHtml, plainExcerpt, withChips, type Cite } from "./markdown";
+import { citeGroups, type Cite } from "./cite";
+import { mdToHtml, plainExcerpt, withChips } from "./markdown";
 
 const cite = (c: Partial<Cite> & { n: number }): Cite => ({ title: "", url: "", name: "", excerpt: "", ...c });
 

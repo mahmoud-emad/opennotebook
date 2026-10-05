@@ -19,17 +19,15 @@ import {
   type MindMapSummary,
   type StudyNotesSummary,
 } from "./api-studio";
+import { audioFormatName } from "./audioFormats";
 import { CardMenu } from "./CardMenu";
+import { RowErr } from "./common";
 import { askConfirm, askPrompt, usd } from "./dialogs";
 import { known } from "./errors";
 import { collTitle } from "./home";
 import { Icon } from "./Icon";
+import { phaseLabel } from "./phases";
 import { mmss, report, when } from "./shell";
-
-/** An audio overview's format, as the person reads it. */
-export function audioFormatLabel(id: string): string {
-  return { brief: "Brief", critique: "Critique", debate: "Debate" }[id] ?? "Deep Dive";
-}
 
 /** Start a failed output again, as a new output in the same collection.
  *
@@ -78,15 +76,6 @@ export async function retryPrep(sid: string, title: string): Promise<string | nu
     return `It started again, but the failed one could not be removed. ${errText(e)}`;
   }
 }
-
-/** The phases a prep runs, in order, named for a person. */
-export const PHASES: [string, string][] = [
-  ["research", "Researching the web"],
-  ["ingest", "Reading your sources"],
-  ["script", "Writing the script"],
-  ["deck", "Recording the voices, and drawing any slides"],
-  ["validate", "Checking it renders"],
-];
 
 /** What a failed prep says to the person who started it, and what it keeps back.
  *
@@ -147,11 +136,6 @@ export function madeKey(m: Made): string {
 
 /** One output, by its kind and its id: what a rename or a delete acts on. */
 export type Target = { kind: "session" | "map" | "notes"; id: string };
-
-/** What it is, at the start of a sentence saying what went wrong with it. */
-export function subject(t: Target): string {
-  return t.kind === "session" ? "It" : t.kind === "map" ? "The mind map" : "The study notes";
-}
 
 /** Rename one output of collection `cid`. Throws why it was not renamed,
  * including one that is no longer there. */
@@ -274,24 +258,16 @@ export function removedLine(what: string): string {
   return `The ${what} ${verb} removed. The sources and everything else made from them stay.`;
 }
 
+/** A rename or delete on its way, where the row's ⋯ menu was. */
+function RowBusy({ text }: { text: string }) {
+  return <span className="mini-spin" role="status" title={text} aria-label={text} />;
+}
+
 /** A map or a set of notes in the outputs list: opens beside the Studio.
  *
  * Read only, with no rename or delete, it is a shared output on a shared
  * collection's page; with `href` it is a link (a shared deck or audio
  * overview, to the player) rather than a button. */
-/** What went wrong with one row's action (a retry, a rename, a delete), said
- * right under that row rather than in a banner away from it. */
-export function RowErr({ text, onDismiss }: { text: string; onDismiss: () => void }) {
-  return (
-    <div className="opt-err row-err" role="alert">
-      <span className="grow">{text}</span>
-      <button className="icon-btn" title="Dismiss" aria-label="Dismiss" onClick={onDismiss}>
-        <Icon name="x-lg" />
-      </button>
-    </div>
-  );
-}
-
 export function ItemRow({
   icon,
   what,
@@ -303,6 +279,7 @@ export function ItemRow({
   onOpen,
   onRename,
   onDelete,
+  busy = "",
   err = "",
   onDismissErr,
 }: {
@@ -320,6 +297,8 @@ export function ItemRow({
   /** The new name, once the person has given one that differs. */
   onRename?: (next: string) => void;
   onDelete?: () => void;
+  /** A rename or delete of it on its way, in words; empty when none is. */
+  busy?: string;
   /** Why the last rename or delete of it failed; empty when nothing did. */
   err?: string;
   onDismissErr?: () => void;
@@ -359,14 +338,19 @@ export function ItemRow({
             {body}
           </button>
         )}
-        {onRename && onDelete && (
-          <OutputMenu
-            title={title}
-            shown={shown}
-            consequence={removedLine(what)}
-            onRename={onRename}
-            onDelete={onDelete}
-          />
+        {busy !== "" ? (
+          <RowBusy text={busy} />
+        ) : (
+          onRename &&
+          onDelete && (
+            <OutputMenu
+              title={title}
+              shown={shown}
+              consequence={removedLine(what)}
+              onRename={onRename}
+              onDelete={onDelete}
+            />
+          )
         )}
       </div>
       {err !== "" && <RowErr text={err} onDismiss={() => onDismissErr?.()} />}
@@ -383,6 +367,7 @@ export function SessionRow({
   onChanged,
   onRename,
   onDelete,
+  busy = "",
   err = "",
   onDismissErr,
 }: {
@@ -393,6 +378,8 @@ export function SessionRow({
   /** Without these the row has no menu: an output of a read-only copy. */
   onRename?: (next: string) => void;
   onDelete?: () => void;
+  /** A rename or delete of it on its way, in words; empty when none is. */
+  busy?: string;
   /** Why the last rename or delete of it failed; empty when nothing did. */
   err?: string;
   onDismissErr?: () => void;
@@ -445,7 +432,7 @@ export function SessionRow({
           <span className="out-d num">
             {audio ? (
               <>
-                {audioFormatLabel(s.audio_format)}
+                {audioFormatName(s.audio_format) ?? "Deep Dive"}
                 {s.duration_ms > 0 && ` · ${mmss(s.duration_ms)}`}
               </>
             ) : (
@@ -491,14 +478,19 @@ export function SessionRow({
             {retrying ? "Starting…" : "Retry"}
           </button>
         )}
-        {onRename && onDelete && (
-          <OutputMenu
-            title={s.title}
-            shown={shown}
-            consequence="It is removed from this collection. The sources and everything else made from them stay."
-            onRename={onRename}
-            onDelete={onDelete}
-          />
+        {busy !== "" ? (
+          <RowBusy text={busy} />
+        ) : (
+          onRename &&
+          onDelete && (
+            <OutputMenu
+              title={s.title}
+              shown={shown}
+              consequence="It is removed from this collection. The sources and everything else made from them stay."
+              onRename={onRename}
+              onDelete={onDelete}
+            />
+          )
         )}
       </div>
       {retryErr !== "" && <RowErr text={retryErr} onDismiss={() => setRetryErr("")} />}
@@ -522,9 +514,10 @@ export const LIVE_MAX = 2;
  * `sid` follows nothing and shows only that it is preparing. */
 export function Progress({ sid, waiting = "" }: { sid: string; waiting?: string }) {
   const [at, setAt] = useState<[string, number, number]>(["", 0, 0]);
-  // Why the build has not started (no worker yet), from the list and then the
-  // stream; cleared the moment it starts.
-  const [held, setHeld] = useState(waiting);
+  // Why the build has not started (no worker yet): what the stream last said,
+  // and until it says anything, what the list says, read again on each poll.
+  const [streamHeld, setHeld] = useState<string | null>(null);
+  const held = streamHeld ?? waiting;
   useEffect(() => {
     if (sid === "") return;
     let es: EventSource;
@@ -560,7 +553,7 @@ export function Progress({ sid, waiting = "" }: { sid: string; waiting?: string 
     return () => es.close();
   }, [sid]);
   const [step, done, total] = at;
-  const label = PHASES.find(([k]) => k === step)?.[1] ?? "Starting";
+  const label = phaseLabel(step) ?? "Starting";
   const pct = total > 0 ? Math.floor((done * 100) / total) : 0;
   return (
     <>

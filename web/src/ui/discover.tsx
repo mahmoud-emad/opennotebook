@@ -1,6 +1,5 @@
 // Discover, the studio's root: every collection shared on this studio, and one
-// of them as a visitor sees it, with the way to reuse it. A port of the old
-// app's `discover.rs`.
+// of them as a visitor sees it, with the way to reuse it.
 
 import { Suspense, lazy, useCallback, useEffect, useRef, useState } from "react";
 import { errText, sleep } from "./api";
@@ -62,35 +61,43 @@ export function DiscoverPage() {
   // Which ask is current: a page of items asked for under an older search,
   // order or kind is dropped when it lands.
   const asked = useRef(0);
+  // What the page shows was asked for under these: while they differ from
+  // what is asked for now, the kept answer is on its way out.
+  const want = JSON.stringify([query, sort, kind, again]);
+  const [got, setGot] = useState("");
 
   useEffect(() => {
-    let live = true;
+    // A newer keystroke, order or kind cancels this ask, its wait included.
+    const ctrl = new AbortController();
+    const live = () => !ctrl.signal.aborted;
     const n = ++asked.current;
     void (async () => {
-      // A pause, so typing asks once rather than per keystroke; a newer
-      // keystroke drops this one.
-      if (query.trim() !== "") await sleep(250);
-      if (!live) return;
+      // A pause, so typing asks once rather than per keystroke.
+      if (query.trim() !== "") await sleep(250, ctrl.signal);
+      if (!live()) return;
       try {
         if (kind === "all") {
-          const v = await shareFeed(query, sort);
-          if (!live) return;
+          const v = await shareFeed(query, sort, ctrl.signal);
+          if (!live()) return;
           setFeed(v);
+          setGot(want);
         } else {
-          const page = await shareItems(kind, query, sort);
-          if (!live || n !== asked.current) return;
+          const page = await shareItems(kind, query, sort, 0, ctrl.signal);
+          if (!live() || n !== asked.current) return;
           setItems({ kind, list: page.items, next: page.next });
           setMore("");
+          setGot(want);
         }
         setErr("");
       } catch (e) {
-        if (live) setErr(errText(e));
+        if (live()) {
+          setErr(errText(e));
+          setGot(want);
+        }
       }
     })();
-    return () => {
-      live = false;
-    };
-  }, [query, sort, kind, again]);
+    return () => ctrl.abort();
+  }, [query, sort, kind, again, want]);
 
   const loadMore = async () => {
     if (kind === "all" || !items || items.kind !== kind || items.next === null || more === "loading") return;
@@ -114,6 +121,8 @@ export function DiscoverPage() {
   const shown = kind === "all" ? null : items !== null && items.kind === kind ? items : null;
   const list: unknown[] | null = kind === "all" ? feed : (shown?.list ?? null);
   const plural = feedKindLabel[kind].toLowerCase();
+  // A search or a change of order on its way, over the answer kept on screen.
+  const refreshing = list !== null && got !== want;
   return (
     <main>
       <div className="page-h">
@@ -126,8 +135,8 @@ export function DiscoverPage() {
         </div>
       </div>
       <div className="feed-bar" role="search">
-        <div className="search">
-          <Icon name="search" />
+        <div className="search" aria-busy={refreshing}>
+          {refreshing ? <span className="ic mini-spin" /> : <Icon name="search" />}
           <input
             type="search"
             aria-label={kind === "all" ? "Search shared collections" : `Search shared ${plural}`}
@@ -471,7 +480,13 @@ function SharedViewer({ v, onClose }: { v: SharedViewing; onClose: () => void })
         aria-modal="true"
         aria-label={`${outputLabel[v.kind]}: ${v.title}`}
       >
-        <Suspense fallback={null}>
+        <Suspense
+          fallback={
+            <div className="mm-msg">
+              <span className="mini-spin" /> Opening…
+            </div>
+          }
+        >
           {v.kind === "mindmap" ? (
             <MindMapView
               key={v.id}

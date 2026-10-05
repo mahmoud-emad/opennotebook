@@ -7,7 +7,7 @@
 // appears. See `docs/study-notes-spec.md`.
 
 import { useEffect, useState } from "react";
-import { errText } from "./api";
+import { errText, isAbort } from "./api";
 import { sharedNotes } from "./api-share";
 import {
   notesCreate,
@@ -19,9 +19,11 @@ import {
   type StudyNotesSummary,
 } from "./api-studio";
 import { Icon } from "./Icon";
-import { citeGroups, mdToHtml, withChips, type Cite } from "./markdown";
-import { covering, download, fileStem } from "./mindmap";
-import { report } from "./shell";
+import { citeGroups, type Cite } from "./cite";
+import { mdToHtml, withChips } from "./markdown";
+import { download, fileStem } from "./common";
+import { covering } from "./mindmap";
+import { keepSame } from "./helpers";
 import { store, type Store } from "./store";
 
 // ── the state the page shares ────────────────────────────────────────────────
@@ -33,8 +35,17 @@ export type NotesState = {
   focus: Store<string>;
   making: Store<boolean>;
   err: Store<string>;
+  /** The list has answered once, well or not. */
+  loaded: Store<boolean>;
+  /** Why the list could not be read; said in the outputs list. */
+  loadErr: Store<string>;
   est: Store<QuickEstimate | null>;
   estLoading: Store<boolean>;
+  /** Why the last estimate could not be had, as a sentence. */
+  estErr: Store<string>;
+  /** Which list read and which estimate are the latest: an older answer
+   * landing after a newer one is dropped. */
+  seq: { load: number; est: number };
 };
 
 export function newNotesState(): NotesState {
@@ -43,27 +54,43 @@ export function newNotesState(): NotesState {
     focus: store(""),
     making: store(false),
     err: store(""),
+    loaded: store(false),
+    loadErr: store(""),
     est: store<QuickEstimate | null>(null),
     estLoading: store(false),
+    estErr: store(""),
+    seq: { load: 0, est: 0 },
   };
 }
 
 /** The collection's notes, newest first. */
-export async function loadNotes(cid: string, st: NotesState): Promise<void> {
+export async function loadNotes(cid: string, st: NotesState, signal?: AbortSignal): Promise<void> {
+  const my = ++st.seq.load;
   try {
-    st.notes.set(await notesList(cid));
+    const list = await notesList(cid, signal);
+    if (my !== st.seq.load) return;
+    st.notes.set((was) => keepSame(was, list, (x) => x.id));
+    st.loadErr.set("");
   } catch (e) {
-    report(`The study notes could not be loaded. ${errText(e)}`);
+    if (isAbort(e) || my !== st.seq.load) return;
+    st.loadErr.set(errText(e));
   }
+  st.loaded.set(true);
 }
 
 /** What notes of the collection would cost. */
-export async function estimateNotes(cid: string, st: NotesState): Promise<void> {
+export async function estimateNotes(cid: string, st: NotesState, signal?: AbortSignal): Promise<void> {
+  const my = ++st.seq.est;
   st.estLoading.set(true);
+  st.estErr.set("");
   try {
-    st.est.set(await notesEstimate(cid));
-  } catch {
+    const e = await notesEstimate(cid, signal);
+    if (my !== st.seq.est) return;
+    st.est.set(e);
+  } catch (e) {
+    if (isAbort(e) || my !== st.seq.est) return;
     st.est.set(null);
+    st.estErr.set(errText(e));
   }
   st.estLoading.set(false);
 }
@@ -77,14 +104,21 @@ export async function makeNotes(cid: string, st: NotesState): Promise<string | n
   const f = st.focus.get().trim();
   try {
     const n = await notesCreate(cid, f);
+    // Read back as the newest list: a read already on its way may not have it.
+    const my = ++st.seq.load;
     const list = await notesList(cid);
     st.making.set(false);
-    st.notes.set(list);
+    if (my === st.seq.load) {
+      st.notes.set((was) => keepSame(was, list, (x) => x.id));
+      st.loaded.set(true);
+    }
     st.focus.set("");
     return n.id;
   } catch (e) {
     st.making.set(false);
     st.err.set(errText(e));
+    // A list read it took the place of is not coming: the list is as it was.
+    st.loaded.set(true);
     return null;
   }
 }
@@ -200,12 +234,14 @@ export function NotesView({
   useEffect(installCiteFlip, []);
   useEffect(() => {
     let live = true;
-    (shareId !== undefined ? sharedNotes(shareId, id) : notesGet(cid, id)).then(
+    const ctrl = new AbortController();
+    (shareId !== undefined ? sharedNotes(shareId, id, ctrl.signal) : notesGet(cid, id, ctrl.signal)).then(
       (n) => live && setNotes(n),
-      (e) => live && setErr(errText(e)),
+      (e) => live && !isAbort(e) && setErr(errText(e)),
     );
     return () => {
       live = false;
+      ctrl.abort();
     };
   }, [cid, id, shareId]);
 

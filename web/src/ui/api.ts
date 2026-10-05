@@ -10,6 +10,8 @@
 
 import type * as Rest from "@/client/types.gen";
 import { readable } from "./errors";
+import { fromWireKind, ms } from "./helpers";
+import { sseFrames } from "./sse";
 
 /** The service root this bundle was served under, with no trailing slash:
  * whatever precedes `/ui` in the address. */
@@ -28,11 +30,28 @@ export const UPLOAD_MAX_MB = 25;
 
 const UNREADABLE = "The studio's answer could not be read. Reload the page and try again.";
 
-/** A rename, pin or delete of something that is not there any more. */
-export const GONE = "It is no longer there. Reload the page to see what is.";
+/** A request the server refused: its sentence, and the status it came with,
+ * so a caller can tell "not there" (404) from any other refusal without
+ * reading the words. */
+export class ApiError extends Error {
+  readonly status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+  }
+}
+
+/** Whether a call failed because what it asked for is not there. */
+export const isGone = (e: unknown) => e instanceof ApiError && e.status === 404;
+
+/** Whether a call was cancelled by its caller, which is not a failure to
+ * show anyone: the page that asked has gone, or asked again. */
+export const isAbort = (e: unknown) => e instanceof DOMException && e.name === "AbortError";
 
 /** Send one request. A refusal comes back as the server's own sentence; a
- * request that never got an answer as the sentence for that. */
+ * request that never got an answer as the sentence for that. `init` carries
+ * anything else for `fetch`, a `signal` to cancel it above all. */
 export async function call<T>(
   method: string,
   path: string,
@@ -49,10 +68,10 @@ export async function call<T>(
       ...init,
     });
   } catch (e) {
-    if (e instanceof DOMException && e.name === "AbortError") throw e;
+    if (isAbort(e)) throw e;
     throw new Error(readable("network error"), { cause: e });
   }
-  if (!resp.ok) throw new Error(await refusal(resp));
+  if (!resp.ok) throw new ApiError(await refusal(resp), resp.status);
   if (resp.status === 204) return undefined as T;
   try {
     return (await resp.json()) as T;
@@ -79,8 +98,8 @@ export function errText(e: unknown): string {
 }
 
 /** POST, then hand each server-sent event's JSON to `onEvent` as it arrives.
- * `EventSource` cannot POST, so the body is read as a stream and cut on the
- * SSE frame boundary. */
+ * `EventSource` cannot POST, so the body is read as a stream and cut into
+ * frames by `sseFrames`. */
 export async function postStream(
   path: string,
   body: unknown,
@@ -96,10 +115,10 @@ export async function postStream(
       signal,
     });
   } catch (e) {
-    if (e instanceof DOMException && e.name === "AbortError") throw e;
+    if (isAbort(e)) throw e;
     throw new Error(readable("network error"), { cause: e });
   }
-  if (!resp.ok) throw new Error(await refusal(resp));
+  if (!resp.ok) throw new ApiError(await refusal(resp), resp.status);
   const reader = resp.body?.getReader();
   if (!reader) throw new Error(UNREADABLE);
   const dec = new TextDecoder();
@@ -108,19 +127,14 @@ export async function postStream(
     let chunk: ReadableStreamReadResult<Uint8Array>;
     try {
       chunk = await reader.read();
-    } catch {
-      throw new Error("The answer was cut off. Try again.");
+    } catch (e) {
+      if (isAbort(e)) throw e;
+      throw new Error("The answer was cut off. Try again.", { cause: e });
     }
     if (chunk.value) buf += dec.decode(chunk.value, { stream: true });
-    let at: number;
-    while ((at = buf.indexOf("\n\n")) >= 0) {
-      const frame = buf.slice(0, at);
-      buf = buf.slice(at + 2);
-      const data = frame
-        .split("\n")
-        .filter((l) => l.startsWith("data:"))
-        .map((l) => l.slice(5).replace(/^ /, ""))
-        .join("\n");
+    const got = sseFrames(buf);
+    buf = got.rest;
+    for (const { data } of got.frames) {
       try {
         onEvent(JSON.parse(data) as Record<string, unknown>);
       } catch {
@@ -140,9 +154,20 @@ export function storage(): Storage | null {
   }
 }
 
-export const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
-
-const ms = (iso: string | null | undefined) => (iso ? Date.parse(iso) : 0);
+/** Wait `ms`, or less: a `signal` that aborts ends the wait at once, so a loop
+ * that sleeps stops with the page that runs it. */
+export function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise<void>((resolve) => {
+    if (signal?.aborted) return resolve();
+    const done = () => {
+      clearTimeout(t);
+      signal?.removeEventListener("abort", done);
+      resolve();
+    };
+    const t = setTimeout(done, ms);
+    signal?.addEventListener("abort", done, { once: true });
+  });
+}
 
 // ── collections ──────────────────────────────────────────────────────────────
 
@@ -223,8 +248,7 @@ export function sessionOf(o: Rest.SessionSummary): SessionSummary {
     state: o.state,
     slide_count: o.parts,
     speakers: o.speakers,
-    // The old app called a deck "session".
-    kind: o.kind === "slides" ? "session" : "audio",
+    kind: fromWireKind(o.kind) === "session" ? "session" : "audio",
     audio_format: o.audio_format,
     duration_ms: o.duration_ms,
     description: o.description,
@@ -244,16 +268,17 @@ export async function listCollections(): Promise<CollectionSummary[]> {
 
 export async function getCollection(
   cid: string,
+  signal?: AbortSignal,
 ): Promise<{ found: boolean; collection?: CollectionSummary; outputs: SessionSummary[] }> {
   try {
-    const d = await call<Rest.CollectionDetail>("GET", `/collections/${enc(cid)}`);
+    const d = await call<Rest.CollectionDetail>("GET", `/collections/${enc(cid)}`, undefined, { signal });
     return {
       found: true,
       collection: collectionOf(d.collection),
       outputs: d.outputs.map(sessionOf),
     };
   } catch (e) {
-    if (errText(e).includes("no longer there")) return { found: false, outputs: [] };
+    if (isGone(e)) return { found: false, outputs: [] };
     throw e;
   }
 }
@@ -292,8 +317,8 @@ export function coverUrl(cid: string, version: string, theme: "dark" | "light"):
 
 export type ServerSource = { name: string; title: string; url: string; chars: number };
 
-export async function sourceList(cid: string): Promise<ServerSource[]> {
-  return (await call<Rest.SourceOut[]>("GET", `/collections/${enc(cid)}/sources`)).map((s) => ({
+export async function sourceList(cid: string, signal?: AbortSignal): Promise<ServerSource[]> {
+  return (await call<Rest.SourceOut[]>("GET", `/collections/${enc(cid)}/sources`, undefined, { signal })).map((s) => ({
     name: s.name,
     title: s.title,
     url: s.url,
@@ -338,14 +363,24 @@ export async function sourceAddText(cid: string, text: string, title = ""): Prom
     text,
     title,
   });
-  return fetchedOf(out[0]!);
+  return fetchedOf(only(out));
 }
+
+/** The one result of an add of one thing. An empty answer is the studio not
+ * saying, which is said as such rather than read as a success. */
+function only(out: Rest.AddResult[]): Rest.AddResult {
+  const r = out[0];
+  if (!r) throw new Error(UNSAID);
+  return r;
+}
+
+const UNSAID = "The studio did not say whether it was added. Reload the page to see your sources.";
 
 export async function sourceAddFile(cid: string, file: File): Promise<Fetched> {
   const form = new FormData();
   form.append("files", file);
   const out = await call<Rest.AddResult[]>("POST", `/collections/${enc(cid)}/sources/files`, form);
-  const r = fetchedOf(out[0]!);
+  const r = fetchedOf(only(out));
   if (!r.ok) throw new Error(r.error);
   return r;
 }

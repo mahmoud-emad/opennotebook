@@ -5,8 +5,9 @@
 import { useState } from "react";
 import { sourceList } from "./api";
 import { readable } from "./errors";
+import { str } from "./helpers";
 import { Icon } from "./Icon";
-import { RowErr } from "./outputs";
+import { RowErr } from "./common";
 
 /** One source on the sources panel. */
 export type Src = {
@@ -22,6 +23,9 @@ export type Src = {
   /** Its stored file name on the server, what a remove takes. Empty for a
    * row that is not on the server: one being read, or one that failed. */
   file: string;
+  /** What a row not on the server is known by while it is shown, since it has
+   * no stored name. Unset for a row the server listed. */
+  key?: string;
 };
 
 /** The row a source shows while its page is still being read. */
@@ -52,8 +56,8 @@ const words = (chars: number) => Math.floor(chars / 6);
 
 /** What the server holds as a collection's sources, as the rows the sources
  * panel shows. Throws the reason it could not be read. */
-export async function serverSources(cid: string): Promise<Src[]> {
-  return (await sourceList(cid)).map((s) => ({
+export async function serverSources(cid: string, signal?: AbortSignal): Promise<Src[]> {
+  return (await sourceList(cid, signal)).map((s) => ({
     detail: s.url
       ? `${shortHost(s.url)} · ${words(s.chars)} words`
       : `${fileKind(s.name)} · ${words(s.chars)} words`,
@@ -65,21 +69,24 @@ export async function serverSources(cid: string): Promise<Src[]> {
   }));
 }
 
+/** What a row is known by on the panel: its own key while it is not on the
+ * server, its stored name once it is. */
+export const srcKey = (s: Src) => s.key ?? `file:${s.file}`;
+
 /** A source row from the server's `Fetched` shape, or from a source the chat
  * agent read. */
 export function srcFrom(g: Record<string, unknown>): Src {
-  const str = (k: string) => (typeof g[k] === "string" ? (g[k] as string) : "");
   // A source the agent read may come as the stored source itself, which has
   // no `ok`: it is there, so it arrived.
   const ok = typeof g.ok === "boolean" ? g.ok : "name" in g && !("error" in g);
-  const url = str("url");
-  const name = str("title");
+  const url = str(g.url);
+  const name = str(g.title);
   const chars = typeof g.chars === "number" ? g.chars : 0;
   return {
-    icon: str("icon"),
+    icon: str(g.icon),
     name: name || url,
     detail: !ok
-      ? readable(str("error") || "could not read it")
+      ? readable(str(g.error) || "could not read it")
       : url === ""
         ? `note · ${words(chars)} words`
         : `${shortHost(url)} · ${words(chars)} words`,
@@ -87,7 +94,7 @@ export function srcFrom(g: Record<string, unknown>): Src {
     url,
     // The stored name, when the reply carries it; the list read back from
     // the server after an add fills it in either way.
-    file: str("name"),
+    file: str(g.name),
   };
 }
 
@@ -106,11 +113,14 @@ export function srcFrom(g: Record<string, unknown>): Src {
 export function SrcRow({
   s,
   onRemove,
+  busy = false,
   err = "",
   onDismissErr,
 }: {
   s: Src;
   onRemove?: (s: Src) => void;
+  /** Being removed: the row says so and offers nothing until it is gone. */
+  busy?: boolean;
   /** Why the last removal failed, said under the row; empty when none did. */
   err?: string;
   onDismissErr?: () => void;
@@ -118,19 +128,19 @@ export function SrcRow({
   const reading = s.detail === FETCHING;
   // Without `onRemove` the row is read only: a shared source, or one in a
   // read-only copy.
-  const removable = onRemove !== undefined && !reading && (s.file !== "" || !s.ok);
+  const removable = onRemove !== undefined && !reading && !busy && (s.file !== "" || !s.ok);
   // A row that never reached the server is only dismissed, like any other
   // error row; one that did is removed from the collection.
   const verb = s.file === "" ? "Dismiss" : "Remove";
   return (
     <>
-      <div className={s.ok ? "src" : "src bad"}>
-        <SrcIcon s={s} />
+      <div className={busy ? "src run" : s.ok ? "src" : "src bad"}>
+        {busy ? <span className="src-i spin" title="Removing…" /> : <SrcIcon s={s} />}
         <div className="src-t">
           <div className="src-n" title={s.name}>
             {s.name}
           </div>
-          <div className="src-d">{s.detail}</div>
+          <div className="src-d">{busy ? "Removing…" : s.detail}</div>
         </div>
         {removable && (
           <button className="icon-btn src-x" title={verb} aria-label={`${verb} ${s.name}`} onClick={() => onRemove?.(s)}>
@@ -145,7 +155,8 @@ export function SrcRow({
 
 /** The leading icon of a source: a spinner while it is read, then its logo. */
 function SrcIcon({ s }: { s: Src }) {
-  const [broken, setBroken] = useState(false);
+  // The icon that would not load, so a row given another one tries it.
+  const [broken, setBroken] = useState("");
   const host = shortHost(s.url);
   if (s.detail === FETCHING) return <span className="src-i spin" title="Reading the page…" />;
   if (s.url === "")
@@ -154,10 +165,10 @@ function SrcIcon({ s }: { s: Src }) {
         <Icon name="file-earmark-text" />
       </span>
     );
-  if (broken || !s.ok) {
+  const fav = s.icon === "" ? `${origin(s.url)}/favicon.ico` : s.icon;
+  if (broken === fav || !s.ok) {
     const first = ([...host][0] ?? "?").toUpperCase();
     return <span className="src-i">{first}</span>;
   }
-  const fav = s.icon === "" ? `${origin(s.url)}/favicon.ico` : s.icon;
-  return <img className="src-i" src={fav} alt="" onError={() => setBroken(true)} />;
+  return <img className="src-i" src={fav} alt="" onError={() => setBroken(fav)} />;
 }

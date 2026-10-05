@@ -128,7 +128,6 @@ describe("settings, the pure parts", () => {
     expect(saveLine(undefined)).toEqual(["set-st", ""]);
     expect(saveLine({ kind: "saving" })).toEqual(["set-st", "Saving…"]);
     expect(saveLine({ kind: "saved" })).toEqual(["set-st ok", "Saved"]);
-    expect(saveLine({ kind: "note", text: "n" })).toEqual(["set-st warn", "n"]);
     expect(saveLine({ kind: "failed", text: "e" })).toEqual(["set-st err", "e"]);
   });
 });

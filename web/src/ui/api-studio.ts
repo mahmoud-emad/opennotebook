@@ -3,20 +3,17 @@
 //
 // As in `api.ts`, the screens read the shapes the old app read (a map's
 // `created_ms`, a chat line with `who` and `me`), and this file is where the
-// REST answers become those shapes. Routes the server has not ported yet
-// answer with a sentence saying so, which `call` throws like any refusal, so
-// the screen shows it where it shows every other error.
+// REST answers become those shapes. A refusal is the server's own sentence,
+// which `call` throws, so the screen shows it where it shows every other
+// error.
 
 import type * as Rest from "@/client/types.gen";
 import { apiBase, call, enc, postStream, serviceRoot, sessionOf, type SessionSummary } from "./api";
 import type { Estimate } from "./dialogs";
-import { citeFrom, type Cite } from "./markdown";
+import { ms, num, str } from "./helpers";
+import { citeFrom, type Cite } from "./cite";
 import type { MindNode } from "./mindmapLayout";
 
-const ms = (iso: string | null | undefined) => (iso ? Date.parse(iso) : 0);
-/** A number the server may send as a decimal string. */
-const num = (v: unknown) => (typeof v === "number" ? v : typeof v === "string" ? Number(v) || 0 : 0);
-const str = (v: unknown) => (typeof v === "string" ? v : "");
 
 // ── decks and audio overviews ────────────────────────────────────────────────
 
@@ -31,8 +28,10 @@ export async function buildOutput(cid: string, req: BuildReq): Promise<SessionSu
 }
 
 /** What exactly that build would cost, itemised. */
-export async function estimateOutput(cid: string, req: BuildReq): Promise<Estimate> {
-  return estimateOf(await call<Record<string, unknown>>("POST", `/collections/${enc(cid)}/outputs/estimate`, req));
+export async function estimateOutput(cid: string, req: BuildReq, signal?: AbortSignal): Promise<Estimate> {
+  return estimateOf(
+    await call<Record<string, unknown>>("POST", `/collections/${enc(cid)}/outputs/estimate`, req, { signal }),
+  );
 }
 
 function estimateOf(v: Record<string, unknown>): Estimate {
@@ -181,20 +180,20 @@ export function mapOf(m: Rest.MindMapOut): MindMap {
 const maps = (cid: string) => `/collections/${enc(cid)}/mindmaps`;
 
 /** The collection's maps, newest first. */
-export async function mindmapList(cid: string): Promise<MindMapSummary[]> {
-  return (await call<Rest.MindMapSummary[]>("GET", maps(cid))).map(mapSummaryOf);
+export async function mindmapList(cid: string, signal?: AbortSignal): Promise<MindMapSummary[]> {
+  return (await call<Rest.MindMapSummary[]>("GET", maps(cid), undefined, { signal })).map(mapSummaryOf);
 }
 
-export async function mindmapGet(cid: string, id: string): Promise<MindMap> {
-  return mapOf(await call<Rest.MindMapOut>("GET", `${maps(cid)}/${enc(id)}`));
+export async function mindmapGet(cid: string, id: string, signal?: AbortSignal): Promise<MindMap> {
+  return mapOf(await call<Rest.MindMapOut>("GET", `${maps(cid)}/${enc(id)}`, undefined, { signal }));
 }
 
 export async function mindmapCreate(cid: string, focus: string): Promise<MindMap> {
   return mapOf(await call<Rest.MindMapOut>("POST", maps(cid), { focus } satisfies Rest.MakeReq));
 }
 
-export async function mindmapEstimate(cid: string): Promise<QuickEstimate> {
-  return quickOf(await call<Record<string, unknown>>("GET", `${maps(cid)}/estimate`));
+export async function mindmapEstimate(cid: string, signal?: AbortSignal): Promise<QuickEstimate> {
+  return quickOf(await call<Record<string, unknown>>("GET", `${maps(cid)}/estimate`, undefined, { signal }));
 }
 
 export async function mindmapRetitle(cid: string, id: string, title: string): Promise<void> {
@@ -268,20 +267,20 @@ export function notesOf(n: Rest.NotesOut): StudyNotes {
 const notes = (cid: string) => `/collections/${enc(cid)}/notes`;
 
 /** The collection's notes, newest first. */
-export async function notesList(cid: string): Promise<StudyNotesSummary[]> {
-  return (await call<Rest.NotesSummary[]>("GET", notes(cid))).map(notesSummaryOf);
+export async function notesList(cid: string, signal?: AbortSignal): Promise<StudyNotesSummary[]> {
+  return (await call<Rest.NotesSummary[]>("GET", notes(cid), undefined, { signal })).map(notesSummaryOf);
 }
 
-export async function notesGet(cid: string, id: string): Promise<StudyNotes> {
-  return notesOf(await call<Rest.NotesOut>("GET", `${notes(cid)}/${enc(id)}`));
+export async function notesGet(cid: string, id: string, signal?: AbortSignal): Promise<StudyNotes> {
+  return notesOf(await call<Rest.NotesOut>("GET", `${notes(cid)}/${enc(id)}`, undefined, { signal }));
 }
 
 export async function notesCreate(cid: string, focus: string): Promise<StudyNotes> {
   return notesOf(await call<Rest.NotesOut>("POST", notes(cid), { focus } satisfies Rest.MakeReq));
 }
 
-export async function notesEstimate(cid: string): Promise<QuickEstimate> {
-  return quickOf(await call<Record<string, unknown>>("GET", `${notes(cid)}/estimate`));
+export async function notesEstimate(cid: string, signal?: AbortSignal): Promise<QuickEstimate> {
+  return quickOf(await call<Record<string, unknown>>("GET", `${notes(cid)}/estimate`, undefined, { signal }));
 }
 
 export async function notesRetitle(cid: string, id: string, title: string): Promise<void> {
@@ -320,10 +319,15 @@ export type Msg = {
   status: string;
   /** The passages an answer from the sources cites, matching its `[n]`. */
   cites: Cite[];
+  /** What the thread knows the line by, for as long as the page is open. A
+   * step's progress changes the line but not its key. */
+  key: string;
 };
 
+let lines = 0;
+
 export function said(who: string, text: string, me: boolean): Msg {
-  return { who, text, me, kind: "", id: "", detail: "", note: "", status: "", cites: [] };
+  return { who, text, me, kind: "", id: "", detail: "", note: "", status: "", cites: [], key: `m${++lines}` };
 }
 
 /** A kept work line as the step it was. */
@@ -341,8 +345,8 @@ function stepOf(s: Record<string, unknown>): Msg {
 
 /** The collection's conversation as the server keeps it, oldest first: each
  * answer's work lines before it, as they were shown while it ran. */
-export async function chatHistory(cid: string): Promise<Msg[]> {
-  const rows = await call<Rest.Message[]>("GET", `/collections/${enc(cid)}/chat`);
+export async function chatHistory(cid: string, signal?: AbortSignal): Promise<Msg[]> {
+  const rows = await call<Rest.Message[]>("GET", `/collections/${enc(cid)}/chat`, undefined, { signal });
   const out: Msg[] = [];
   for (const m of rows) {
     if (m.role === "user") {
@@ -383,8 +387,9 @@ export function chatSay(
   text: string,
   picks: Picks,
   onEvent: (v: Record<string, unknown>) => void,
+  signal?: AbortSignal,
 ): Promise<void> {
-  return postStream(`/collections/${enc(cid)}/chat`, { ...picks, text } satisfies Rest.Say, onEvent);
+  return postStream(`/collections/${enc(cid)}/chat`, { ...picks, text } satisfies Rest.Say, onEvent, signal);
 }
 
 /** A `/` command run by the server, answering with the same events; `/clear`
@@ -397,10 +402,12 @@ export function chatCommand(
   picks: Picks,
   onEvent: (v: Record<string, unknown>) => void,
   said = "",
+  signal?: AbortSignal,
 ): Promise<void> {
   return postStream(
     `/collections/${enc(cid)}/chat/commands`,
     { ...picks, name, arg, text: said } satisfies Rest.RunCommand,
     onEvent,
+    signal,
   );
 }

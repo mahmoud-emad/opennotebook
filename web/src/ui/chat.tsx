@@ -2,8 +2,8 @@
 // server, with the agent's work shown line by line as it happens. A port of
 // the old app's `chat.rs`.
 
-import { Fragment, useEffect, useState, type KeyboardEvent } from "react";
-import { errText } from "./api";
+import { Fragment, memo, useEffect, useMemo, useState, type KeyboardEvent } from "react";
+import { errText, isAbort } from "./api";
 import {
   chatClear,
   chatCommand,
@@ -15,8 +15,10 @@ import {
   type Picks,
 } from "./api-studio";
 import { readable } from "./errors";
+import { str } from "./helpers";
 import { Icon } from "./Icon";
-import { citeFrom, citeGroups, mdToHtml, withChips, type Cite } from "./markdown";
+import { citeFrom, citeGroups, type Cite } from "./cite";
+import { mdToHtml, withChips } from "./markdown";
 import { SettingsLink, keys, useSettings } from "./settings";
 import { OUTPUTS, focusId, report, type Output } from "./shell";
 import { srcFrom, type Src } from "./sources";
@@ -146,6 +148,11 @@ export type ChatState = {
   /** Whether the thread follows new lines down. True until the person scrolls
    * up to read something, true again once they are back at the bottom. */
   stick: Store<boolean>;
+  /** The kept conversation has not answered yet. */
+  loading: Store<boolean>;
+  /** Ends what the tab asked for when it goes: the history read and a turn
+   * still streaming. Set while the page holding the state is mounted. */
+  life: Store<AbortSignal | undefined>;
 };
 
 /** The state, held by the calling component: the conversation as the server
@@ -157,18 +164,23 @@ export function useChatState(cid: string): ChatState {
     talking: store(false),
     thinking: store(false),
     stick: store(true),
+    loading: store(true),
+    life: store<AbortSignal | undefined>(undefined),
   }));
   useEffect(() => {
     let live = true;
-    chatHistory(st.cid).then(
+    const ctrl = new AbortController();
+    st.life.set(ctrl.signal);
+    chatHistory(st.cid, ctrl.signal).then(
       (list) => {
         // Not over anything said here while it was on its way.
         if (live && list.length > 0 && !st.msgs.get().some((m) => m.me)) st.msgs.set(list);
       },
-      (e) => live && report(`The conversation could not be loaded. ${errText(e)}`),
-    );
+      (e) => live && !isAbort(e) && report(`The conversation could not be loaded. ${errText(e)}`),
+    ).finally(() => live && st.loading.set(false));
     return () => {
       live = false;
+      ctrl.abort();
     };
   }, [st]);
   return st;
@@ -194,7 +206,6 @@ export function clearChat(st: ChatState): void {
   chatClear(st.cid).catch((e) => report(`The conversation could not be cleared. ${errText(e)}`));
 }
 
-const str = (v: unknown) => (typeof v === "string" ? v : "");
 const citesOf = (v: unknown): Cite[] =>
   Array.isArray(v) ? v.map(citeFrom).filter((c): c is Cite => c !== null) : [];
 
@@ -276,10 +287,11 @@ export async function send(
   };
   try {
     const cmd = splitCommand(text);
-    if (cmd) await chatCommand(st.cid, cmd.name, cmd.arg, picks, onEvent, said);
-    else await chatSay(st.cid, text, picks, onEvent);
+    if (cmd) await chatCommand(st.cid, cmd.name, cmd.arg, picks, onEvent, said, st.life.get());
+    else await chatSay(st.cid, text, picks, onEvent, st.life.get());
   } catch (e) {
-    push(st, said_("Studio", `I could not answer. ${readable(errText(e))}`, false));
+    // Cut off because the page went: nobody is there to read why.
+    if (!isAbort(e)) push(st, said_("Studio", `I could not answer. ${readable(errText(e))}`, false));
   }
   st.thinking.set(false);
   st.talking.set(false);
@@ -403,12 +415,87 @@ export function ChatInput({ onSend }: { onSend: (t: string) => void }) {
   );
 }
 
+/** One line of the conversation. Drawn once per line: a line that has not
+ * changed keeps its object, so its Markdown is not parsed, sanitised and
+ * chipped again for every new line below it. */
+const Message = memo(function Message({ m }: { m: Msg }) {
+  // Only the Studio's answers are Markdown.
+  const html = useMemo(
+    () =>
+      m.me || m.kind === "step" ? "" : m.cites.length === 0 ? mdToHtml(m.text) : withChips(mdToHtml(m.text), m.cites),
+    [m],
+  );
+  return (
+    m.kind === "step" ? (
+      // One line per action: what, on what, then the result under it.
+      <div className={`step-row ${m.status}`}>
+        <span className="step-ico">
+          {m.status === "run" ? (
+            <span className="mini-spin" />
+          ) : m.status === "bad" ? (
+            <Icon name="x-lg" />
+          ) : (
+            <Icon name="check-lg" />
+          )}
+        </span>
+        <div className="step-body">
+          <div>
+            <span className="step-t">{m.text}</span>
+            {m.detail !== "" && <span className="step-dt">{` · ${m.detail}`}</span>}
+          </div>
+          {m.note !== "" && (
+            <div className="step-note">
+              <span className="corner" />
+              {m.note}
+            </div>
+          )}
+        </div>
+      </div>
+    ) : (
+      <div className={m.me ? "cmsg me" : "cmsg"}>
+        <div className="cav">{initials(m.who)}</div>
+        <div className="cbub">
+          <div className="cnm">{m.who}</div>
+          {/* The Studio writes Markdown; the person's own words stay
+              plain text. */}
+          {m.me ? (
+            <div>{m.text}</div>
+          ) : m.cites.length === 0 ? (
+            <div className="md" dangerouslySetInnerHTML={{ __html: html }} />
+          ) : (
+            <>
+              <div className="md" dangerouslySetInnerHTML={{ __html: html }} />
+              <div className="cites">
+                {"Sources: "}
+                {citeGroups(m.cites).map(([title, url, ns], i) => (
+                  <Fragment key={i}>
+                    {i > 0 && " · "}
+                    {url === "" ? (
+                      title
+                    ) : (
+                      <a href={url} target="_blank" rel="noopener noreferrer">
+                        {title}
+                      </a>
+                    )}
+                    <span className="cite-ns">{` ${ns}`}</span>
+                  </Fragment>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    )
+  );
+});
+
 /** The Ask tab: the conversation, then the box to say something in. */
 export function AskTab({ st, onSend }: { st: ChatState; onSend: (t: string) => void }) {
   const msgs = useStore(st.msgs);
   const talking = useStore(st.talking);
   const thinking = useStore(st.thinking);
   const stick = useStore(st.stick);
+  const loading = useStore(st.loading);
   const last = msgs[msgs.length - 1];
   // Down to the newest line as it arrives, and on opening the tab, while the
   // person is following the end.
@@ -435,67 +522,18 @@ export function AskTab({ st, onSend }: { st: ChatState; onSend: (t: string) => v
           if (at !== st.stick.get()) st.stick.set(at);
         }}
       >
-        {msgs.map((m, n) =>
-          m.kind === "step" ? (
-            // One line per action: what, on what, then the result under it.
-            <div key={n} className={`step-row ${m.status}`}>
-              <span className="step-ico">
-                {m.status === "run" ? (
-                  <span className="mini-spin" />
-                ) : m.status === "bad" ? (
-                  <Icon name="x-lg" />
-                ) : (
-                  <Icon name="check-lg" />
-                )}
-              </span>
-              <div className="step-body">
-                <div>
-                  <span className="step-t">{m.text}</span>
-                  {m.detail !== "" && <span className="step-dt">{` · ${m.detail}`}</span>}
-                </div>
-                {m.note !== "" && (
-                  <div className="step-note">
-                    <span className="corner" />
-                    {m.note}
-                  </div>
-                )}
-              </div>
+        {msgs.map((m) => (
+          <Message key={m.key} m={m} />
+        ))}
+        {loading && (
+          <div className="step-row run">
+            <span className="step-ico">
+              <span className="mini-spin" />
+            </span>
+            <div className="step-body">
+              <span className="step-t dim">Loading the conversation…</span>
             </div>
-          ) : (
-            <div key={n} className={m.me ? "cmsg me" : "cmsg"}>
-              <div className="cav">{initials(m.who)}</div>
-              <div className="cbub">
-                <div className="cnm">{m.who}</div>
-                {/* The Studio writes Markdown; the person's own words stay
-                    plain text. */}
-                {m.me ? (
-                  <div>{m.text}</div>
-                ) : m.cites.length === 0 ? (
-                  <div className="md" dangerouslySetInnerHTML={{ __html: mdToHtml(m.text) }} />
-                ) : (
-                  <>
-                    <div className="md" dangerouslySetInnerHTML={{ __html: withChips(mdToHtml(m.text), m.cites) }} />
-                    <div className="cites">
-                      {"Sources: "}
-                      {citeGroups(m.cites).map(([title, url, ns], i) => (
-                        <Fragment key={i}>
-                          {i > 0 && " · "}
-                          {url === "" ? (
-                            title
-                          ) : (
-                            <a href={url} target="_blank" rel="noopener noreferrer">
-                              {title}
-                            </a>
-                          )}
-                          <span className="cite-ns">{` ${ns}`}</span>
-                        </Fragment>
-                      ))}
-                    </div>
-                  </>
-                )}
-              </div>
-            </div>
-          ),
+          </div>
         )}
         {talking && thinking && (
           <div className="step-row run">

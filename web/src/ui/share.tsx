@@ -1,5 +1,5 @@
 // Sharing a collection with everyone on this studio, and reusing what others
-// shared. A port of the old app's `share.rs`.
+// shared.
 //
 // A share puts one collection in the studio's public feed, Discover. The owner
 // decides what it includes, per share: the sources or not, and each ready
@@ -182,7 +182,8 @@ export function ShareDialog({
   const [note, setNote] = useState("");
   // Off unless the owner turns it on: a copy is read-only by default.
   const [allowEdits, setAllowEdits] = useState(false);
-  const [busy, setBusy] = useState(false);
+  // What is on its way: a save, or a stop; the button that asked says so.
+  const [busy, setBusy] = useState<"" | "save" | "stop">("");
   const [err, setErr] = useState("");
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => ref.current?.focus(), []);
@@ -220,7 +221,7 @@ export function ShareDialog({
 
   const submit = async () => {
     if (busy) return;
-    setBusy(true);
+    setBusy("save");
     setErr("");
     try {
       await shareSet(cid, {
@@ -229,25 +230,25 @@ export function ShareDialog({
         note: note.trim(),
         allow_edits: allowEdits,
       });
-      setBusy(false);
+      setBusy("");
       notify(shared ? "Share updated." : "Shared. Everyone on this studio can find it in Discover.");
       onClose(true);
     } catch (e) {
-      setBusy(false);
+      setBusy("");
       setErr(`It could not be shared: ${errText(e)}`);
     }
   };
   const stop = async () => {
     if (busy || !h?.share) return;
-    setBusy(true);
+    setBusy("stop");
     setErr("");
     try {
       await shareRemove(h.share.share_id);
-      setBusy(false);
+      setBusy("");
       notify("Not shared any more. Copies people already made stay theirs.");
       onClose(true);
     } catch (e) {
-      setBusy(false);
+      setBusy("");
       setErr(`It could not be unshared: ${errText(e)}`);
     }
   };
@@ -379,10 +380,10 @@ export function ShareDialog({
             <button
               className="ghost bad"
               title="Take it out of Discover. Copies already made stay with whoever made them."
-              disabled={busy}
+              disabled={busy !== ""}
               onClick={() => void stop()}
             >
-              Stop sharing
+              {busy === "stop" ? "Stopping…" : "Stop sharing"}
             </button>
           )}
           <span className="grow">
@@ -401,9 +402,9 @@ export function ShareDialog({
             <button className="ghost" onClick={() => onClose(false)}>
               Cancel
             </button>
-            <button className="primary" disabled={!ready || !hasContent || busy} onClick={() => void submit()}>
+            <button className="primary" disabled={!ready || !hasContent || busy !== ""} onClick={() => void submit()}>
               <Icon name="share" />
-              {busy ? "Saving…" : shared ? "Update share" : "Share"}
+              {busy === "save" ? "Saving…" : shared ? "Update share" : "Share"}
             </button>
           </div>
         </div>

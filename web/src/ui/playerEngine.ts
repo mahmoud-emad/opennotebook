@@ -15,7 +15,6 @@ import {
   languageTag,
   nextSpeed,
   partsOf,
-  PHASE_LABEL,
   say,
   seekTarget,
   slideKind,
@@ -23,7 +22,6 @@ import {
   soundsUnfinished,
   speakerName,
   SPEEDS,
-  sseFrames,
   stepTarget,
   toWav,
   totalMs,
@@ -47,6 +45,8 @@ import {
   type Playhead,
   type Source,
 } from "./playerApi";
+import { phaseLabel } from "./phases";
+import { sseFrames } from "./sse";
 import { Mic, makeSink, startRecognition, type Sink } from "./playerVoice";
 import { go, type View } from "./routes";
 import { SETTINGS, settingValue } from "./settings";
@@ -114,6 +114,9 @@ const BARGE_POLLS = 5;
 /** Audio kept from before the detector fired. */
 const PREFIX_MS = 300;
 const POLL_MS = 3000;
+/** How often the place is kept while playing, at most. A pause, a seek, the
+ * end and leaving keep it at once besides. */
+const REPORT_MS = 5000;
 
 function stored(key: string): string | null {
   try {
@@ -186,6 +189,10 @@ export class PlayerEngine {
   private readonly heads: Heads;
   private audio: HTMLAudioElement | null = null;
   private disposed = false;
+  /** Which attach this is. React mounts the page twice in development, and a
+   * boot from the first mount that answers after the second has started must
+   * not start a second stream and poll beside the second boot's. */
+  private life = 0;
   private playToken = 0;
   private slideToken = 0;
   private shownOrdinal = -1;
@@ -259,6 +266,7 @@ export class PlayerEngine {
   attach(audio: HTMLAudioElement): () => void {
     // Attached again after a dispose when React mounts the page twice.
     this.disposed = false;
+    this.life++;
     this.audio = audio;
     const onError = () => {
       const e = audio.error;
@@ -293,6 +301,9 @@ export class PlayerEngine {
   }
 
   dispose(): void {
+    // Left while playing, by Back or a link: the place is kept as it was,
+    // read before the audio lets go of it.
+    if (!this.disposed && this.v.playing && this.v.idx >= 0) void this.keepPlace("paused");
     this.disposed = true;
     if (this.audio) {
       this.audio.pause();
@@ -310,10 +321,12 @@ export class PlayerEngine {
   // ── the session ────────────────────────────────────────────────────────────
 
   async boot(): Promise<void> {
+    const life = this.life;
     let s: SessionDoc;
     try {
       s = await loadSession(this.src);
     } catch (e) {
+      if (this.disposed || life !== this.life) return;
       this.v.phase = "missing";
       this.v.state = "";
       this.v.stageName = errText(e);
@@ -322,6 +335,7 @@ export class PlayerEngine {
       this.emit();
       return;
     }
+    if (this.disposed || life !== this.life) return;
     this.setSession(s);
     this.v.state = s.state;
     if (s.state === "ready") this.becameReady();
@@ -374,7 +388,9 @@ export class PlayerEngine {
         try {
           const p = JSON.parse(e.data) as { step?: string; steps_done?: number; steps_total?: number };
           const known = (p.steps_total ?? 0) > 0;
-          this.v.stageName = PHASE_LABEL[p.step ?? ""] || p.step || "starting";
+          // Said in the card's lower case, as its other lines are.
+          const label = phaseLabel(p.step ?? "");
+          this.v.stageName = label ? label[0]!.toLowerCase() + label.slice(1) : p.step || "starting";
           this.v.barIdle = !known;
           this.v.prepSub = known ? `step ${p.steps_done} of ${p.steps_total}` : "";
           this.v.fill = known ? `${(100 * (p.steps_done ?? 0)) / (p.steps_total ?? 1)}%` : "";
@@ -389,10 +405,13 @@ export class PlayerEngine {
       // be opened is not retried.
       es.onerror = () => es.close();
     }
+    const life = this.life;
+    const gone = () => this.disposed || life !== this.life;
     const tick = async () => {
-      if (this.disposed) return;
+      if (gone()) return;
       try {
         const s = await loadSession(this.src);
+        if (gone()) return;
         if (s.state !== "preparing") {
           this.es?.close();
           this.es = null;
@@ -510,7 +529,7 @@ export class PlayerEngine {
     if (token !== this.playToken) return;
     this.emit();
     // Told, not awaited: blocking the next line on a round trip is a stutter.
-    this.heads.put(this.at("playing")).catch(() => {});
+    void this.keepPlace("playing");
   }
 
   private async finish(): Promise<void> {
@@ -521,7 +540,7 @@ export class PlayerEngine {
     this.nowSpeaking("", false);
     this.v.caption = null;
     this.emit();
-    await this.heads.put(this.at("finished")).catch(() => {});
+    await this.keepPlace("finished");
   }
 
   private timeupdate(): void {
@@ -533,11 +552,14 @@ export class PlayerEngine {
     }
     this.caption();
     this.emit();
-    const now = Date.now();
-    if (this.v.playing && now - this.lastReport > 1000) {
-      this.lastReport = now;
-      this.heads.put(this.at("playing")).catch(() => {});
-    }
+    if (this.v.playing && Date.now() - this.lastReport >= REPORT_MS) void this.keepPlace("playing");
+  }
+
+  /** Keep the place where it is kept (the server, or this browser for a
+   * share's), told rather than awaited. */
+  private keepPlace(state: Playhead["state"]): Promise<void> {
+    this.lastReport = Date.now();
+    return this.heads.put(this.at(state)).catch(() => {});
   }
 
   private markPosition(): void {
@@ -696,7 +718,7 @@ export class PlayerEngine {
     this.audio?.pause();
     this.es?.close();
     // Told rather than walked away from: nothing else would tell it.
-    if (this.v.idx >= 0) await this.heads.put(this.at("paused")).catch(() => {});
+    if (this.v.idx >= 0) await this.keepPlace("paused");
     go(this.homeView());
   }
 
@@ -874,7 +896,7 @@ export class PlayerEngine {
       this.audio?.pause();
       this.v.caption = null;
       this.emit();
-      await this.heads.put(this.at("paused")).catch(() => {});
+      await this.keepPlace("paused");
     }
     // The first question loads the detector, which takes a moment.
     this.micButtons("working");

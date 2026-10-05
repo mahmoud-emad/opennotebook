@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import { ICONS } from "./icons";
 import { outputKey, outputKind, reusedLine, shareHasContent } from "./share";
 
-// Ported from the old app's share.rs tests.
 describe("sharing", () => {
   it("reads a reuse count as words", () => {
     expect(reusedLine(0)).toBe("Not reused yet");

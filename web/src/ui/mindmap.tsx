@@ -7,7 +7,7 @@
 // See `docs/mindmap-spec.md` section 6.
 
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
-import { errText } from "./api";
+import { errText, isAbort } from "./api";
 import { sharedMindmap } from "./api-share";
 import {
   mindmapCreate,
@@ -42,7 +42,8 @@ import {
   type NodePath,
   type OpenSet,
 } from "./mindmapLayout";
-import { report } from "./shell";
+import { download, fileStem, saveBlob } from "./common";
+import { keepSame } from "./helpers";
 import { store, type Store } from "./store";
 
 // ── making one ───────────────────────────────────────────────────────────────
@@ -54,8 +55,17 @@ export type MapState = {
   focus: Store<string>;
   making: Store<boolean>;
   err: Store<string>;
+  /** The list has answered once, well or not. */
+  loaded: Store<boolean>;
+  /** Why the list could not be read; said in the outputs list. */
+  loadErr: Store<string>;
   est: Store<QuickEstimate | null>;
   estLoading: Store<boolean>;
+  /** Why the last estimate could not be had, as a sentence. */
+  estErr: Store<string>;
+  /** Which list read and which estimate are the latest: an older answer
+   * landing after a newer one is dropped. */
+  seq: { load: number; est: number };
 };
 
 export function newMapState(): MapState {
@@ -64,27 +74,43 @@ export function newMapState(): MapState {
     focus: store(""),
     making: store(false),
     err: store(""),
+    loaded: store(false),
+    loadErr: store(""),
     est: store<QuickEstimate | null>(null),
     estLoading: store(false),
+    estErr: store(""),
+    seq: { load: 0, est: 0 },
   };
 }
 
 /** The collection's maps, newest first. */
-export async function loadMaps(cid: string, st: MapState): Promise<void> {
+export async function loadMaps(cid: string, st: MapState, signal?: AbortSignal): Promise<void> {
+  const my = ++st.seq.load;
   try {
-    st.maps.set(await mindmapList(cid));
+    const list = await mindmapList(cid, signal);
+    if (my !== st.seq.load) return;
+    st.maps.set((was) => keepSame(was, list, (x) => x.id));
+    st.loadErr.set("");
   } catch (e) {
-    report(`The mind maps could not be loaded. ${errText(e)}`);
+    if (isAbort(e) || my !== st.seq.load) return;
+    st.loadErr.set(errText(e));
   }
+  st.loaded.set(true);
 }
 
 /** What a map of the collection would cost. */
-export async function estimateMap(cid: string, st: MapState): Promise<void> {
+export async function estimateMap(cid: string, st: MapState, signal?: AbortSignal): Promise<void> {
+  const my = ++st.seq.est;
   st.estLoading.set(true);
+  st.estErr.set("");
   try {
-    st.est.set(await mindmapEstimate(cid));
-  } catch {
+    const e = await mindmapEstimate(cid, signal);
+    if (my !== st.seq.est) return;
+    st.est.set(e);
+  } catch (e) {
+    if (isAbort(e) || my !== st.seq.est) return;
     st.est.set(null);
+    st.estErr.set(errText(e));
   }
   st.estLoading.set(false);
 }
@@ -98,14 +124,21 @@ export async function makeMap(cid: string, st: MapState): Promise<string | null>
   const f = st.focus.get().trim();
   try {
     const map = await mindmapCreate(cid, f);
+    // Read back as the newest list: a read already on its way may not have it.
+    const my = ++st.seq.load;
     const list = await mindmapList(cid);
     st.making.set(false);
-    st.maps.set(list);
+    if (my === st.seq.load) {
+      st.maps.set((was) => keepSame(was, list, (x) => x.id));
+      st.loaded.set(true);
+    }
     st.focus.set("");
     return map.id;
   } catch (e) {
     st.making.set(false);
     st.err.set(errText(e));
+    // A list read it took the place of is not coming: the list is as it was.
+    st.loaded.set(true);
     return null;
   }
 }
@@ -231,7 +264,8 @@ export function MindMapView({
   useEffect(() => {
     let live = true;
     let t: ReturnType<typeof setTimeout> | undefined;
-    (shareId !== undefined ? sharedMindmap(shareId, id) : mindmapGet(cid, id)).then(
+    const ctrl = new AbortController();
+    (shareId !== undefined ? sharedMindmap(shareId, id, ctrl.signal) : mindmapGet(cid, id, ctrl.signal)).then(
       (m) => {
         if (!live) return;
         const first = layout(m.root, initialOpen(), measure);
@@ -242,11 +276,12 @@ export function MindMapView({
           if (v) setView(v);
         }, 0);
       },
-      (e) => live && setErr(errText(e)),
+      (e) => live && !isAbort(e) && setErr(errText(e)),
     );
     return () => {
       live = false;
       clearTimeout(t);
+      ctrl.abort();
     };
   }, [cid, id, shareId]);
 
@@ -580,35 +615,6 @@ export function MindMapView({
       </div>
     </div>
   );
-}
-
-/** A title as a file name: letters, digits, spaces and dashes, at most 60. */
-export function fileStem(title: string): string {
-  const s = [...title]
-    .map((c) => (/[\p{L}\p{N}]/u.test(c) || c === " " || c === "-" ? c : " "))
-    .join("")
-    .split(/\s+/)
-    .filter((w) => w !== "")
-    .join(" ");
-  const cut = [...s].slice(0, 60).join("");
-  return cut === "" ? "Mind map" : cut;
-}
-
-function saveBlob(b: Blob, name: string): void {
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(b);
-  a.download = name;
-  document.body.appendChild(a);
-  a.click();
-  setTimeout(() => {
-    URL.revokeObjectURL(a.href);
-    a.remove();
-  }, 1000);
-}
-
-/** Save text as a file, through a link the browser downloads. */
-export function download(name: string, mime: string, body: string): void {
-  saveBlob(new Blob([body], { type: mime }), name);
 }
 
 /** The drawn map as a PNG at twice its size, on the page's background.

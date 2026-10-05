@@ -54,23 +54,15 @@ export function grouped(rows: SettingItem[]): [string, SettingItem[]][] {
   return out;
 }
 
-/** What a save says under its control: saving, saved, saved with a caveat, or
- * why it was refused. */
-export type SaveState =
-  | { kind: "saving" }
-  | { kind: "saved" }
-  | { kind: "note"; text: string }
-  | { kind: "failed"; text: string };
+/** What a save says under its control: saving, saved, or why it was
+ * refused. */
+export type SaveState = { kind: "saving" } | { kind: "saved" } | { kind: "failed"; text: string };
 
 /** Save one setting and say how it went. A refusal is the server's own
  * sentence (`{"detail": …}`), as `settingsSet` throws it. */
 export async function saveSetting(key: string, value: string): Promise<[SettingItem | null, SaveState]> {
   try {
-    const item = await settingsSet(key, value);
-    // The old server could send a caveat with a save; the REST PATCH answers
-    // with the setting alone, so this is always empty today.
-    const note: string = "";
-    return [item, note === "" ? { kind: "saved" } : { kind: "note", text: note }];
+    return [await settingsSet(key, value), { kind: "saved" }];
   } catch (e) {
     return [null, { kind: "failed", text: errText(e) }];
   }
@@ -540,8 +532,6 @@ export function saveLine(status: SaveState | undefined): [string, string] {
       return ["set-st", "Saving…"];
     case "saved":
       return ["set-st ok", "Saved"];
-    case "note":
-      return ["set-st warn", status.text];
     case "failed":
       return ["set-st err", status.text];
     default:

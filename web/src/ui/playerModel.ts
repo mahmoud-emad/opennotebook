@@ -4,6 +4,7 @@
 // functions in the old `player.html`, kept apart so each is tested.
 
 import type * as Rest from "@/client/types.gen";
+import { str } from "./helpers";
 
 // ── the session as the player reads it ───────────────────────────────────────
 
@@ -35,7 +36,6 @@ export type Flat = { slide: Part; line: Line };
 
 type Obj = Record<string, unknown>;
 const obj = (v: unknown): Obj => (v && typeof v === "object" ? (v as Obj) : {});
-const str = (v: unknown): string => (typeof v === "string" ? v : "");
 const int = (v: unknown, or: number): number => (typeof v === "number" && Number.isFinite(v) ? v : or);
 
 function aspectOf(v: unknown): Aspect | null {
@@ -145,13 +145,6 @@ export function voiceIndex(s: SessionDoc, id: string): 0 | 1 {
 export function slideName(s: Part | null | undefined, audio: boolean): string {
   return (s && s.title) || (s ? `${audio ? "Chapter" : "Slide"} ${s.ordinal + 1}` : "");
 }
-
-export const FORMATS: Record<string, string> = {
-  deep_dive: "Deep Dive",
-  brief: "Brief",
-  critique: "Critique",
-  debate: "Debate",
-};
 
 export const initialsOf = (n: string) =>
   String(n || "?")
@@ -398,16 +391,6 @@ export function soundsUnfinished(text: string): boolean {
   return w.length > 0 && UNFINISHED.has(w[w.length - 1]!);
 }
 
-/** The six phases a build runs, as the card says them. */
-export const PHASE_LABEL: Record<string, string> = {
-  ingest: "reading your resources",
-  script: "writing the script",
-  deck: "building the slides",
-  measure: "measuring the narration",
-  narrate: "recording the voices",
-  validate: "checking it renders",
-};
-
 export const say = {
   blocked: "The browser blocked playback. Press play again.",
   cannotPlay: "This part could not be played. Press play to try again; if it keeps failing, reload the page.",
@@ -477,21 +460,3 @@ export function b64ToPcm16(b64: string): Int16Array {
   return new Int16Array(bytes.buffer, 0, bytes.length >> 1);
 }
 
-/** Complete server-sent event frames out of `buf`, and what is left over.
- * Only one space after `data:` is the field's; the payload keeps the rest. */
-export function sseFrames(buf: string): { frames: { ev: string | null; data: string }[]; rest: string } {
-  const frames: { ev: string | null; data: string }[] = [];
-  let cut: number;
-  while ((cut = buf.indexOf("\n\n")) >= 0) {
-    const frame = buf.slice(0, cut);
-    buf = buf.slice(cut + 2);
-    let ev: string | null = null;
-    const data: string[] = [];
-    for (const ln of frame.split("\n")) {
-      if (ln.startsWith("event:")) ev = ln.slice(6).trim();
-      else if (ln.startsWith("data:")) data.push(ln.slice(5).replace(/^ /, ""));
-    }
-    frames.push({ ev, data: data.join("\n") });
-  }
-  return { frames, rest: buf };
-}

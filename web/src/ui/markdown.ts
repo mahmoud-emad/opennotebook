@@ -1,29 +1,13 @@
 // The Studio's Markdown as safe HTML, and the numbered citation chips every
 // cited answer, mind map answer and set of study notes shows. A port of
 // `md_to_html` from the old app's `chat.rs` and the citation half of its
-// `mindmap.rs`.
+// `mindmap.rs`. What a citation is lives in `cite.ts`, apart from the
+// Markdown parser and the sanitiser, so reading one costs the first screen
+// neither.
 
 import DOMPurify from "dompurify";
 import { Marked } from "marked";
-
-/** One passage an answer cites, as the chat keeps it. */
-export type Cite = {
-  n: number;
-  title: string;
-  url: string;
-  /** The source's file name in the collection: what a click opens. */
-  name: string;
-  excerpt: string;
-};
-
-/** A citation from the server's JSON, or null when it has no number. */
-export function citeFrom(v: unknown): Cite | null {
-  if (!v || typeof v !== "object") return null;
-  const o = v as Record<string, unknown>;
-  const str = (k: string) => (typeof o[k] === "string" ? (o[k] as string) : "");
-  if (typeof o.n !== "number" || o.n < 0) return null;
-  return { n: Math.floor(o.n), title: str("title"), url: str("url"), name: str("name"), excerpt: str("excerpt") };
-}
+import type { Cite } from "./cite";
 
 export function esc(s: string): string {
   return s.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
@@ -71,19 +55,6 @@ md.use({
 export function mdToHtml(src: string): string {
   const html = md.parse(src) as string;
   return DOMPurify.sanitize(html, { ADD_ATTR: ["target"] });
-}
-
-/** The sources an answer cites, each once, in order of first citation, with
- * the numbers of its passages: [title, url, "1, 3, 5"]. Seven passages from
- * one paper are one source, not seven. */
-export function citeGroups(cites: Cite[]): [string, string, string][] {
-  const out: [string, string, number[]][] = [];
-  for (const c of cites) {
-    const g = out.find(([t, u]) => t === c.title && u === c.url);
-    if (g) g[2].push(c.n);
-    else out.push([c.title, c.url, [c.n]]);
-  }
-  return out.map(([t, u, ns]) => [t, u, ns.join(", ")]);
 }
 
 /** A passage as prose to read in a popover.

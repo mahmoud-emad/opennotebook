@@ -6,11 +6,11 @@
 // What a share includes is read through the share's own routes, never the
 // collection's: those stay its owner's.
 
-import { apiBase, call, enc, errText } from "./api";
+import { apiBase, call, enc, isGone } from "./api";
 import { mapOf, notesOf, playerUrl, type MindMap, type StudyNotes } from "./api-studio";
+import { fromWireKind, ms, toWireKind } from "./helpers";
 import type * as Rest from "@/client/types.gen";
 
-const ms = (iso: string | null | undefined) => (iso ? Date.parse(iso) : 0);
 
 /** One collection's share: what it includes. */
 export type Share = {
@@ -143,8 +143,7 @@ function cardOf(c: Rest.ShareCard): ShareCard {
 }
 
 function sharedOutputOf(o: Rest.SharedOutput): SharedOutput {
-  // The old app called a deck "session".
-  const kind = o.kind === "slides" ? "session" : o.kind;
+  const kind = fromWireKind(o.kind);
   const session = kind === "session" || kind === "audio";
   return {
     key: o.key,
@@ -159,13 +158,12 @@ function sharedOutputOf(o: Rest.SharedOutput): SharedOutput {
 }
 
 /** The wire's name for a kind of output: a deck is "slides" there. */
-export const wireKind = (k: Exclude<FeedKind, "all">) => (k === "session" ? "slides" : k);
+export const wireKind = (k: Exclude<FeedKind, "all">) => toWireKind(k);
 
 export function sharedItemOf(i: Rest.SharedItem): SharedItem {
   return {
     key: i.key,
-    // The old app called a deck "session".
-    kind: i.kind === "slides" ? "session" : i.kind,
+    kind: fromWireKind(i.kind),
     id: i.id,
     title: i.title,
     slide_count: i.parts,
@@ -181,18 +179,19 @@ export function sharedItemOf(i: Rest.SharedItem): SharedItem {
   };
 }
 
-/** Whether a call failed because what it named is not there. */
-const isGone = (e: unknown) => errText(e).includes("no longer there");
-
 // ── the calls ────────────────────────────────────────────────────────────────
 
 /** Everything shared on this studio, in `sort`'s order ("newest" or
  * "reused"), matching `query`. */
-export async function shareFeed(query: string, sort: "newest" | "reused"): Promise<ShareCard[]> {
+export async function shareFeed(
+  query: string,
+  sort: "newest" | "reused",
+  signal?: AbortSignal,
+): Promise<ShareCard[]> {
   const q = query.trim();
   const params = new URLSearchParams({ sort });
   if (q !== "") params.set("query", q);
-  return (await call<Rest.ShareCard[]>("GET", `/shares?${params.toString()}`)).map(cardOf);
+  return (await call<Rest.ShareCard[]>("GET", `/shares?${params.toString()}`, undefined, { signal })).map(cardOf);
 }
 
 /** How many items Discover asks for at a time. */
@@ -205,20 +204,21 @@ export async function shareItems(
   query: string,
   sort: "newest" | "reused",
   offset = 0,
+  signal?: AbortSignal,
 ): Promise<SharedItems> {
   const q = query.trim();
   const params = new URLSearchParams({ kind: wireKind(kind), sort, limit: String(ITEMS_PAGE) });
   if (q !== "") params.set("query", q);
   if (offset > 0) params.set("offset", String(offset));
-  const page = await call<Rest.SharedItems>("GET", `/shares/items?${params.toString()}`);
+  const page = await call<Rest.SharedItems>("GET", `/shares/items?${params.toString()}`, undefined, { signal });
   return { items: page.items.map(sharedItemOf), next: page.next_offset };
 }
 
 /** One shared collection as a visitor sees it; `found` is false when it is
  * not shared any more. */
-export async function shareView(shareId: string): Promise<ShareView> {
+export async function shareView(shareId: string, signal?: AbortSignal): Promise<ShareView> {
   try {
-    const v = await call<Rest.ShareView>("GET", `/shares/${enc(shareId)}`);
+    const v = await call<Rest.ShareView>("GET", `/shares/${enc(shareId)}`, undefined, { signal });
     return {
       found: true,
       card: cardOf(v.card),
@@ -264,13 +264,13 @@ export function shareCoverUrl(shareId: string, version: string, theme: "dark" | 
 }
 
 /** A map a share includes, to read only. */
-export async function sharedMindmap(shareId: string, id: string): Promise<MindMap> {
-  return mapOf(await call<Rest.MindMapOut>("GET", `/shares/${enc(shareId)}/mindmaps/${enc(id)}`));
+export async function sharedMindmap(shareId: string, id: string, signal?: AbortSignal): Promise<MindMap> {
+  return mapOf(await call<Rest.MindMapOut>("GET", `/shares/${enc(shareId)}/mindmaps/${enc(id)}`, undefined, { signal }));
 }
 
 /** Study notes a share includes, to read only. */
-export async function sharedNotes(shareId: string, id: string): Promise<StudyNotes> {
-  return notesOf(await call<Rest.NotesOut>("GET", `/shares/${enc(shareId)}/notes/${enc(id)}`));
+export async function sharedNotes(shareId: string, id: string, signal?: AbortSignal): Promise<StudyNotes> {
+  return notesOf(await call<Rest.NotesOut>("GET", `/shares/${enc(shareId)}/notes/${enc(id)}`, undefined, { signal }));
 }
 
 /** Where a deck or audio overview a share includes plays: the player, told to

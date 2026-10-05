@@ -70,6 +70,20 @@ export function SkelGrid({ n }: { n: number }) {
   );
 }
 
+/** A page on its way, while its code loads: lines shaped like text where the
+ * page will be, rather than nothing. */
+export function PageSkel() {
+  return (
+    <main aria-busy="true">
+      <div className="skel">
+        <div className="skel-line" />
+        <div className="skel-line" />
+        <div className="skel-line short" />
+      </div>
+    </main>
+  );
+}
+
 /** A list that could not be loaded: what failed, and another go. */
 export function ListError({
   what = "Your collections could not be loaded",
@@ -277,8 +291,11 @@ export function CollectionCard({
   const [redrawing, setRedrawing] = useState(false);
   // The share dialog, from the ⋯ menu's Share….
   const [sharing, setSharing] = useState(false);
+  // A rename, pin or delete on its way, in words: said on the card in place
+  // of what it holds, with its menu off until it is done.
+  const [working, setWorking] = useState("");
   const picks = useStore(PICKS);
-  const busy = redrawing;
+  const busy = redrawing || working !== "";
   const selecting = pickable && picks.on;
   const picked = pickable && picks.set.includes(c.cid);
   const title = collTitle(c.title);
@@ -297,29 +314,38 @@ export function CollectionCard({
   const reused =
     c.reused_from === "" ? null : origin !== undefined ? `Reused from ${origin}` : "Reused from a shared collection";
 
-  const acts = cardActions(c, origin !== undefined, busy);
+  const acts = cardActions(c, origin !== undefined, redrawing);
   const coverAt = acts.findIndex((a) => a[0] === "cover");
+  const off = working !== "" ? acts.map((_, i) => i) : redrawing && coverAt >= 0 ? [coverAt] : [];
 
   const menu = (
     <CardMenu
       label={title}
       items={acts.map((a) => [a[1], a[2]])}
-      off={busy && coverAt >= 0 ? [coverAt] : []}
+      off={off}
       onPick={(i) => {
         switch (acts[i]?.[0]) {
           case "rename":
             askPrompt("Rename collection", c.title, "Save", (next) => {
               next = next.trim();
               if (next === c.title) return;
+              setWorking("Renaming…");
               collectionRetitle(c.cid, next)
                 .catch((e) => report(`The collection could not be renamed. ${errText(e)}`))
-                .finally(onChanged);
+                .finally(() => {
+                  setWorking("");
+                  onChanged();
+                });
             });
             break;
           case "pin":
+            setWorking(c.pinned ? "Unpinning…" : "Pinning…");
             collectionPin(c.cid, !c.pinned)
               .catch((e) => report(`The collection could not be ${c.pinned ? "unpinned" : "pinned"}. ${errText(e)}`))
-              .finally(onChanged);
+              .finally(() => {
+                setWorking("");
+                onChanged();
+              });
             break;
           case "share":
             setSharing(true);
@@ -343,8 +369,14 @@ export function CollectionCard({
               "Its sources, slides, audio, mind maps and notes are removed, and so is its share if it has one. Copies others reused stay theirs. This cannot be undone.",
               "Delete",
               () => {
+                setWorking("Deleting…");
+                // Gone from the list when it is read back; only a failure
+                // brings the card back to how it was.
                 collectionDelete(c.cid)
-                  .catch((e) => report(`The collection could not be deleted. ${errText(e)}`))
+                  .catch((e) => {
+                    setWorking("");
+                    report(`The collection could not be deleted. ${errText(e)}`);
+                  })
                   .finally(onChanged);
               },
             );
@@ -399,7 +431,7 @@ export function CollectionCard({
             <div className="row-main">
               {name}
               <div className="row-d">
-                {sub}
+                {working || sub}
                 {reused !== null && ` · ${reused}`}
               </div>
             </div>
@@ -420,7 +452,7 @@ export function CollectionCard({
           <div className="meta">
             {name}
             <div className="sub">
-              <span>{sub}</span>
+              <span>{working || sub}</span>
             </div>
             {reused !== null && (
               <div className="sub reused">

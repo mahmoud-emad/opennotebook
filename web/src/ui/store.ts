@@ -1,6 +1,6 @@
-// A value any screen can read and set, the way the old app's context signals
-// worked: the banner, the snackbar and the shared dialog are set from
-// anywhere, even outside a component, and the shell draws them.
+// A value any screen can read and set: the banner, the snackbar and the shared
+// dialog are set from anywhere, even outside a component, and the shell draws
+// them. A component that reads one redraws when it changes, and only then.
 
 import { useSyncExternalStore } from "react";
 
@@ -30,4 +30,13 @@ export function store<T>(initial: T): Store<T> {
 
 export function useStore<T>(s: Store<T>): T {
   return useSyncExternalStore(s.subscribe, s.get, s.get);
+}
+
+/** One fact read from a store, re-rendering only when that fact changes: a
+ * count, a flag, a title. `pick` must answer a value that compares equal
+ * when nothing it reads has changed (a number, a string, a boolean), not a
+ * new array or object each time. */
+export function useStoreSel<T, U>(s: Store<T>, pick: (v: T) => U): U {
+  const read = () => pick(s.get());
+  return useSyncExternalStore(s.subscribe, read, read);
 }
