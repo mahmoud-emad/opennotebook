@@ -24,9 +24,10 @@ async def drain(*queues: str, concurrency: int = 1) -> None:
     async with app.open_async():
         # A job held back by another's lock is not fetched while that one
         # runs, so a single pass can leave it waiting: go round until none is.
+        names = list(queues) or ["prep", "work", "refresh"]
         for _ in range(10):
             await app.run_worker_async(
-                queues=list(queues) or ["prep", "work"],
+                queues=names,
                 wait=False,
                 install_signal_handlers=False,
                 listen_notify=False,
@@ -34,7 +35,11 @@ async def drain(*queues: str, concurrency: int = 1) -> None:
             )
             async with engine().begin() as c:
                 left = await c.scalar(
-                    text("SELECT count(*) FROM procrastinate_jobs WHERE status = 'todo'")
+                    text(
+                        "SELECT count(*) FROM procrastinate_jobs "
+                        "WHERE status = 'todo' AND queue_name = ANY(:q)"
+                    ),
+                    {"q": names},
                 )
             if not left:
                 return

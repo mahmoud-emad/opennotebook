@@ -57,16 +57,63 @@ def test_the_naming_prompt_reads_past_the_heading_and_source_line() -> None:
     assert len(naming.opening("# T\n" + "word " * 100_000)) == naming.NAME_OPENING_CHARS
 
 
-def test_a_naming_run_asked_for_twice_runs_again_not_beside_itself() -> None:
-    s1, s2 = uuid.uuid4(), uuid.uuid4()
-    running: dict[uuid.UUID, bool] = {}
-    assert refresh.run_claim(running, s1), "the first caller runs it"
-    assert not refresh.run_claim(running, s1), "a second waits on it"
-    assert not refresh.run_claim(running, s1), "and a third"
-    assert refresh.run_claim(running, s2), "another collection is not held up"
-    assert refresh.run_done(running, s1), "asked again: once more"
-    assert not refresh.run_done(running, s1), "nothing new: done"
-    assert refresh.run_claim(running, s1), "free to run again"
+async def test_a_refresh_asked_for_twice_runs_again_not_beside_itself(
+    client: AsyncClient,
+) -> None:
+    """The queue merges runs per collection as `run_claim` / `run_done` did:
+    one waiting at most, which every further change joins; one more allowed
+    once that one has started; another collection never held up."""
+    c1 = uuid.UUID((await client.post("/api/collections", json={})).json()["id"])
+    c2 = uuid.UUID((await client.post("/api/collections", json={})).json()["id"])
+    owner = await _owner(str(c1))
+    assert await refresh.request(owner, c1), "the first caller queues it"
+    assert not await refresh.request(owner, c1), "a second joins it"
+    assert not await refresh.request(owner, c1), "and a third"
+    assert await refresh.request(owner, c2), "another collection is not held up"
+    assert await _waiting(c1) == ["todo"]
+    # As if a worker had taken it: a change now asks for one more run, after.
+    async with engine().begin() as c:
+        await c.execute(
+            text("UPDATE procrastinate_jobs SET status = 'doing' WHERE queueing_lock = :q"),
+            {"q": f"refresh:{c1}"},
+        )
+    assert await refresh.request(owner, c1), "asked again while it runs: once more"
+    assert not await refresh.request(owner, c1), "and only once"
+    assert sorted(await _waiting(c1)) == ["doing", "todo"]
+    async with engine().begin() as c:
+        await c.execute(
+            text("UPDATE procrastinate_jobs SET status = 'succeeded' WHERE status = 'doing'")
+        )
+    await refresh.settle()
+    assert await _waiting(c1) == [], "nothing new: done"
+
+
+async def _waiting(cid: uuid.UUID) -> list[str]:
+    async with engine().begin() as c:
+        rows = await c.execute(
+            text(
+                "SELECT status FROM procrastinate_jobs WHERE lock = :q "
+                "AND status IN ('todo', 'doing') ORDER BY id"
+            ),
+            {"q": f"refresh:{cid}"},
+        )
+        return [str(r[0]) for r in rows]
+
+
+async def test_a_refresh_is_queued_with_the_change_and_not_without_it(
+    client: AsyncClient,
+) -> None:
+    """Queued in the request's own transaction: a source added queues one, a
+    refused one queues nothing."""
+    cid = (await client.post("/api/collections", json={})).json()["id"]
+    r = await client.post(f"/api/collections/{cid}/sources", json={"kind": "text", "text": " "})
+    assert r.status_code == 422, r.text
+    assert await _waiting(uuid.UUID(cid)) == []
+    r = await client.post(
+        f"/api/collections/{cid}/sources", json={"kind": "text", "text": NOTE, "title": "x"}
+    )
+    assert r.status_code == 201, r.text
+    assert await _waiting(uuid.UUID(cid)) == ["todo"]
 
 
 # ── in the background, after a source change ──────────────────────────────────
@@ -105,7 +152,7 @@ async def test_a_collection_is_named_by_the_model_from_its_sources(
     assert "title" in kinds, "the call is on the ledger"
 
     # The same sources again ask no model.
-    refresh.spawn(await _owner(cid), uuid.UUID(cid))
+    await refresh.request(await _owner(cid), uuid.UUID(cid))
     await refresh.settle()
     assert len(model.asked) == 1
 

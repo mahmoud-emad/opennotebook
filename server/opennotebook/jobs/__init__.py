@@ -24,6 +24,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import select, text, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from opennotebook.db.models import Job
@@ -82,19 +83,57 @@ async def defer(
     Procrastinate's own SQL function, so its trigger tells the workers once
     the transaction commits, and not at all if it rolls back.
     """
-    pid = await s.scalar(
-        text(
-            "SELECT unnest(procrastinate_defer_jobs_v1(ARRAY[ROW(CAST(:queue AS varchar), "
-            "CAST(:task AS varchar), 0, CAST(:lock AS text), NULL::text, CAST(:args AS jsonb), "
-            "NULL::timestamptz)]::procrastinate_job_to_defer_v1[]))"
-        ),
-        {"queue": queue, "task": task, "lock": lock, "args": json.dumps(args)},
-    )
+    pid = await enqueue(s, task, args, queue=queue, lock=lock)
     assert pid is not None
-    job.procrastinate_job_id = int(pid)
+    job.procrastinate_job_id = pid
     await notify(s, job.id)
     await s.flush()
     return int(pid)
+
+
+async def enqueue(
+    s: AsyncSession,
+    task: str,
+    args: dict[str, Any],
+    *,
+    queue: str,
+    lock: str | None = None,
+    queueing_lock: str | None = None,
+) -> int | None:
+    """Put `task` on the queue in the caller's transaction, with no job row:
+    for work nobody follows the progress of. The worker sees it once the
+    transaction commits, and never if it rolls back.
+
+    With a `queueing_lock`, a task already waiting under the same lock takes
+    this one's place: nothing is added and the answer is None. That is
+    Procrastinate's unique index on waiting jobs, met inside a savepoint so
+    the caller's transaction goes on."""
+    sql = text(
+        "SELECT unnest(procrastinate_defer_jobs_v1(ARRAY[ROW(CAST(:queue AS varchar), "
+        "CAST(:task AS varchar), 0, CAST(:lock AS text), CAST(:qlock AS text), "
+        "CAST(:args AS jsonb), NULL::timestamptz)]::procrastinate_job_to_defer_v1[]))"
+    )
+    params = {
+        "queue": queue,
+        "task": task,
+        "lock": lock,
+        "qlock": queueing_lock,
+        "args": json.dumps(args),
+    }
+    if queueing_lock is None:
+        pid = await s.scalar(sql, params)
+        return None if pid is None else int(pid)
+    try:
+        async with s.begin_nested():
+            pid = await s.scalar(sql, params)
+    except IntegrityError as e:
+        if getattr(e.orig, "sqlstate", None) != UNIQUE_VIOLATION:
+            raise
+        return None
+    return None if pid is None else int(pid)
+
+
+UNIQUE_VIOLATION = "23505"
 
 
 async def stop(s: AsyncSession, session_id: uuid.UUID) -> list[uuid.UUID]:

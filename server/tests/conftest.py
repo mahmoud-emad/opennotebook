@@ -65,7 +65,8 @@ async def empty_tables(model_down: None) -> AsyncIterator[None]:
     from opennotebook.domain import refresh
 
     await refresh.settle()
-    tables = ", ".join(t.name for t in Base.metadata.sorted_tables)
+    # The queue too: a job left waiting would run against the next test's rows.
+    tables = ", ".join([*(t.name for t in Base.metadata.sorted_tables), "procrastinate_jobs"])
     async with engine().begin() as c:
         await c.execute(text(f"TRUNCATE {tables} CASCADE"))
 

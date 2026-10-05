@@ -327,7 +327,7 @@ async def reuse_share(share_id: uuid.UUID, s: Db, me: Me) -> CollectionSummary:
     touches the original."""
     copy = await shares.reuse(s, me.id, share_id)
     # Named and its cover designed, if what it holds calls for it.
-    refresh.after_commit(s, me.id, copy.id)
+    await refresh.schedule(s, me.id, copy.id)
     return CollectionSummary.of(await collections.summary(s, me.id, copy.id))
 
 

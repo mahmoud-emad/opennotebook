@@ -21,6 +21,16 @@ PREP_QUEUE = "prep"
 PREP_LOCK = "prep"
 # Everything else that takes longer than a request: deep research.
 WORK_QUEUE = "work"
+# Naming a collection and designing its cover, after its sources change. A job
+# per collection carries the collection's id as both its `lock` and its
+# `queueing_lock`: never two runs of one collection at once, and at most one
+# waiting behind a running one, which every further change joins.
+REFRESH_QUEUE = "refresh"
+REFRESH_TASK = "refresh"
+
+
+def refresh_lock(cid: object) -> str:
+    return f"refresh:{cid}"
 
 
 def conninfo() -> str:

@@ -19,7 +19,7 @@ from opennotebook.domain import refresh
 from opennotebook.domain import settings as st
 from opennotebook.errors import SERVER_FAULT, Problem
 from opennotebook.jobs import NoJob, Progress
-from opennotebook.jobs.app import app
+from opennotebook.jobs.app import REFRESH_QUEUE, REFRESH_TASK, app
 
 log = logging.getLogger(__name__)
 
@@ -101,7 +101,27 @@ async def deep_research(**spec: object) -> None:
             return
     progress.done = RESEARCH_PHASES
     await _finish(progress, None)
-    # The collection's sources changed: name it and design its cover again.
+    # The collection's sources changed: name it and design its cover again,
+    # merged with any other change to it.
+    await refresh.request(r.owner_id, r.collection_id)
+
+
+class RefreshSpec(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    owner_id: uuid.UUID
+    collection_id: uuid.UUID
+
+
+@app.task(name=REFRESH_TASK, queue=REFRESH_QUEUE, pass_context=False)
+async def refresh_collection(**spec: object) -> None:
+    """Name a collection and design its cover, after its sources changed.
+    Queued by `refresh.schedule`, one waiting per collection at most."""
+    try:
+        r = RefreshSpec.model_validate(spec)
+    except ValidationError as e:
+        log.error("a refresh arrived with arguments that do not decode: %s", e)
+        return
     await refresh.refresh(r.owner_id, r.collection_id)
 
 

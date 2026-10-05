@@ -101,7 +101,7 @@ async def list_collections(s: Db, me: Me) -> list[CollectionSummary]:
     # A collection whose cover is older than what it holds (an output that
     # finished while nothing was listening) gets one designed in the
     # background. This list shows the cover it has.
-    refresh.enqueue_covers(me.id, await covers.stale(s, me.id, listed))
+    await refresh.enqueue_covers(s, me.id, await covers.stale(s, me.id, listed))
     return [CollectionSummary.of(c) for c in listed]
 
 
@@ -118,7 +118,7 @@ async def get_collection(cid: uuid.UUID, s: Db, me: Me) -> CollectionDetail:
     summary = await collections.summary(s, me.id, cid)
     # As the list does: opening the collection is enough to bring its cover
     # up to date.
-    refresh.enqueue_covers(me.id, await covers.stale(s, me.id, [summary]))
+    await refresh.enqueue_covers(s, me.id, await covers.stale(s, me.id, [summary]))
     return CollectionDetail(
         collection=CollectionSummary.of(summary), outputs=await summaries_of(s, me.id, cid)
     )
@@ -133,7 +133,7 @@ async def update_collection(
         await collections.retitle(s, me.id, cid, body.title)
         if not body.title.strip():
             # Handed back to the studio: it names it again from the sources.
-            refresh.after_commit(s, me.id, cid)
+            await refresh.schedule(s, me.id, cid)
     if body.pinned is not None:
         await collections.pin(s, me.id, cid, body.pinned)
     return CollectionSummary.of(await collections.summary(s, me.id, cid))

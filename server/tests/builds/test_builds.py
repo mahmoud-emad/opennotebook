@@ -155,7 +155,9 @@ async def test_a_build_over_the_limit_is_refused_and_leaves_nothing(
     )
     assert await _rows("SELECT id FROM sessions") == []
     assert await _rows("SELECT id FROM jobs") == []
-    assert await _rows("SELECT id FROM procrastinate_jobs") == []
+    # Nothing queued for the build; the source added before it queued its
+    # naming and cover, which is not the build's.
+    assert await _rows("SELECT id FROM procrastinate_jobs WHERE queue_name <> 'refresh'") == []
 
 
 async def test_a_read_only_copy_is_not_built_from(
