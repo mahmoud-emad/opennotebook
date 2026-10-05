@@ -66,7 +66,7 @@ pub async fn load(sid: String, mut st: NotesState) {
     .await;
     match got {
         Ok(out) => st.notes.set(out.notes),
-        Err(e) => crate::report(format!("The study notes could not be loaded: {e}")),
+        Err(e) => crate::report(format!("The study notes could not be loaded. {e}")),
     }
 }
 
@@ -302,6 +302,7 @@ pub fn NotesView(
                     n: c.n as u32,
                     title: c.title.clone(),
                     url: c.url.clone(),
+                    name: c.name.clone(),
                     excerpt: c.excerpt.clone(),
                 })
                 .collect()
@@ -484,6 +485,7 @@ mod tests {
             title: "Moshi".into(),
             url: String::new(),
             excerpt: "Moshi is…".into(),
+            ..Default::default()
         }];
         let h = cited_inline("Why does **Moshi** skip text? [1]", &cites);
         assert!(!h.starts_with("<p>"), "{h}");

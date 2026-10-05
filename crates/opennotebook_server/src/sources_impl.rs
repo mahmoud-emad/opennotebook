@@ -1,10 +1,9 @@
 //! The `sources` domain: what a collection's outputs are made from, as tools
 //! any agent can call.
 //!
-//! Every method here is published as an MCP tool, and is the
-//! same code the Studio's own chat agent and the collection page use: a
-//! collection's sources are its staging directory under
-//! `var/opennotebook/staging/<cid>`, a source is one Markdown file in it, and
+//! Every method here is on the `sources` RPC endpoint, and is the same code the
+//! Studio's own chat agent and the collection page use: a collection's sources
+//! are its staging directory under `<data dir>/staging/<cid>`, a source is one Markdown file in it, and
 //! `session_build`, `mindmap_create` and `notes_create` read that directory.
 //! The wire field is still named `sid`; it carries the cid. Nothing here keeps
 //! state of its own beyond telling the collection its sources changed.
@@ -451,6 +450,37 @@ pub(crate) fn heading(path: &std::path::Path, name: &str) -> (String, String) {
         })
         .unwrap_or_default();
     head(lines.into_iter(), name)
+}
+
+#[derive(serde::Deserialize)]
+pub struct ReadQuery {
+    session: String,
+    name: String,
+}
+
+/// `GET /api/session/source/read?session=<cid>&name=<file>` — one source,
+/// whole: its title, the page it came from, and its text as Markdown. What a
+/// citation opens. Only a name the collection stages is read, so `name`
+/// cannot reach outside it.
+pub async fn read_source(
+    axum::extract::Query(q): axum::extract::Query<ReadQuery>,
+) -> axum::response::Response {
+    use axum::http::StatusCode;
+    use axum::response::IntoResponse;
+    let Ok(sid) = create::safe_sid(&q.session) else {
+        return (StatusCode::BAD_REQUEST, "bad session id").into_response();
+    };
+    if !create::staged_names(sid).contains(&q.name) {
+        return (
+            StatusCode::NOT_FOUND,
+            "that source is not in this collection",
+        )
+            .into_response();
+    }
+    let text = std::fs::read_to_string(create::staging_dir(sid).join(&q.name)).unwrap_or_default();
+    let (title, url) = head(text.lines().map(str::to_string), &q.name);
+    axum::Json(serde_json::json!({ "name": q.name, "title": title, "url": url, "text": text }))
+        .into_response()
 }
 
 /// A staged file as a source, its length included, so read whole.

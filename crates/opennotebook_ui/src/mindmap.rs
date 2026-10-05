@@ -95,7 +95,7 @@ pub async fn load(sid: String, mut st: MapState) {
     .await;
     match got {
         Ok(out) => st.maps.set(out.maps),
-        Err(e) => crate::report(format!("The mind maps could not be loaded: {e}")),
+        Err(e) => crate::report(format!("The mind maps could not be loaded. {e}")),
     }
 }
 
@@ -694,6 +694,9 @@ pub struct Cite {
     pub title: String,
     #[serde(default)]
     pub url: String,
+    /// The source's file name in the collection: what a click opens.
+    #[serde(default)]
+    pub name: String,
     #[serde(default)]
     pub excerpt: String,
 }
@@ -704,6 +707,7 @@ impl Cite {
             n: v["n"].as_u64()? as u32,
             title: v["title"].as_str().unwrap_or_default().to_string(),
             url: v["url"].as_str().unwrap_or_default().to_string(),
+            name: v["name"].as_str().unwrap_or_default().to_string(),
             excerpt: v["excerpt"].as_str().unwrap_or_default().to_string(),
         })
     }
@@ -818,11 +822,15 @@ fn inline_links(s: &str) -> String {
 }
 
 /// An answer's HTML with each `[n]` turned into a numbered chip. Hovering or
-/// focusing a chip shows the source's title and the passage; a chip of a page
-/// links to it.
+/// focusing a chip shows the source's title and the passage; clicking it, or
+/// Enter on it, opens the source at that passage (`source::install_cite_open`).
+/// A chip saved before chips knew their source links to the page instead.
+///
+/// One pass over the text: a chip carries its passage, and a passage can hold
+/// a "[2]" of its own, which replacing one number after another would turn
+/// into a chip inside a chip.
 pub fn with_chips(html: &str, cites: &[Cite]) -> String {
-    let mut out = html.to_string();
-    for c in cites {
+    let chip = |c: &Cite| {
         let short = plain_excerpt(&c.excerpt);
         let short = if short.chars().count() > 320 {
             format!(
@@ -832,23 +840,56 @@ pub fn with_chips(html: &str, cites: &[Cite]) -> String {
         } else {
             short
         };
-        let num = if c.url.is_empty() {
-            format!("{}", c.n)
-        } else {
-            format!(
-                "<a href=\"{}\" target=\"_blank\" rel=\"noopener noreferrer\">{}</a>",
-                esc(&c.url),
-                c.n
+        let (num, open) = if !c.name.is_empty() {
+            (
+                c.n.to_string(),
+                format!(
+                    " role=\"button\" data-src=\"{}\" data-x=\"{}\"",
+                    esc(&c.name),
+                    esc(&c.excerpt)
+                ),
             )
+        } else if !c.url.is_empty() {
+            (
+                format!(
+                    "<a href=\"{}\" target=\"_blank\" rel=\"noopener noreferrer\">{}</a>",
+                    esc(&c.url),
+                    c.n
+                ),
+                String::new(),
+            )
+        } else {
+            (c.n.to_string(), String::new())
         };
-        let chip = format!(
-            "<span class=\"cite\" tabindex=\"0\" aria-label=\"Source {n}: {t}\">{num}<span class=\"cite-pop\" role=\"tooltip\"><b>{t}</b><span>{x}</span></span></span>",
+        format!(
+            "<span class=\"cite\" tabindex=\"0\"{open} aria-label=\"Source {n}: {t}\">{num}<span class=\"cite-pop\" role=\"tooltip\"><b>{t}</b><span>{x}</span></span></span>",
             n = c.n,
             t = esc(&c.title),
             x = esc(&short),
-        );
-        out = out.replace(&format!("[{}]", c.n), &chip);
+        )
+    };
+    let mut out = String::with_capacity(html.len());
+    let mut rest = html;
+    while let Some(i) = rest.find('[') {
+        out.push_str(&rest[..i]);
+        let after = &rest[i + 1..];
+        let digits = after.chars().take_while(char::is_ascii_digit).count();
+        let cite = (digits > 0 && after[digits..].starts_with(']'))
+            .then(|| after[..digits].parse::<u32>().ok())
+            .flatten()
+            .and_then(|n| cites.iter().find(|c| c.n == n));
+        match cite {
+            Some(c) => {
+                out.push_str(&chip(c));
+                rest = &after[digits + 1..];
+            }
+            None => {
+                out.push('[');
+                rest = after;
+            }
+        }
     }
+    out.push_str(rest);
     out
 }
 
@@ -881,12 +922,14 @@ mod tests {
                 title: "A <b>".into(),
                 url: "https://x.org/?a=1&b=2".into(),
                 excerpt: "one   two".into(),
+                ..Default::default()
             },
             Cite {
                 n: 2,
                 title: "Note".into(),
                 url: String::new(),
                 excerpt: "e".into(),
+                ..Default::default()
             },
         ];
         let h = with_chips("<p>X [1]. Y [2][1]. Not [10].</p>", &cites);
@@ -900,12 +943,42 @@ mod tests {
     }
 
     #[test]
+    fn a_chip_of_a_source_opens_it_and_a_passage_never_grows_chips() {
+        let cites = vec![
+            Cite {
+                n: 1,
+                title: "Report".into(),
+                name: "research_1.md".into(),
+                excerpt: "As [2] says, \"ramps\".".into(),
+                ..Default::default()
+            },
+            Cite {
+                n: 2,
+                title: "Wiki".into(),
+                name: "wiki.md".into(),
+                url: "https://w.org".into(),
+                excerpt: "e".into(),
+            },
+        ];
+        let h = with_chips("<p>A [1] B [2]</p>", &cites);
+        assert_eq!(h.matches("class=\"cite\"").count(), 2, "{h}");
+        assert!(h.contains("data-src=\"research_1.md\""), "{h}");
+        assert!(
+            h.contains("data-x=\"As [2] says, &quot;ramps&quot;.\""),
+            "{h}"
+        );
+        // A source opens in the viewer, which links the page itself.
+        assert!(!h.contains("href="), "{h}");
+    }
+
+    #[test]
     fn one_source_cited_many_times_is_listed_once() {
         let c = |n: u32, t: &str| Cite {
             n,
             title: t.into(),
             url: String::new(),
             excerpt: String::new(),
+            ..Default::default()
         };
         let g = cite_groups(&[c(1, "Moshi"), c(2, "Mimi"), c(3, "Moshi"), c(4, "Moshi")]);
         assert_eq!(

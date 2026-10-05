@@ -97,6 +97,8 @@ const BUILD_ROUTE: &str = "/api/session/build";
 const SRC_TEXT_ROUTE: &str = "/api/session/source/text";
 const SRC_FETCH_ROUTE: &str = "/api/session/source/fetch";
 const SRC_LIST_ROUTE: &str = "/api/session/source/list";
+/// One source's text, for the viewer a citation opens.
+const SRC_READ_ROUTE: &str = "/api/session/source/read";
 /// A file handed over whole: the body is its bytes, `?name=` its name.
 const SRC_UPLOAD_ROUTE: &str = "/api/session/source/upload";
 
@@ -157,6 +159,7 @@ async fn main() -> anyhow::Result<()> {
         // 64 MiB the listener allows is never what a person hits first.
         .route(SRC_UPLOAD_ROUTE, axum::routing::post(create::upload_source))
         .route(SRC_LIST_ROUTE, get(create::list_sources))
+        .route(SRC_READ_ROUTE, get(sources_impl::read_source))
         .route(CHAT_ROUTE, axum::routing::post(agent::chat))
         .route(
             SETTINGS_ROUTE,

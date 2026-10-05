@@ -437,24 +437,27 @@ pub(crate) fn md_to_html(src: &str) -> String {
         let l = u.trim().to_ascii_lowercase();
         l.starts_with("http://") || l.starts_with("https://") || l.starts_with("mailto:")
     };
-    let parser = Parser::new_ext(src, Options::ENABLE_STRIKETHROUGH).map(|ev| match ev {
-        Event::Html(t) | Event::InlineHtml(t) => Event::Text(t),
-        Event::Start(Tag::Link {
-            link_type,
-            dest_url,
-            title,
-            id,
-        }) if !safe(&dest_url) => Event::Start(Tag::Link {
-            link_type,
-            dest_url: CowStr::from(""),
-            title,
-            id,
-        }),
-        Event::Start(Tag::Image { .. }) | Event::End(pulldown_cmark::TagEnd::Image) => {
-            Event::Text(CowStr::from(""))
-        }
-        other => other,
-    });
+    let parser =
+        Parser::new_ext(src, Options::ENABLE_STRIKETHROUGH | Options::ENABLE_TABLES).map(|ev| {
+            match ev {
+                Event::Html(t) | Event::InlineHtml(t) => Event::Text(t),
+                Event::Start(Tag::Link {
+                    link_type,
+                    dest_url,
+                    title,
+                    id,
+                }) if !safe(&dest_url) => Event::Start(Tag::Link {
+                    link_type,
+                    dest_url: CowStr::from(""),
+                    title,
+                    id,
+                }),
+                Event::Start(Tag::Image { .. }) | Event::End(pulldown_cmark::TagEnd::Image) => {
+                    Event::Text(CowStr::from(""))
+                }
+                other => other,
+            }
+        });
     let mut out = String::new();
     html::push_html(&mut out, parser);
     out.replace(
@@ -565,14 +568,15 @@ pub(crate) async fn send(
                     .rev()
                     .find(|m| m.kind == "step" && m.id == id)
                 {
-                    m.note = text;
+                    let failed = t == "step_done" && !v["ok"].as_bool().unwrap_or(false);
+                    // A failed step's result is the server's error: said in words.
+                    m.note = if failed {
+                        crate::errors::readable(&text)
+                    } else {
+                        text
+                    };
                     if t == "step_done" {
-                        m.status = if v["ok"].as_bool().unwrap_or(false) {
-                            "ok"
-                        } else {
-                            "bad"
-                        }
-                        .into();
+                        m.status = if failed { "bad" } else { "ok" }.into();
                     }
                 }
             }
@@ -608,7 +612,7 @@ pub(crate) async fn send(
     if let Err(e) = streamed {
         msgs.write().push(Msg::said(
             "Studio",
-            format!("I could not answer: {e}"),
+            format!("I could not answer. {}", crate::errors::readable(&e)),
             false,
         ));
     }
@@ -683,6 +687,7 @@ pub(crate) async fn ask_sources(st: ChatState, question: String) {
                     n: c.n as u32,
                     title: c.title.clone(),
                     url: c.url.clone(),
+                    name: c.name.clone(),
                     excerpt: c.excerpt.clone(),
                 })
                 .collect();
@@ -693,7 +698,7 @@ pub(crate) async fn ask_sources(st: ChatState, question: String) {
         }
         Err(e) => msgs.write().push(Msg::said(
             "Studio",
-            format!("I could not read the sources: {e}"),
+            format!("I could not read the sources. {e}"),
             false,
         )),
     }
