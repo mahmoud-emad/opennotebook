@@ -455,3 +455,12 @@ It passed the PDF verbatim test, the scan, tracked changes, text boxes, lists an
 - **Settings:** General is the first tab, where Settings opens. It holds the theme, the language, and how collections are named and drawn.
 - **Production:** Docker Compose with Caddy (`make up`), CI on every push, and Playwright tests of the main flows.
 - **Still to do:** a real build on real models and speech compared with the Rust app (phase 4), then removing `crates/` (phase 5).
+
+### 2026-10-05: clean up, reliability and speed
+
+- **The server drives the studio.** Studio state, build phases and the cost of every tool come from the server; the web app shows them and a loading state while it waits, and drops replies that arrive after the screen changed. Every tool is checked against the spending limit, and every call is kept in `usage_events`.
+- **Errors** are sentences that say what to do, shown where they happen; the page banner floats over the page and clears when the screen changes.
+- **Reliability:** database pool and statement timeouts, one shared HTTP client per model and speech server, and clean shutdown.
+- **Speed:** indexes on the queries every page runs (migration 0008), lists paged with defaults, rows read in batches, settings cached for five seconds, and mind maps and study notes made as jobs (the request answers 202). Finished work is tidied hourly. Migrations are applied with `alembic upgrade heads`.
+- **Gates:** 733 server tests, 179 web tests and the Playwright flows pass. The first screen is 109.6 KB gzipped.
+- **Still to do:** the web app asks only for the first page of each list; mind maps and study notes are not yet in the collection's event stream.
