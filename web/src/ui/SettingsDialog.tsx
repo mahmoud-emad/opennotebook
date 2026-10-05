@@ -9,6 +9,7 @@ import { errText, settingsSet, type SettingItem, type SettingsDoc, type TabInfo 
 import { Icon } from "./Icon";
 import {
   APPEARANCE,
+  GENERAL,
   SETTINGS,
   TAB_LABELS,
   THEME,
@@ -36,9 +37,10 @@ export function tabEl(id: string): string {
   return `set-tab-${id}`;
 }
 
-/** The tabs in order: Appearance, then the server's. */
+/** The tabs in order, as the server lists them. Until it answers, General
+ * alone, so the theme can be changed while the rest loads. */
 export function allTabs(d: SettingsDoc): TabInfo[] {
-  return [{ id: APPEARANCE, label: "Appearance", note: "", advanced: false }, ...d.tab_info];
+  return d.tab_info.length > 0 ? d.tab_info : [{ id: GENERAL, label: "General", note: "", advanced: false }];
 }
 
 /** Rows in their catalogue order, gathered under their group headings. */
@@ -78,7 +80,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
   const s = useStore(SETTINGS);
   const theme = useStore(THEME);
   // The tab shown, by id. Starts where the link that opened it pointed.
-  const [tab, setTab] = useState(() => SETTINGS.get().open ?? "defaults");
+  const [tab, setTab] = useState(() => SETTINGS.get().open ?? GENERAL);
   const [status, setStatus] = useState<Record<string, SaveState>>({});
   const box = useRef<HTMLDivElement>(null);
 
@@ -107,9 +109,11 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
   const loadErr = s.err;
   const tabs = allTabs(d);
   let current = tab;
+  // The old Appearance tab is General's theme row now.
+  if (current === APPEARANCE) current = GENERAL;
   // A link to a tab this server does not have lands on the first one.
   if (loaded && !tabs.some((t) => t.id === current)) {
-    current = tabs[1]?.id ?? APPEARANCE;
+    current = tabs[0]?.id ?? GENERAL;
   }
   const info: TabInfo = tabs.find((t) => t.id === current) ?? {
     id: current,
@@ -208,7 +212,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
               <span>{info.note}</span>
             </p>
           )}
-          {current === APPEARANCE ? (
+          {current === GENERAL && (
             <div className="set-row">
               <div className="set-text">
                 <div className="set-label">Theme</div>
@@ -231,7 +235,8 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
                 </div>
               </div>
             </div>
-          ) : !loaded && d.items.length === 0 ? (
+          )}
+          {!loaded && d.items.length === 0 ? (
             <div className="set-note">
               <span className="mini-spin" /> Loading settings…
             </div>
@@ -263,11 +268,10 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
               );
             })
           )}
-          {current === APPEARANCE ? (
-            <p className="set-foot">Kept in this browser and applied at once.</p>
-          ) : (
-            <p className="set-foot">Saved as soon as you change it, for the next thing you make or open.</p>
-          )}
+          <p className="set-foot">
+            Saved as soon as you change it, for the next thing you make or open.
+            {current === GENERAL && " The theme is kept in this browser."}
+          </p>
         </section>
       </div>
     </>

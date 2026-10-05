@@ -137,11 +137,13 @@ describe("settings, the pure parts", () => {
 
 const DOC_REST = {
   tabs: [
+    { id: "general", label: "General", note: "", advanced: false },
     { id: "defaults", label: "Generation defaults", note: "", advanced: false },
     { id: "voices", label: "Voices", note: "", advanced: false },
     { id: "models", label: "Models", note: "Changing these affects quality and cost.", advanced: true },
   ],
   settings: [
+    rest({ key: keys.LANGUAGE, tab: "General", label: "Output language", kind: "choice", default: "English", options: [{ value: "English", label: "English", hint: "" }] }),
     rest({ key: keys.SLIDE_COUNT, tab: "Generation defaults", label: "Slides per deck", kind: "number", default: "5", min: 1, max: 20, unit: "slides" }),
     rest({ key: keys.COVERS, tab: "Generation defaults", label: "Covers", kind: "toggle", default: "on" }),
     rest({ key: keys.SPEAKER_COUNT, tab: "Voices", label: "Speakers in a deck", kind: "choice", default: "1", options: [{ value: "1", label: "One", hint: "" }, { value: "2", label: "Two", hint: "" }] }),
@@ -194,7 +196,7 @@ describe("the Settings dialog", () => {
   it("lands on the first server tab when the asked-for tab is not there", async () => {
     SETTINGS.set((s) => ({ ...s, open: "nowhere" }));
     await openDialog();
-    expect(screen.getByRole("heading", { level: 3 }).textContent).toBe("Generation defaults");
+    expect(screen.getByRole("heading", { level: 3 }).textContent).toBe("General");
   });
 
   it("moves between tabs with the arrow keys, Home and End", async () => {
@@ -205,7 +207,7 @@ describe("the Settings dialog", () => {
     fireEvent.keyDown(list, { key: "End" });
     expect(document.activeElement!.id).toBe(tabEl("models"));
     fireEvent.keyDown(list, { key: "ArrowDown" });
-    expect(document.activeElement!.id).toBe(tabEl("appearance"));
+    expect(document.activeElement!.id).toBe(tabEl("general"));
     fireEvent.keyDown(list, { key: "ArrowUp" });
     expect(document.activeElement!.id).toBe(tabEl("models"));
     expect(document.querySelector(".set-tnote")!.textContent).toBe("Changing these affects quality and cost.");
@@ -222,13 +224,20 @@ describe("the Settings dialog", () => {
     expect(onClose).toHaveBeenCalledTimes(3);
   });
 
-  it("chooses the theme on Appearance", async () => {
+  it("opens on General, the first tab, with the theme at its top", async () => {
+    SETTINGS.set((s) => ({ ...s, open: null }));
+    await openDialog();
+    expect(screen.getByRole("heading", { level: 3 }).textContent).toBe("General");
+    expect(screen.getByText("Output language")).toBeTruthy();
+  });
+
+  it("chooses the theme on General, and an old Appearance link lands there", async () => {
     SETTINGS.set((s) => ({ ...s, open: "appearance" }));
     await openDialog();
     fireEvent.click(screen.getByRole("radio", { name: "Light" }));
     expect(document.documentElement.getAttribute("data-bs-theme")).toBe("light");
     expect(screen.getByRole("radio", { name: "Light" }).getAttribute("aria-checked")).toBe("true");
-    expect(screen.getByText("Kept in this browser and applied at once.")).toBeTruthy();
+    expect(screen.getByRole("heading", { level: 3 }).textContent).toBe("General");
     fireEvent.click(screen.getByRole("radio", { name: "Dark" }));
     expect(document.documentElement.hasAttribute("data-bs-theme")).toBe(false);
   });
@@ -283,8 +292,8 @@ describe("the Settings dialog", () => {
   });
 
   it("says when the settings could not be loaded, with a way to try again", async () => {
-    // As the old page did, an unknown tab falls back to Appearance once the
-    // read has answered, so the message shows on a tab the page already knows.
+    // An unknown tab falls back to the first one once the read has answered,
+    // so the message shows on a tab the page already knows.
     SETTINGS.set((s) => ({ ...s, doc: { tab_info: DOC_REST.tabs, items: [] } }));
     vi.stubGlobal("fetch", () => reply(500, { detail: "The studio could not read its settings." }));
     await openDialog();

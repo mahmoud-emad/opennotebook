@@ -205,9 +205,9 @@ RESEARCH_DEPTHS: Pairs = (
 
 # ── the catalogue ─────────────────────────────────────────────────────────────
 
+TAB_GENERAL = "General"
 TAB_DEFAULTS = "Generation defaults"
 TAB_VOICES = "Voices"
-TAB_LANGUAGE = "Language"
 TAB_CONVERSATION = "Live conversation"
 TAB_COSTS = "Costs & limits"
 TAB_MODELS = "Models"
@@ -224,12 +224,13 @@ class Tab:
     advanced: bool = False
 
 
-# The page's server tabs, in display order. Appearance is the page's own tab,
-# drawn before these, because the theme belongs to the browser.
+# The tabs, in display order. General comes first and is where Settings
+# opens; the page draws the theme at its top, because the theme belongs to
+# the browser rather than to the studio.
 TAB_INFO: tuple[Tab, ...] = (
+    Tab("general", TAB_GENERAL),
     Tab("defaults", TAB_DEFAULTS),
     Tab("voices", TAB_VOICES),
-    Tab("language", TAB_LANGUAGE),
     Tab("conversation", TAB_CONVERSATION),
     Tab("costs", TAB_COSTS),
     Tab("models", TAB_MODELS, "Changing these affects quality and cost.", advanced=True),
@@ -296,6 +297,8 @@ WRITING = "Writing"
 CHAT = "Chat & answers"
 HOST = "Host"
 SECOND = "Second voice"
+# The General tab's heading over how collections are named and drawn.
+COLLECTIONS = "Collections"
 
 
 def _model(key: str, label: str, help: str, tested: Pairs, default: str, group: str) -> Def:
@@ -366,22 +369,33 @@ CATALOGUE: tuple[Def, ...] = (
         choice(*RESEARCH_DEPTHS),
         "standard",
     ),
+    # General
+    Def(
+        LANGUAGE_KEY,
+        TAB_GENERAL,
+        "Output language",
+        "Scripts, notes, maps, answers and chat are written in this. Voices stay English-accented.",
+        choice(*LANGUAGE_CHOICES),
+        "English",
+    ),
     Def(
         AUTO_NAME_KEY,
-        TAB_DEFAULTS,
+        TAB_GENERAL,
         "Name collections automatically",
         "Titles a new collection from its sources. Your own title is never replaced.",
         TOGGLE,
         "on",
+        group=COLLECTIONS,
     ),
     Def(
         COVERS_KEY,
-        TAB_DEFAULTS,
+        TAB_GENERAL,
         "Design collection covers",
         "Draws each collection's cover from its sources and what you made. One small model "
         "call when they change, well under a cent.",
         TOGGLE,
         "on",
+        group=COLLECTIONS,
     ),
     # Voices
     Def(
@@ -446,15 +460,6 @@ CATALOGUE: tuple[Def, ...] = (
         TEXT,
         "expert",
         group=SECOND,
-    ),
-    # Language
-    Def(
-        LANGUAGE_KEY,
-        TAB_LANGUAGE,
-        "Output language",
-        "Scripts, notes, maps, answers and chat are written in this. Voices stay English-accented.",
-        choice(*LANGUAGE_CHOICES),
-        "English",
     ),
     # Live conversation
     Def(

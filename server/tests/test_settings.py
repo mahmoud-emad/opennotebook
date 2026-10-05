@@ -83,9 +83,9 @@ def test_out_of_range_and_unknown_choices_are_refused() -> None:
 
 def test_the_tabs_are_in_the_plans_order_and_each_has_its_info() -> None:
     assert st.TABS == (
+        "General",
         "Generation defaults",
         "Voices",
-        "Language",
         "Live conversation",
         "Costs & limits",
         "Models",
@@ -100,8 +100,8 @@ def test_the_new_settings_exist_with_their_defaults() -> None:
         (st.AUDIO_FORMAT_KEY, st.TAB_DEFAULTS, "deep_dive"),
         (st.AUDIO_LENGTH_KEY, st.TAB_DEFAULTS, "default"),
         (st.RESEARCH_DEPTH_KEY, st.TAB_DEFAULTS, "standard"),
-        (st.AUTO_NAME_KEY, st.TAB_DEFAULTS, "on"),
-        (st.COVERS_KEY, st.TAB_DEFAULTS, "on"),
+        (st.AUTO_NAME_KEY, st.TAB_GENERAL, "on"),
+        (st.COVERS_KEY, st.TAB_GENERAL, "on"),
         (st.SHOW_COST_KEY, st.TAB_COSTS, "on"),
         (st.SEARCH_MODEL_KEY, st.TAB_MODELS, st.SEARCH_MODEL_DEFAULT),
         (st.SLIDE_MODEL_KEY, st.TAB_MODELS, st.SLIDE_MODEL_DEFAULT),

@@ -21,7 +21,7 @@ import { Icon } from "./Icon";
 import { EMPTY, ORDER, PICKS, PickBar, keep, start } from "./pick";
 import { follow, routeFromLocation, routeUrl, sameView, setNav, setRoute, type Open, type View } from "./routes";
 import { SettingsDialog } from "./SettingsDialog";
-import { SETTINGS, keys, openSettings, reloadSettings, settingValue } from "./settings";
+import { GENERAL, SETTINGS, keys, openSettings, reloadSettings, settingValue } from "./settings";
 import { FLASH, NOTICE, SNACK, SNACK_MS, snack, type Output } from "./shell";
 import { useStore } from "./store";
 
@@ -377,7 +377,7 @@ export function App() {
             <span className="hide-sm">New collection</span>
           </button>
         )}
-        <button className="icon-btn" title="Settings" aria-label="Settings" onClick={() => openSettings("defaults")}>
+        <button className="icon-btn" title="Settings" aria-label="Settings" onClick={() => openSettings(GENERAL)}>
           <Icon name="gear" className="lg" />
         </button>
       </header>

@@ -138,16 +138,19 @@ export function useSettings() {
   };
 }
 
-/** The Settings tab for how the studio looks in this browser. */
+/** The Settings tab Settings opens on: the theme, the language, and how
+ * collections are named and drawn. */
+export const GENERAL = "general";
+
+/** The old Appearance tab's id; a link to it opens General, where the theme is. */
 export const APPEARANCE = "appearance";
 
 /** The tab ids the app links to, with their labels for while the settings are
  * still on their way. The server's `tab_info` is the authority. */
 export const TAB_LABELS: [string, string][] = [
-  [APPEARANCE, "Appearance"],
+  [GENERAL, "General"],
   ["defaults", "Generation defaults"],
   ["voices", "Voices"],
-  ["language", "Language"],
   ["conversation", "Live conversation"],
   ["costs", "Costs & limits"],
   ["models", "Models"],
@@ -157,6 +160,7 @@ export const TAB_LABELS: [string, string][] = [
 export function tabGlyph(id: string): string {
   return (
     {
+      [GENERAL]: "circle-half",
       [APPEARANCE]: "circle-half",
       defaults: "sliders",
       voices: "people",
@@ -171,15 +175,16 @@ export function tabGlyph(id: string): string {
 /** "Settings › Voices": a link that opens Settings on that tab. */
 export function SettingsLink({ tab, text }: { tab: string; text?: string }) {
   const s = useStore(SETTINGS);
+  const id = tab === APPEARANCE || tab === "language" ? GENERAL : tab;
   const label =
-    s.doc.tab_info.find((t) => t.id === tab)?.label ??
-    TAB_LABELS.find((t) => t[0] === tab)?.[1] ??
+    s.doc.tab_info.find((t) => t.id === id)?.label ??
+    TAB_LABELS.find((t) => t[0] === id)?.[1] ??
     "Settings";
   return (
     <button
       className="link-btn set-link"
       title={`Open Settings on ${label}`}
-      onClick={() => openSettings(tab)}
+      onClick={() => openSettings(id)}
     >
       {text ?? `Settings › ${label}`}
     </button>
