@@ -444,3 +444,14 @@ It passed the PDF verbatim test, the scan, tracked changes, text boxes, lists an
   - shares, the Discover feed and Reuse (migration 0005).
 - **Gates:** 290 server tests and 75 web tests pass. The first screen is 134.5 KB; the collection page loads only when a collection is opened.
 - **Not ported yet:** builds (jobs, the script, slides and narration), the chat agent stream and its `/` commands on the server, the player, and voice.
+
+### 2026-10-05: the rest of the server, and production
+
+- **Chat:** Ask runs on the server. The agent loop, its tools and the `/` commands are ported, and `start_build` starts the job itself; the web app only sends what was typed and draws the events. The conversation is kept on the server.
+- **Voice:** spoken questions during playback are answered by the narrator who was interrupted. Silence is caught by Silero (bundled, MIT) before any model call, so it is never billed.
+- **Jobs:** collection naming and cover design run on the queue, one waiting run per collection.
+- **JSON-RPC adapter:** the 47 old methods are served at their old paths for one release, marked deprecated, so existing agents keep working.
+- **Community, beyond the old app:** Discover lists the items inside shared collections, which play or open in place. An author decides whether reused copies may be edited and shared again, and the original counts its reuses.
+- **Settings:** General is the first tab, where Settings opens. It holds the theme, the language, and how collections are named and drawn.
+- **Production:** Docker Compose with Caddy (`make up`), CI on every push, and Playwright tests of the main flows.
+- **Still to do:** a real build on real models and speech compared with the Rust app (phase 4), then removing `crates/` (phase 5).
