@@ -1,5 +1,6 @@
 import os
 
+import pytest
 from httpx import ASGITransport, AsyncClient
 
 from opennotebook.config import settings
@@ -42,3 +43,16 @@ async def test_keys_mode_asks_for_a_key() -> None:
     finally:
         os.environ["OPENNOTEBOOK_AUTH"] = "local"
         settings.cache_clear()
+
+
+def test_the_ai_key_is_read_under_the_old_names_too(monkeypatch: pytest.MonkeyPatch) -> None:
+    from opennotebook.config import Settings
+
+    for name in ("OPENNOTEBOOK_AI_API_KEY", "OPENNOTEBOOK_AI_KEY", "OPENROUTER_API_KEY"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("OPENROUTER_API_KEY", "or-key")
+    assert Settings().ai_key.get_secret_value() == "or-key"  # pyright: ignore[reportCallIssue]
+    monkeypatch.setenv("OPENNOTEBOOK_AI_KEY", "new-key")
+    assert Settings().ai_key.get_secret_value() == "new-key"  # pyright: ignore[reportCallIssue]
+    monkeypatch.setenv("OPENNOTEBOOK_AI_API_KEY", "old-key")
+    assert Settings().ai_key.get_secret_value() == "old-key"  # pyright: ignore[reportCallIssue]

@@ -9,7 +9,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import Field, SecretStr
+from pydantic import AliasChoices, Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -21,7 +21,14 @@ class Settings(BaseSettings):
     files_dir: Path = Path("./data/files")
 
     ai_base_url: str = "https://openrouter.ai/api/v1"
-    ai_key: SecretStr = SecretStr("")
+    # The names the Rust studio read still work: OPENNOTEBOOK_AI_API_KEY wins,
+    # then OPENNOTEBOOK_AI_KEY, then OPENROUTER_API_KEY.
+    ai_key: SecretStr = Field(
+        default=SecretStr(""),
+        validation_alias=AliasChoices(
+            "OPENNOTEBOOK_AI_API_KEY", "OPENNOTEBOOK_AI_KEY", "OPENROUTER_API_KEY"
+        ),
+    )
     embed_model: str = ""
 
     # How a request is tied to a person. `local` signs every request without a
