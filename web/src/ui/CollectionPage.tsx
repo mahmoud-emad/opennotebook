@@ -33,20 +33,8 @@ import {
   type CollectionSummary,
   type SessionSummary,
 } from "./api";
-import { buildOutput, estimateOutput, researchTopic, said, type BuildReq } from "./api-studio";
-import {
-  AskTab,
-  THREAD_ID,
-  askSources,
-  clearChat,
-  exchange,
-  helpText,
-  parseCommand,
-  send,
-  servedCommand,
-  useChatState,
-  type ChatState,
-} from "./chat";
+import { buildOutput, estimateOutput, researchTopic, type BuildReq, type Picks } from "./api-studio";
+import { AskTab, THREAD_ID, askSources, send, useChatState, type ChatState, type ChatMade } from "./chat";
 import { CostDialog, LimitNote, anyUnpriced, countShort, usd, usdRange, usdRangeSpoken, type Estimate } from "./dialogs";
 import { Cover, collTitle, coverPending } from "./home";
 import { Icon } from "./Icon";
@@ -243,9 +231,6 @@ function pageState(props: CollectionPageProps) {
     est: store<Estimate | null>(null),
     estErr: store(""),
     estLoading: store(false),
-    // A build the agent asked for while another was starting: started as soon
-    // as that one is submitted.
-    queued: store<[Output, string | null] | null>(null),
   };
 }
 
@@ -596,86 +581,51 @@ function pageActions(cid: string, S: PageState, chat: ChatState) {
     S.estLoading.set(false);
   };
 
-  // Something to make, asked for in the chat: by the agent, or by a slash
-  // command. A deck or audio overview already starting is not dropped: the
-  // new one is queued, and starts the moment the first has been submitted.
-  const make = (kind: Output, named: string | null) => {
-    if (!isBuild(kind)) generate(kind);
-    else if (S.generating.get()) {
-      S.queued.set([kind, named]);
-      chat.msgs.set((v) => [
-        ...v,
-        said("Studio", "Another build is starting; this one follows as soon as it has been submitted.", false),
-      ]);
-    } else void generateBuild(kind, named);
+  // What the page has picked, for what the chat makes when the person does
+  // not say: the tile chosen, and its style or format and length.
+  const picks = (): Picks => {
+    const o = S.chosen.get();
+    return {
+      output: o ?? "",
+      style: S.style.get(),
+      audio_format: S.audioFormat.get() as Picks["audio_format"],
+      audio_length: S.audioLength.get() as Picks["audio_length"],
+    };
   };
 
+  // Something the server made or started from the chat, by the agent or a
+  // slash command: shown the way the Studio's Generate shows it. A deck or an
+  // audio overview is on the outputs list in the Studio; a map or notes open
+  // beside it, unless something else was opened while they were made.
+  const made = (before: Open | null) => (m: ChatMade) => {
+    S.chosen.set(null);
+    if (isBuild(m.kind)) {
+      S.audioFocus.set("");
+      S.tab.set("studio");
+      void load();
+      return;
+    }
+    void (async () => {
+      if (m.kind === "mindmap") await loadMaps(cid, S.mm);
+      else await loadNotes(cid, S.nt);
+      if (m.id !== "" && sameOpen(props().open, before))
+        props().onOpen({ kind: m.kind === "mindmap" ? "map" : "notes", id: m.id });
+    })();
+  };
+
+  // A message or a `/` command: the server does the work and keeps the turn.
   const sendChat = async (text: string) => {
     if (chat.talking.get()) return;
-    // A slash command: the makers, help and clear run here; search and
-    // research go to the server as commands, and so does any command the
-    // server lists that this page does not know.
-    const p = parseCommand(text);
-    let command: { name: string; arg: string } | undefined;
-    if (p && "unknown" in p) {
-      if (!servedCommand(p.unknown)) {
-        exchange(chat, text, `There is no /${p.unknown} command. Type / to see the ones there are.`);
-        return;
-      }
-      command = { name: p.unknown, arg: text.trim().slice(1 + p.unknown.length).trim() };
-    } else if (p) {
-      const { cmd, arg } = p;
-      if (cmd === "help") return exchange(chat, text, helpText());
-      if (cmd === "clear") return clearChat(chat);
-      if (cmd === "ask") {
-        if (arg === "") exchange(chat, text, "Ask what? Type the question after /ask.");
-        else await askSources(chat, arg);
-        return;
-      }
-      if (cmd === "search" || cmd === "research") command = { name: cmd, arg };
-      else {
-        const kind = cmd.make;
-        const n = staged(S.srcs.get()).length;
-        const label = outputLabel[kind].toLowerCase();
-        if (n === 0) {
-          exchange(
-            chat,
-            text,
-            `I make ${label} from your sources, and there are none yet. Add a link or a ` +
-              "file on the left, or try `/search` and a topic.",
-          );
-          return;
-        }
-        // What follows the name: the deck's title, or what the others
-        // should focus on.
-        let named: string | null = null;
-        if (arg !== "") {
-          if (kind === "session") named = arg;
-          else if (kind === "audio") S.audioFocus.set(arg);
-          else if (kind === "mindmap") S.mm.focus.set(arg);
-          else S.nt.focus.set(arg);
-        }
-        const sources = n === 1 ? "your source" : `your ${n} sources`;
-        const where = isBuild(kind)
-          ? "It appears in the Studio tab and takes a few minutes."
-          : "It opens beside the chat when it is ready.";
-        exchange(chat, text, `Making ${label} from ${sources}. ${where}`);
-        make(kind, named);
-        return;
-      }
-    }
     const changed = await send(
       chat,
       text,
+      picks(),
       // A page the agent read: a source row at once.
       (s) => {
         if (s.icon !== "") icons.set(s.url, s.icon);
         pushSrc(s);
       },
-      // The agent asked for something to be made: made the way the Studio's
-      // Generate makes it.
-      make,
-      command,
+      made(props().open),
     );
     if (changed) {
       await loadSources();
@@ -688,7 +638,7 @@ function pageActions(cid: string, S: PageState, chat: ChatState) {
   const askFromMap = async (question: string) => {
     if (question.trim() === "" || chat.talking.get()) return;
     S.tab.set("ask");
-    await askSources(chat, question);
+    await askSources(chat, question, picks());
   };
 
   const mount = () => {
@@ -842,18 +792,10 @@ export function CollectionPage(props: CollectionPageProps) {
   const est = useStore(S.est);
   const estErr = useStore(S.estErr);
   const estLoading = useStore(S.estLoading);
-  const queued = useStore(S.queued);
 
   // The sources a build would read: on the server, not being read, not failed.
   const stagedNow = useMemo(() => staged(srcs), [srcs]);
   const nSrc = stagedNow.length;
-
-  // A build asked for while another was starting, started once it is in.
-  useEffect(() => {
-    if (generating || queued === null) return;
-    S.queued.set(null);
-    void A.generateBuild(queued[0], queued[1]);
-  }, [A, S, generating, queued]);
 
   // Priced again when what would be made changes: an estimate for a
   // different build is worse than none. A change in Settings (slides,
@@ -1507,7 +1449,7 @@ function Options({
         <p className="lang-chip">
           <Icon name="translate" />
           {build ? `Writing in ${language} · voices are English. ` : `Writing in ${language}. `}
-          <SettingsLink tab="language" />
+          <SettingsLink tab="general" text="Settings › General" />
         </p>
       )}
       {k === "session" && (

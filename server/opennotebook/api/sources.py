@@ -9,14 +9,18 @@ from fastapi import APIRouter, BackgroundTasks, File, UploadFile
 from pydantic import BaseModel, Field, HttpUrl
 from sqlalchemy import delete, select
 
-from opennotebook import jobs, storage
-from opennotebook.api.deps import Db, Me, not_yet
+from opennotebook import jobs, research, storage
+from opennotebook.ai import ledger
+from opennotebook.ai.errors import AiError
+from opennotebook.api.deps import Db, Me
 from opennotebook.api.sessions import JobOut
 from opennotebook.db.models import Source
 from opennotebook.domain import collections, refresh, sources
+from opennotebook.domain import settings as config
 from opennotebook.errors import Problem, not_found
 from opennotebook.jobs.app import WORK_QUEUE
 from opennotebook.jobs.tasks import RESEARCH_TASK
+from opennotebook.script.errors import problem
 
 router = APIRouter(prefix="/api", tags=["sources"])
 
@@ -96,7 +100,7 @@ async def add_sources(
             src = await sources.add_note(s, me.id, cid, body.text, body.title)
         except sources.Refused as e:
             raise Problem(422, str(e)) from e
-        refresh.after_commit(s, me.id, cid)
+        await refresh.schedule(s, me.id, cid)
         return [AddResult(url="", ok=True, source=SourceOut.of(src), error="")]
     await collections.summary(s, me.id, cid)
     out: list[AddResult] = []
@@ -108,7 +112,7 @@ async def add_sources(
             except sources.Refused as e:
                 out.append(AddResult(url=u, ok=False, error=str(e)))
     if any(r.ok for r in out):
-        refresh.after_commit(s, me.id, cid)
+        await refresh.schedule(s, me.id, cid)
     return out
 
 
@@ -132,7 +136,7 @@ async def add_files(
         except sources.Refused as e:
             out.append(AddResult(url="", ok=False, error=str(e)))
     if any(r.ok for r in out):
-        refresh.after_commit(s, me.id, cid)
+        await refresh.schedule(s, me.id, cid)
     return out
 
 
@@ -165,13 +169,23 @@ async def remove_source(cid: uuid.UUID, name: str, s: Db, me: Me, after: Backgro
     if gone.file_path:
         after.add_task(storage.remove_file, gone.file_path)
     await collections.touch(s, cid)
-    refresh.after_commit(s, me.id, cid)
+    await refresh.schedule(s, me.id, cid)
 
 
 @router.post("/search")
-async def web_search(body: SearchReq, me: Me) -> list[WebHit]:
-    """Search the web. Nothing is added: pass the best links to add_sources."""
-    raise not_yet()
+async def web_search(body: SearchReq, s: Db, me: Me) -> list[WebHit]:
+    """Search the web. Nothing is added: pass the best links to add_sources.
+    A few seconds; charged to the person like any model call."""
+    query = body.query.strip()
+    if not query:
+        raise Problem(422, "The search is empty. Write what to look for, then search again.")
+    model = await config.value(s, me.id, config.SEARCH_MODEL_KEY)
+    try:
+        async with ledger.spending(me.id, "web_search"):
+            hits = await research.web_search(model, query)
+    except AiError as e:
+        raise problem(e) from e
+    return [WebHit(title=h.title, url=h.url, snippet=h.snippet) for h in hits]
 
 
 @router.post("/collections/{cid}/research", status_code=202)

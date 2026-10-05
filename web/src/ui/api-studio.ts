@@ -341,18 +341,42 @@ export async function listCommands(): Promise<Rest.Command[]> {
   return call<Rest.Command[]>("GET", "/commands");
 }
 
+/** What the page has picked, which the server uses for whatever the person
+ * does not say: the kind to make, a deck's style, an audio overview's format
+ * and length. */
+export type Picks = {
+  output: "" | "session" | "audio" | "mindmap" | "notes";
+  style?: string;
+  audio_format?: Rest.Say["audio_format"];
+  audio_length?: Rest.Say["audio_length"];
+};
+
 /** One turn: the events of the answer as they arrive (`thinking`, `step`,
- * `step_note`, `step_done`, `source`, `reply`, `state`). */
-export function chatSay(cid: string, text: string, onEvent: (v: Record<string, unknown>) => void): Promise<void> {
-  return postStream(`/collections/${enc(cid)}/chat`, { text } satisfies Rest.Say, onEvent);
+ * `step_note`, `step_done`, `source`, `reply`, `build`, `state`). The server
+ * does the work, starts what is asked for, and keeps the turn. */
+export function chatSay(
+  cid: string,
+  text: string,
+  picks: Picks,
+  onEvent: (v: Record<string, unknown>) => void,
+): Promise<void> {
+  return postStream(`/collections/${enc(cid)}/chat`, { ...picks, text } satisfies Rest.Say, onEvent);
 }
 
-/** A `/` command run by the server, answering with the same events. */
+/** A `/` command run by the server, answering with the same events; `/clear`
+ * answers `cleared`. `said` is what the conversation keeps as said, when it
+ * is not the command as typed (a question asked from a mind map). */
 export function chatCommand(
   cid: string,
   name: string,
   arg: string,
+  picks: Picks,
   onEvent: (v: Record<string, unknown>) => void,
+  said = "",
 ): Promise<void> {
-  return postStream(`/collections/${enc(cid)}/chat/commands`, { name, arg } satisfies Rest.RunCommand, onEvent);
+  return postStream(
+    `/collections/${enc(cid)}/chat/commands`,
+    { ...picks, name, arg, text: said } satisfies Rest.RunCommand,
+    onEvent,
+  );
 }

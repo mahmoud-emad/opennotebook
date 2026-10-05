@@ -10,8 +10,9 @@ import {
   chatHistory,
   chatSay,
   listCommands,
-  said,
+  said as said_,
   type Msg,
+  type Picks,
 } from "./api-studio";
 import { readable } from "./errors";
 import { Icon } from "./Icon";
@@ -26,7 +27,7 @@ export type { Msg } from "./api-studio";
 /** The Ask tab's opening line. */
 export function greeting(): Msg[] {
   return [
-    said(
+    said_(
       "Studio",
       "**Ask me anything about your sources.**\n\n" +
         "I answer from what is on the left and cite it. I can find pages on a " +
@@ -40,12 +41,6 @@ export function greeting(): Msg[] {
 
 // ── slash commands ───────────────────────────────────────────────────────────
 
-/** What a slash command does: make one of the four outputs from the sources
- * at once; find pages on a topic (the agent's job); research a topic in depth
- * (the agent's too); answer a question from the sources with citations; say
- * what the studio can do, without a model call; or clear the conversation. */
-export type Cmd = { make: Output } | "search" | "research" | "ask" | "help" | "clear";
-
 /** One entry of the `/` menu, as the server lists it. */
 export type MenuCommand = {
   name: string;
@@ -55,34 +50,16 @@ export type MenuCommand = {
   icon: string;
 };
 
-export type Command = MenuCommand & { cmd: Cmd };
-
-/** Every command, in the order the menu lists them. The makers come first:
- * they are what the person came for. The server's `/api/commands` lists the
- * same, and is the menu once it has answered. */
-export const COMMANDS: Command[] = [
-  { name: "slides", arg: "[title]", label: "Build narrated slides", icon: "easel", cmd: { make: "session" } },
-  { name: "audio", arg: "[focus]", label: "Make an audio overview", icon: "soundwave", cmd: { make: "audio" } },
-  { name: "mindmap", arg: "[focus]", label: "Make a mind map", icon: "diagram-3", cmd: { make: "mindmap" } },
-  { name: "notes", arg: "[focus]", label: "Make study notes", icon: "journal-text", cmd: { make: "notes" } },
-  { name: "search", arg: "<topic>", label: "Find sources on the web", icon: "search", cmd: "search" },
-  { name: "research", arg: "<topic>", label: "Research a topic in depth", icon: "stars", cmd: "research" },
-  { name: "ask", arg: "<question>", label: "Ask your sources, with citations", icon: "chat-dots", cmd: "ask" },
-  { name: "help", arg: "", label: "What I can do", icon: "info-circle", cmd: "help" },
-  { name: "clear", arg: "", label: "Clear the conversation", icon: "trash", cmd: "clear" },
-];
-
-/** A message as a command: null when it is not one, `{ unknown }` for a name
- * no command has, else the command and what followed it. */
-export function parseCommand(text: string): null | { unknown: string } | { cmd: Cmd; arg: string } {
+/** A message as a command: null when it is not one, else the name typed
+ * (lowercased) and what followed it. What a command does, and the answer to
+ * one that does not exist, are the server's. */
+export function splitCommand(text: string): { name: string; arg: string } | null {
   const t = text.trim();
   if (!t.startsWith("/")) return null;
   const rest = t.slice(1);
   const m = /\s/.exec(rest);
   const name = (m ? rest.slice(0, m.index) : rest).toLowerCase();
-  const arg = m ? rest.slice(m.index + 1) : "";
-  const c = COMMANDS.find((c) => c.name === name);
-  return c ? { cmd: c.cmd, arg: arg.trim() } : { unknown: name };
+  return { name, arg: m ? rest.slice(m.index + 1).trim() : "" };
 }
 
 /** The commands the box's text so far could be: while it is a `/` and a name
@@ -95,49 +72,32 @@ export function commandMatches<T extends MenuCommand>(text: string, list: T[]): 
   return list.filter((c) => c.name.startsWith(low));
 }
 
-/** The `/help` answer: everything the studio does, from the same list the
- * menu shows. */
-export function helpText(list: MenuCommand[] = COMMANDS): string {
-  let s =
-    "**What I can do**\n\n" +
-    "Everything I make comes from the sources on the left. Add your own " +
-    "links and files there, paste a link here, or let me find pages.\n\n";
-  for (const c of list) s += `- \`/${c.name}${c.arg === "" ? "" : ` ${c.arg}`}\` — ${c.label}\n`;
-  return s + "\nOr just tell me what you want to learn, and say build when you are happy with the sources.";
-}
-
 /** The output a `build` event names, by its wire name. */
 export function outputFromWire(w: string): Output {
   return OUTPUTS.find((k) => k === w) ?? "session";
 }
 
-// The server's menu, read once per page load. Until it answers, and if it
-// cannot, the built-in list is the menu.
+// The server's menu, read once per page load and shared by every box. Until
+// it answers the menu is empty; a `/` typed meanwhile still goes to the
+// server, which answers it.
 let served: Promise<MenuCommand[]> | null = null;
-let servedNow: MenuCommand[] | null = null;
 function servedCommands(): Promise<MenuCommand[]> {
-  served ??= listCommands().then(
-    (l) => {
-      servedNow = l.length > 0 ? l : null;
-      return servedNow ?? COMMANDS;
-    },
-    () => COMMANDS,
-  );
+  served ??= listCommands().catch((e: unknown) => {
+    served = null;
+    throw e;
+  });
   return served;
 }
 
-/** Whether the server runs a command of this name, for one this page does
- * not know itself. */
-export function servedCommand(name: string): boolean {
-  return !!servedNow?.some((c) => c.name === name);
-}
-
-/** The `/` menu: the server's list once it has answered. */
+/** The `/` menu, as the server lists it. */
 export function useCommands(): MenuCommand[] {
-  const [list, setList] = useState<MenuCommand[]>(COMMANDS);
+  const [list, setList] = useState<MenuCommand[]>([]);
   useEffect(() => {
     let live = true;
-    void servedCommands().then((l) => live && setList(l));
+    servedCommands().then(
+      (l) => live && setList(l),
+      () => undefined,
+    );
     return () => {
       live = false;
     };
@@ -215,6 +175,7 @@ export function useChatState(cid: string): ChatState {
 }
 
 const push = (st: ChatState, ...m: Msg[]) => st.msgs.set((v) => [...v, ...m]);
+const mine = (text: string) => said_("You", text, true);
 
 /** Change the newest step line with this id. */
 function updateStep(st: ChatState, id: string, f: (m: Msg) => Msg): void {
@@ -227,13 +188,6 @@ function updateStep(st: ChatState, id: string, f: (m: Msg) => Msg): void {
   });
 }
 
-/** Something said and answered here, without the agent: a command's echo and
- * the studio's word on it. */
-export function exchange(st: ChatState, mine: string, reply: string): void {
-  st.stick.set(true);
-  push(st, said("You", mine, true), said("Studio", reply, false));
-}
-
 /** Clear the conversation, here and on the server. */
 export function clearChat(st: ChatState): void {
   st.msgs.set(greeting());
@@ -244,26 +198,34 @@ const str = (v: unknown) => (typeof v === "string" ? v : "");
 const citesOf = (v: unknown): Cite[] =>
   Array.isArray(v) ? v.map(citeFrom).filter((c): c is Cite => c !== null) : [];
 
-/** One turn with the agent: what was said goes up, and its work comes back
- * line by line. A page it reads goes to `onSource`, what it asks to be made
- * to `onBuild`. A `command` runs that `/` command on the server instead of
- * the text. True when it changed the collection, so the caller reads it back. */
+/** What a turn made: a deck or audio overview started, or a map or notes
+ * made, by the server. */
+export type ChatMade = { kind: Output; id: string; title: string };
+
+/** One turn: what was said goes up, and the server's work comes back line by
+ * line. A message starting with `/` runs that command on the server; `said`
+ * is what is shown and kept as said, when it is not the text (a question
+ * asked from a mind map). A page read goes to `onSource`, what was started
+ * or made to `onMade`. True when it changed the collection, so the caller
+ * reads it back. */
 export async function send(
   st: ChatState,
   text: string,
+  picks: Picks,
   onSource: (s: Src) => void,
-  onBuild: (kind: Output, named: string | null) => void,
-  command?: { name: string; arg: string },
+  onMade: (m: ChatMade) => void,
+  said = "",
 ): Promise<boolean> {
+  const shown = said.trim() === "" ? text : said;
   if (text.trim() === "" || st.talking.get()) return false;
   st.stick.set(true);
-  push(st, said("You", text, true));
+  push(st, mine(shown));
   st.talking.set(true);
   st.thinking.set(true);
   let changed = false;
   const onEvent = (v: Record<string, unknown>) => {
     const t = str(v.t);
-    const said_ = str(v.text);
+    const text_ = str(v.text);
     switch (t) {
       case "thinking":
         st.thinking.set(true);
@@ -271,7 +233,7 @@ export async function send(
       case "step":
         st.thinking.set(false);
         push(st, {
-          ...said("Studio", said_, false),
+          ...said_("Studio", text_, false),
           kind: "step",
           id: str(v.id),
           detail: str(v.detail),
@@ -283,36 +245,41 @@ export async function send(
         const failed = t === "step_done" && v.ok !== true;
         updateStep(st, str(v.id), (m) => ({
           ...m,
-          // A failed step's result is the server's error: said in words.
-          note: failed ? readable(said_) : said_,
+          // The server words its failures; an old wording is put in words.
+          note: failed ? readable(text_) : text_,
           status: t === "step_done" ? (failed ? "bad" : "ok") : m.status,
         }));
         break;
       }
       case "source": {
         changed = true;
-        const s = v.src ?? v.source;
+        const s = v.src;
         if (s && typeof s === "object") onSource(srcFrom(s as Record<string, unknown>));
         break;
       }
       case "reply":
         st.thinking.set(false);
-        push(st, { ...said("Studio", said_, false), cites: citesOf(v.citations) });
+        push(st, { ...said_("Studio", text_, false), cites: citesOf(v.citations) });
         break;
       case "build":
-        onBuild(outputFromWire(str(v.kind)), str(v.title) || null);
+        changed = true;
+        onMade({ kind: outputFromWire(str(v.kind)), id: str(v.id), title: str(v.title) });
         break;
       case "state":
         // The collection changed under the turn: read it back after.
         changed = true;
         break;
+      case "cleared":
+        st.msgs.set(greeting());
+        break;
     }
   };
   try {
-    if (command) await chatCommand(st.cid, command.name, command.arg, onEvent);
-    else await chatSay(st.cid, text, onEvent);
+    const cmd = splitCommand(text);
+    if (cmd) await chatCommand(st.cid, cmd.name, cmd.arg, picks, onEvent, said);
+    else await chatSay(st.cid, text, picks, onEvent);
   } catch (e) {
-    push(st, said("Studio", `I could not answer. ${readable(errText(e))}`, false));
+    push(st, said_("Studio", `I could not answer. ${readable(errText(e))}`, false));
   }
   st.thinking.set(false);
   st.talking.set(false);
@@ -320,46 +287,10 @@ export async function send(
 }
 
 /** A question answered from the sources with citations, in the conversation.
- * The `/ask` command rather than the agent, so a click on a map topic always
- * gets a grounded answer. */
-export async function askSources(st: ChatState, question: string): Promise<void> {
-  if (question.trim() === "" || st.talking.get()) return;
-  st.stick.set(true);
-  push(st, said("You", question, true));
-  st.talking.set(true);
-  const id = `mm${Date.now()}`;
-  push(st, { ...said("Studio", "Reading your sources", false), kind: "step", id, status: "run" });
-  const got: { text?: string; cites?: Cite[] } = {};
-  let err = "";
-  try {
-    await chatCommand(st.cid, "ask", question, (v) => {
-      if (v.t === "reply") {
-        got.text = str(v.text);
-        got.cites = citesOf(v.citations);
-      }
-    });
-    if (got.text === undefined) err = "No answer came back. Try again.";
-  } catch (e) {
-    err = errText(e);
-  }
-  const cites = got.cites ?? [];
-  updateStep(st, id, (m) =>
-    err === ""
-      ? {
-          ...m,
-          status: "ok",
-          note:
-            cites.length === 0
-              ? "no passage cited"
-              : cites.length === 1
-                ? "1 passage cited"
-                : `${cites.length} passages cited`,
-        }
-      : { ...m, status: "bad", note: err },
-  );
-  if (err === "") push(st, { ...said("Studio", got.text ?? "", false), cites });
-  else push(st, said("Studio", `I could not read the sources. ${err}`, false));
-  st.talking.set(false);
+ * The server's `/ask` rather than the agent, so a click on a map topic always
+ * gets a grounded answer; the question is shown as it was asked. */
+export function askSources(st: ChatState, question: string, picks: Picks): Promise<boolean> {
+  return send(st, `/ask ${question.trim()}`, picks, () => undefined, () => undefined, question);
 }
 
 // ── the tab ──────────────────────────────────────────────────────────────────
