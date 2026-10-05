@@ -3,7 +3,6 @@ import type * as Rest from "@/client/types.gen";
 import {
   captionAt,
   captionParts,
-  displayName,
   doneMs,
   extendMs,
   fills,
@@ -24,7 +23,6 @@ import {
   tocLine,
   totalMs,
   transcript,
-  voiceName,
   type Msg,
 } from "./playerModel";
 import { sseFrames } from "./sse";
@@ -43,12 +41,14 @@ function detail(over: Partial<Rest.SessionDetail> = {}): Rest.SessionDetail {
     collection_id: "c1",
     kind: "slides",
     title: "Reefs",
+    display_title: "Reefs",
     description: "",
     state: "ready",
     failure: null,
     parts: 2,
     speakers: 2,
     audio_format: "",
+    audio_label: "",
     duration_ms: 0,
     pinned: false,
     spent_usd: null,
@@ -59,6 +59,9 @@ function detail(over: Partial<Rest.SessionDetail> = {}): Rest.SessionDetail {
       { speaker_id: "a", voice_id: "af_bella", display_name: "Host" },
       { speaker_id: "b", voice_id: "am_adam", display_name: "Dr Reef" },
     ],
+    // What to call them, as the server says: a role word gives way to the
+    // voice's own name.
+    speaker_names: { a: "Bella", b: "Dr Reef" },
     // Out of order on purpose: the player sorts by ordinal.
     slides: [
       { ordinal: 1, title: "", aspect: { width: 1376, height: 768 }, lines: [line("s1l0", "a", 3000)] },
@@ -87,8 +90,11 @@ describe("the session", () => {
 
   it("is an audio overview by its kind or its audio", () => {
     expect(doc.audio).toBeNull();
-    expect(sessionOf(detail({ kind: "audio" })).audio).toEqual({ format: "" });
-    expect(sessionOf(detail({ audio: { format: "debate" } })).audio).toEqual({ format: "debate" });
+    expect(sessionOf(detail({ kind: "audio" })).audio).toEqual({ format: "", label: "" });
+    expect(sessionOf(detail({ audio: { format: "debate" }, audio_label: "Debate" })).audio).toEqual({
+      format: "debate",
+      label: "Debate",
+    });
   });
 
   it("reads what the build left out as the gap it is", () => {
@@ -101,14 +107,11 @@ describe("the session", () => {
     });
   });
 
-  it("calls a speaker with only a role by their voice", () => {
-    expect(voiceName("af_bella")).toBe("Bella");
-    expect(voiceName("en-US-AvaMultilingualNeural")).toBe("Ava");
-    expect(voiceName("en-GB-RyanNeural")).toBe("Ryan");
-    expect(voiceName("")).toBe("");
-    expect(displayName({ display_name: "Host", voice_id: "af_bella" })).toBe("Bella");
-    expect(displayName({ display_name: "Dr Reef", voice_id: "am_adam" })).toBe("Dr Reef");
-    expect(displayName({ display_name: "Speaker 2", voice_id: "" })).toBe("Speaker 2");
+  it("calls each speaker what the server says to", () => {
+    expect(doc.speakers.map((sp) => sp.name)).toEqual(["Bella", "Dr Reef"]);
+    // A speaker the server named nothing keeps the name they were given.
+    const bare = sessionOf(detail({ speaker_names: {} }));
+    expect(bare.speakers.map((sp) => sp.name)).toEqual(["Host", "Dr Reef"]);
   });
 
   it("says what it is in one line", () => {

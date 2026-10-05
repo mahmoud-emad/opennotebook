@@ -397,7 +397,8 @@ async def session_build(c: Ctx, p: SessionBuildIn) -> dict[str, Any]:
 async def session_estimate(c: Ctx, p: SessionBuildIn) -> dict[str, Any]:
     cid = _build_target(p.req.sid, p.req.collection)
     est = await sessions_api.estimate(cid, _build_of(p.req), c.s, c.me)
-    return est.model_dump(mode="json")
+    # The old shape: the model and the facts came later, with the REST API.
+    return est.model_dump(mode="json", exclude={"model", "facts"})
 
 
 @method("session", "session_prepare", SessionPrepareIn)
@@ -991,7 +992,7 @@ async def mindmap_create(c: Ctx, p: MakeIn) -> dict[str, Any]:
 async def mindmap_estimate(c: Ctx, p: SidParam) -> dict[str, Any]:
     cid = _id(p.sid, "That collection")
     # The old shape: the limit fields came later, with the REST API.
-    return (await mindmaps_api.estimate_mindmap(cid, c.s, c.me)).model_dump(
+    return (await mindmaps_api.one_call(c.s, c.me.id, cid)).model_dump(
         exclude={"limit_usd", "over_limit"}
     )
 
@@ -1096,7 +1097,7 @@ async def notes_create(c: Ctx, p: MakeIn) -> dict[str, Any]:
 async def notes_estimate(c: Ctx, p: SidParam) -> dict[str, Any]:
     cid = _id(p.sid, "That collection")
     # The old shape: the limit fields came later, with the REST API.
-    return (await notes_api.estimate_notes(cid, c.s, c.me)).model_dump(
+    return (await notes_api.one_call(c.s, c.me.id, cid)).model_dump(
         exclude={"limit_usd", "over_limit"}
     )
 
@@ -1187,4 +1188,9 @@ async def settings_set(c: Ctx, p: SettingSetIn) -> dict[str, Any]:
 
 @method("settings", "styles_list", NoParams)
 async def styles_list(c: Ctx, _: NoParams) -> dict[str, Any]:
-    return {"styles": [x.model_dump() for x in await settings_api.list_styles(c.me)]}
+    # The old shape: the pictures came later, with the REST API.
+    return {
+        "styles": [
+            x.model_dump(exclude={"thumbnail"}) for x in await settings_api.list_styles(c.me)
+        ]
+    }

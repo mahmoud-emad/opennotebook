@@ -8,7 +8,19 @@
 // error.
 
 import type * as Rest from "@/client/types.gen";
-import { apiBase, call, enc, postStream, serviceRoot, sessionOf, type SessionSummary } from "./api";
+import {
+  apiBase,
+  call,
+  enc,
+  errText,
+  isAbort,
+  isGone,
+  postStream,
+  serviceRoot,
+  sessionOf,
+  sleep,
+  type SessionSummary,
+} from "./api";
 import type { Estimate } from "./dialogs";
 import { ms, num, str } from "./helpers";
 import { citeFrom, type Cite } from "./cite";
@@ -73,31 +85,16 @@ function estimateOf(v: Record<string, unknown>): Estimate {
     minutes: num(v.minutes),
     limit_usd: num(v.limit_usd),
     over_limit: v.over_limit === true,
+    model: str(v.model),
+    facts: Array.isArray(v.facts) ? v.facts.map(str) : [],
   };
 }
 
-/** What a retry of a failed output keeps from it. */
-export type SessionFacts = {
-  title: string;
-  collection: string;
-  style: string | null;
-  /** Slides of a deck, as far as its outline got; 0 for none. */
-  slides: number;
-  speakers: number;
-  audio: { format: string; length: string; focus: string } | null;
-};
-
-export async function getSession(sid: string): Promise<SessionFacts> {
-  const d = await call<Rest.SessionDetail>("GET", `/sessions/${enc(sid)}`);
-  const a = d.audio;
-  return {
-    title: d.title,
-    collection: d.collection_id,
-    style: d.style ?? null,
-    slides: d.slides.length,
-    speakers: d.speakers,
-    audio: a ? { format: str(a.format), length: str(a.length), focus: str(a.focus) } : null,
-  };
+/** Make a failed output again with the options it was made with. One step on
+ * the server: the new one starts and the failed one goes, or, refused, the
+ * failed one stays with its reason. Answers with the new one's row. */
+export async function retryOutput(sid: string): Promise<SessionSummary> {
+  return sessionOf(await call<Rest.SessionSummary>("POST", `/sessions/${enc(sid)}/retry`));
 }
 
 export async function sessionRetitle(sid: string, title: string): Promise<void> {
@@ -118,11 +115,35 @@ export function playerUrl(sid: string): string {
   return `${serviceRoot()}/ui/play/${enc(sid)}`;
 }
 
+// ── what the Create panel offers ─────────────────────────────────────────────
+
+/** Everything the Create panel offers for a collection, as the server words
+ * it from the person's settings. */
+export type StudioOptions = Rest.StudioOptions;
+export type StyleChoice = Rest.StyleChoice;
+
+export async function studioOptions(cid: string, signal?: AbortSignal): Promise<StudioOptions> {
+  return call<StudioOptions>("GET", `/collections/${enc(cid)}/options`, undefined, { signal });
+}
+
+/** The slide styles, the default first, each with its picture. */
+export async function styleList(signal?: AbortSignal): Promise<StyleChoice[]> {
+  return call<StyleChoice[]>("GET", "/styles", undefined, { signal });
+}
+
+/** Where a file of the web app is, from its path under the app's mount: a
+ * style's picture. Under the mount, so it resolves on every page. */
+export function assetUrl(path: string): string {
+  return `${serviceRoot()}/ui/${path}`;
+}
+
 // ── mind maps ────────────────────────────────────────────────────────────────
 
 export type MindMapSummary = {
   id: string;
   title: string;
+  /** Its name as it is shown: "Untitled mind map" while it has none. */
+  display_title: string;
   focus: string;
   node_count: number;
   sources: string[];
@@ -131,41 +152,11 @@ export type MindMapSummary = {
 
 export type MindMap = MindMapSummary & { dropped: number; excerpted: boolean; root: MindNode };
 
-/** What a map or notes would cost: one call over the sources, two at most
- * when the first answer comes back too thin. */
-export type QuickEstimate = {
-  priced: boolean;
-  cost_usd: number;
-  cost_high_usd: number;
-  model: string;
-  input_tokens: number;
-  output_tokens: number;
-  sources: number;
-  chars: number;
-  /** The spending limit it is checked against; 0 when there is none. */
-  limit_usd: number;
-  over_limit: boolean;
-};
-
-function quickOf(v: Record<string, unknown>): QuickEstimate {
-  return {
-    priced: v.priced === true,
-    cost_usd: num(v.cost_usd),
-    cost_high_usd: num(v.cost_high_usd),
-    model: str(v.model),
-    input_tokens: num(v.input_tokens),
-    output_tokens: num(v.output_tokens),
-    sources: num(v.sources),
-    chars: num(v.chars),
-    limit_usd: num(v.limit_usd),
-    over_limit: v.over_limit === true,
-  };
-}
-
 function mapSummaryOf(m: Rest.MindMapSummary): MindMapSummary {
   return {
     id: m.id,
     title: m.title,
+    display_title: m.display_title,
     focus: m.focus,
     node_count: m.node_count,
     sources: m.sources,
@@ -192,8 +183,9 @@ export async function mindmapCreate(cid: string, focus: string): Promise<MindMap
   return mapOf(await call<Rest.MindMapOut>("POST", maps(cid), { focus } satisfies Rest.MakeReq));
 }
 
-export async function mindmapEstimate(cid: string, signal?: AbortSignal): Promise<QuickEstimate> {
-  return quickOf(await call<Record<string, unknown>>("GET", `${maps(cid)}/estimate`, undefined, { signal }));
+/** What a map would cost, itemised as a build's estimate is. */
+export async function mindmapEstimate(cid: string, signal?: AbortSignal): Promise<Estimate> {
+  return estimateOf(await call<Record<string, unknown>>("GET", `${maps(cid)}/estimate`, undefined, { signal }));
 }
 
 export async function mindmapRetitle(cid: string, id: string, title: string): Promise<void> {
@@ -209,6 +201,8 @@ export async function mindmapDelete(cid: string, id: string): Promise<void> {
 export type StudyNotesSummary = {
   id: string;
   title: string;
+  /** Its name as it is shown: "Untitled study notes" while it has none. */
+  display_title: string;
   focus: string;
   sources: string[];
   created_ms: number;
@@ -237,6 +231,7 @@ function notesSummaryOf(n: Rest.NotesSummary): StudyNotesSummary {
   return {
     id: n.id,
     title: n.title,
+    display_title: n.display_title,
     focus: n.focus,
     sources: n.sources,
     created_ms: ms(n.created_at),
@@ -279,8 +274,9 @@ export async function notesCreate(cid: string, focus: string): Promise<StudyNote
   return notesOf(await call<Rest.NotesOut>("POST", notes(cid), { focus } satisfies Rest.MakeReq));
 }
 
-export async function notesEstimate(cid: string, signal?: AbortSignal): Promise<QuickEstimate> {
-  return quickOf(await call<Record<string, unknown>>("GET", `${notes(cid)}/estimate`, undefined, { signal }));
+/** What notes would cost, itemised as a build's estimate is. */
+export async function notesEstimate(cid: string, signal?: AbortSignal): Promise<Estimate> {
+  return estimateOf(await call<Record<string, unknown>>("GET", `${notes(cid)}/estimate`, undefined, { signal }));
 }
 
 export async function notesRetitle(cid: string, id: string, title: string): Promise<void> {
@@ -294,9 +290,46 @@ export async function notesDelete(cid: string, id: string): Promise<void> {
 // ── research ─────────────────────────────────────────────────────────────────
 
 /** Research a topic in depth; the server adds the written report as one
- * source when it is done. Answers as soon as the work has started. */
-export async function researchTopic(cid: string, topic: string): Promise<void> {
-  await call("POST", `/collections/${enc(cid)}/research`, { topic } satisfies Rest.ResearchReq);
+ * source when it is done. Answers with the work as soon as it has started. */
+export async function researchTopic(cid: string, topic: string): Promise<Rest.JobOut> {
+  return call<Rest.JobOut>("POST", `/collections/${enc(cid)}/research`, { topic } satisfies Rest.ResearchReq);
+}
+
+/** A piece of background work as the server has it now. */
+export async function getJob(id: string, signal?: AbortSignal): Promise<Rest.JobOut> {
+  return call<Rest.JobOut>("GET", `/jobs/${enc(id)}`, undefined, { signal });
+}
+
+/** Follow background work until it ends, handing on what the server says it is
+ * doing (its step, or why it has not started) as that changes. Resolves to
+ * null once it is done, else to why it is not, in the server's words. A read
+ * that fails is tried again on the next; work that is gone (its collection
+ * was deleted) is said as such. Stops quietly, with null, when `signal`
+ * aborts. */
+export async function followJob(
+  id: string,
+  onSaid: (said: string) => void,
+  signal?: AbortSignal,
+  every = 2000,
+): Promise<string | null> {
+  let last = "";
+  for (;;) {
+    await sleep(every, signal);
+    if (signal?.aborted) return null;
+    let j: Rest.JobOut;
+    try {
+      j = await getJob(id, signal);
+    } catch (e) {
+      if (isAbort(e)) return null;
+      if (isGone(e)) return errText(e);
+      continue;
+    }
+    if (j.status === "done") return null;
+    if (j.status === "failed" || j.status === "cancelled")
+      return j.error ?? "It stopped before it finished. Try again.";
+    const said = j.waiting ?? j.step;
+    if (said !== last) onSaid((last = said));
+  }
 }
 
 // ── the Ask conversation ─────────────────────────────────────────────────────

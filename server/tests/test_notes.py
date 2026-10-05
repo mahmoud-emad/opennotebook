@@ -347,10 +347,25 @@ async def test_the_notes_estimate_prices_the_text_and_the_writing(
     await add_note(client, cid, MIMI)
     e = (await client.get(f"/api/collections/{cid}/notes/estimate")).json()
     chars = len(MOSHI) + len(MIMI)
-    assert e["sources"] == 2 and e["chars"] == chars and e["priced"]
-    assert (e["input_tokens"], e["output_tokens"]) == (tokens_in(chars), OUTPUT_TOKENS)
-    assert e["cost_usd"] == pytest.approx(tokens_in(chars) * PRICE_IN + OUTPUT_TOKENS * PRICE_OUT)
-    assert e["cost_high_usd"] == pytest.approx(2 * e["cost_usd"])
+    # Itemised the way a build's estimate is: one step, one or two calls.
+    assert e["sources"] == 2 and e["source_chars"] == chars
+    [line] = e["lines"]
+    assert (line["group"], line["step"], line["unpriced"]) == (
+        "Study notes",
+        "Write the study notes",
+        False,
+    )
+    assert (line["input_tokens"], line["output_tokens_typical"]) == (
+        tokens_in(chars),
+        OUTPUT_TOKENS,
+    )
+    assert (line["calls_typical"], line["calls_high"]) == (1, 2)
+    one = tokens_in(chars) * PRICE_IN + OUTPUT_TOKENS * PRICE_OUT
+    assert e["total_typical_usd"] == pytest.approx(one) == e["total_low_usd"]
+    assert e["total_high_usd"] == pytest.approx(2 * one)
+    assert line["price_in_per_million"] == pytest.approx(PRICE_IN * 1_000_000)
+    assert e["model"] == "google/gemini-2.5-flash-lite"
+    assert e["facts"] == [f"2 sources · {chars:,} characters", "by Gemini 2.5 Flash Lite"]
 
 
 async def test_a_source_that_is_not_there_writes_no_notes(

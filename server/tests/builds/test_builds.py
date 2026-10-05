@@ -39,6 +39,8 @@ ESTIMATE_KEYS = {
     "minutes",
     "limit_usd",
     "over_limit",
+    "model",
+    "facts",
 }
 LINE_KEYS = {
     "group",
@@ -102,6 +104,11 @@ async def test_the_estimate_is_the_shape_the_web_app_reads(
     assert any(ln["group"] == "Designing the slides" for ln in e["lines"])
     priced = next(ln for ln in e["lines"] if ln["step"] == "Outline")
     assert priced["price_in_per_million"] == pytest.approx(1.0)
+    # What it is made of, worded by the server for the cost dialog.
+    assert e["model"] == "anthropic/claude-haiku-4.5"
+    assert e["facts"][:3] == ["5 slides", "about 5 minutes", "2 voices"]
+    assert re.fullmatch(r"2 sources · [\d.k]+ characters", e["facts"][3])
+    assert e["facts"][4:] == ["Editorial style", "slides by Claude Haiku 4.5"]
 
     a = (
         await client.post(
@@ -110,6 +117,15 @@ async def test_the_estimate_is_the_shape_the_web_app_reads(
         )
     ).json()
     assert (a["slides"], a["speakers"], a["minutes"], a["style"]) == (4, 2, 8, "")
+    assert a["facts"][:3] == ["Debate", "about 8 minutes", "2 voices"]
+    assert len(a["facts"]) == 4, "an audio overview has no style and no slide model"
+    shorter = (
+        await client.post(
+            f"/api/collections/{cid}/outputs/estimate",
+            json={"kind": "audio", "audio_format": "deep_dive", "audio_length": "shorter"},
+        )
+    ).json()
+    assert shorter["facts"][0] == "Deep Dive · shorter"
     assert not any(ln["group"] == "Designing the slides" for ln in a["lines"])
 
 
@@ -416,9 +432,13 @@ async def test_deep_research_is_a_job_that_adds_its_report(
     assert r.status_code == 202, r.text
     job = r.json()
     assert (job["kind"], job["status"], job["steps_total"]) == ("research", "queued", 1)
+    # Queued with no worker running: the job says why it has not started.
+    queued = (await client.get(f"/api/jobs/{job['id']}")).json()
+    assert queued["waiting"].startswith("Waiting for the studio's worker to start.")
     await drain("work")
     done = (await client.get(f"/api/jobs/{job['id']}")).json()
     assert done["status"] == "done", done
+    assert done["waiting"] is None
     listed = (await client.get(f"/api/collections/{cid}/sources")).json()
     assert [(s["kind"], s["title"]) for s in listed] == [("research", "Web research: coral reefs")]
     assert {"research_plan", "search", "report"} <= set(studio.asked)

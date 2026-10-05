@@ -4,19 +4,17 @@
 // Estimate cost.
 
 import { useMemo } from "react";
-import { AUDIO_FORMATS, audioDesc, offeredLengths } from "../audioFormats";
-import { EstimateBanner, quickEstimate, quickFacts } from "../cost";
+import { EstimateBanner } from "../cost";
 import { CostDialog, LimitNote } from "../dialogs";
 import { Icon } from "../Icon";
 import { coveringMap, estimateMap } from "../mindmap";
 import { coveringNotes, estimateNotes } from "../notes";
 import type { Open } from "../routes";
-import { SettingsLink, keys, thumbUrl, useSettings } from "../settings";
+import { assetUrl } from "../api-studio";
+import { SettingsLink } from "../settings";
 import { OUTPUTS, isBuild, outputBlurb, outputHint, outputIcon, outputLabel, type Output } from "../shell";
 import { useStore, useStoreSel, type Store } from "../store";
-import { STYLES } from "../styles";
 import type { PageActions } from "./actions";
-import { deckSummary, nativeVoices, otherLanguage } from "./hints";
 import { fitLength, staged, stagedCount, type PageState } from "./state";
 
 /** The tiles, and the chosen one's options under them. */
@@ -52,7 +50,7 @@ export function Studio({ S, A, onOpen }: { S: PageState; A: PageActions; onOpen:
       </div>
       {nSrc === 0 && srcsLoaded && <p className="tiles-hint">Add a source first.</p>}
 
-      {kindNow !== null && nSrc > 0 && <Options k={kindNow} S={S} A={A} nSrc={nSrc} onOpen={onOpen} />}
+      {kindNow !== null && nSrc > 0 && <Options k={kindNow} S={S} A={A} onOpen={onOpen} />}
     </>
   );
 }
@@ -105,16 +103,17 @@ function Options({
   k,
   S,
   A,
-  nSrc,
   onOpen,
 }: {
   k: Output;
   S: PageState;
   A: PageActions;
-  nSrc: number;
   onOpen: (o: Open) => void;
 }) {
-  const cfg = useSettings();
+  // What the panel offers and how it says it, as the server words it from
+  // the settings.
+  const opts = useStore(S.opts);
+  const optsErr = useStore(S.optsErr);
   const style = useStore(S.style);
   const audioFormat = useStore(S.audioFormat);
   const audioLength = useStore(S.audioLength);
@@ -132,16 +131,14 @@ function Options({
   const build = isBuild(k);
   /** A map or notes of this kind is being made. */
   const making = k === "mindmap" ? mmMaking : k === "notes" ? ntMaking : false;
-  const language = otherLanguage(cfg);
-  const showCost = cfg.on(keys.SHOW_COST);
-  const host = cfg.get(keys.SPEAKER1_NAME);
-  const second = cfg.get(keys.SPEAKER2_NAME);
-  const deck = k === "session" ? deckSummary(cfg, nSrc) : null;
-  const offered = offeredLengths(audioFormat);
-  const priced = qEst?.priced ? qEst : null;
-  // A map's or notes' estimate in a build's shape, so every tool is said and
-  // checked against the limit the same way.
-  const shownEst = build ? est : priced !== null ? quickEstimate(priced, k === "mindmap" ? "mindmap" : "notes", "") : null;
+  const language = opts === null ? null : build ? opts.build_language_note : opts.language_note;
+  // On while unknown: the cost is said unless the settings turn it off.
+  const showCost = opts?.show_cost ?? true;
+  const format = opts?.audio_formats.find((f) => f.id === audioFormat) ?? null;
+  const offered = format?.lengths ?? [];
+  // A map's or notes' estimate comes in a build's shape, so every tool is
+  // said and checked against the limit the same way.
+  const shownEst = build ? est : qEst;
   // The build as chosen would be refused for its cost.
   const over = build ? !!est?.over_limit : !!shownEst?.over_limit;
   const onEstimate = () => {
@@ -154,20 +151,26 @@ function Options({
         <span className="opts-t">{outputLabel[k]}</span>
         <span className="opts-d">{outputHint[k]}</span>
       </div>
-      {language !== null && (
+      {language && (
         <p className="lang-chip">
           <Icon name="translate" />
-          {build && !nativeVoices(cfg)
-            ? `Writing in ${language} · voices are English. `
-            : `Writing in ${language}. `}
+          {`${language} `}
           <SettingsLink tab="general" text="Settings › General" />
         </p>
+      )}
+      {opts === null && optsErr !== "" && (
+        <div className="opt-err" role="alert">
+          {`The options could not be loaded: ${optsErr} `}
+          <button className="link-btn" onClick={() => void A.loadOptions()}>
+            Try again
+          </button>
+        </div>
       )}
       {k === "session" && (
         <>
           <div className="opt-l">Style</div>
           <div className="style-grid" role="radiogroup" aria-label="Style">
-            {STYLES.map((st) => (
+            {(opts?.styles ?? []).map((st) => (
               <button
                 key={st.id}
                 className={style === st.id ? "style on" : "style"}
@@ -179,14 +182,14 @@ function Options({
                   S.style.set(st.id);
                 }}
               >
-                <span className="sw" style={{ backgroundImage: `url(${thumbUrl(st.id)})` }} />
+                <span className="sw" style={{ backgroundImage: `url(${assetUrl(st.thumbnail)})` }} />
                 <span className="style-n">{st.label}</span>
               </button>
             ))}
           </div>
-          {deck !== null && (
+          {opts !== null && (
             <p className="opt-hint">
-              {`${deck} · `}
+              {`${opts.deck_summary} · `}
               <SettingsLink tab="defaults" text="Change defaults in Settings" />
             </p>
           )}
@@ -196,20 +199,20 @@ function Options({
         <>
           <div className="opt-l">Format</div>
           <div className="ao-formats" role="radiogroup" aria-label="Format">
-            {AUDIO_FORMATS.map(([id, name, blurb]) => (
+            {(opts?.audio_formats ?? []).map((f) => (
               <button
-                key={id}
-                className={audioFormat === id ? "ao-f on" : "ao-f"}
+                key={f.id}
+                className={audioFormat === f.id ? "ao-f on" : "ao-f"}
                 role="radio"
-                aria-checked={audioFormat === id}
+                aria-checked={audioFormat === f.id}
                 onClick={() => {
                   S.picked.set(true);
-                  S.audioFormat.set(id);
+                  S.audioFormat.set(f.id);
                   fitLength(S);
                 }}
               >
-                <span className="ao-n">{name}</span>
-                <span className="ao-d">{blurb}</span>
+                <span className="ao-n">{f.label}</span>
+                <span className="ao-d">{f.blurb}</span>
               </button>
             ))}
           </div>
@@ -218,25 +221,23 @@ function Options({
               <span className="opt-l">Length</span>
               {offered.map((l) => (
                 <button
-                  key={l}
-                  className={audioLength === l ? "chip on" : "chip"}
+                  key={l.id}
+                  className={audioLength === l.id ? "chip on" : "chip"}
                   role="radio"
-                  aria-checked={audioLength === l}
+                  aria-checked={audioLength === l.id}
                   onClick={() => {
                     S.picked.set(true);
-                    S.audioLength.set(l);
+                    S.audioLength.set(l.id);
                   }}
                 >
-                  {l === "shorter" ? "Shorter" : l === "longer" ? "Longer" : "Default"}
+                  {l.label}
                 </button>
               ))}
             </div>
           )}
-          {host !== undefined && second !== undefined && (
+          {format !== null && (
             <p className="opt-hint">
-              {audioFormat === "brief"
-                ? `Brief: ${host} alone, about 2 minutes. `
-                : `Voices: ${host} and ${second}. `}
+              {`${format.voices} `}
               <SettingsLink tab="voices" text="Change in Settings › Voices" />
             </p>
           )}
@@ -298,7 +299,7 @@ function Options({
         <EstimateBanner
           est={shownEst}
           loading={build ? estLoading : qLoading}
-          failed={build ? estErr !== "" : !qLoading && priced === null}
+          failed={build ? estErr !== "" : !qLoading && qEst === null}
         />
       )}
       {/* Over the limit is said whether or not costs are shown: it is not a
@@ -334,8 +335,6 @@ export function CostDialogs({ S, A, cid }: { S: PageState; A: PageActions; cid: 
   const est = useStore(S.est);
   const estErr = useStore(S.estErr);
   const estLoading = useStore(S.estLoading);
-  const audioFormat = useStore(S.audioFormat);
-  const audioLength = useStore(S.audioLength);
   const mmEst = useStore(S.mm.est);
   const mmEstLoading = useStore(S.mm.estLoading);
   const ntEst = useStore(S.nt.est);
@@ -347,17 +346,15 @@ export function CostDialogs({ S, A, cid }: { S: PageState; A: PageActions; cid: 
   if (kindNow === "mindmap" || kindNow === "notes") {
     const q = kindNow === "mindmap" ? mmEst : ntEst;
     const loading = kindNow === "mindmap" ? mmEstLoading : ntEstLoading;
-    // Why it could not be had, as the studio said it; a model with no price
-    // is not a failure of the call.
+    // Why it could not be had, as the studio said it.
     const failed = kindNow === "mindmap" ? mmEstErr : ntEstErr;
     return (
       <CostDialog
-        est={q?.priced ? quickEstimate(q, kindNow, "") : null}
-        facts={q ? quickFacts(q) : []}
+        est={q}
         verb="Make"
-        audio={null}
+        audio={false}
         loading={loading}
-        err={loading || q?.priced ? "" : failed !== "" ? failed : "the price of its model could not be read."}
+        err={loading || q !== null ? "" : failed}
         onClose={close}
         onRetry={() =>
           void (kindNow === "mindmap" ? estimateMap(cid, S.mm, A.signal()) : estimateNotes(cid, S.nt, A.signal()))
@@ -372,7 +369,7 @@ export function CostDialogs({ S, A, cid }: { S: PageState; A: PageActions; cid: 
   return (
     <CostDialog
       est={est}
-      audio={kindNow === "audio" ? audioDesc(audioFormat, audioLength) : null}
+      audio={kindNow === "audio"}
       loading={estLoading}
       err={estErr}
       onClose={close}

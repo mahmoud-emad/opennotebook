@@ -3,15 +3,12 @@
 // from. Files dropped anywhere on the panel are uploaded.
 
 import { useState, type DragEvent } from "react";
-import { UPLOAD_MAX_MB } from "../api";
 import { Icon } from "../Icon";
-import { SettingsLink, useSettings } from "../settings";
+import { SettingsLink } from "../settings";
 import { SrcRow, srcKey } from "../sources";
 import { useStore, useStoreSel } from "../store";
 import type { PageActions } from "./actions";
-import { researchTime } from "./hints";
 import { stagedCount, type PageState } from "./state";
-import { MAX_LINKS, UPLOAD_ACCEPT, uploadHint } from "./upload";
 
 /** Whether a drag carries files, as opposed to text, a link or an image
  * dragged off the page. */
@@ -81,15 +78,20 @@ export function SourcesPanel({ S, A, onFold }: { S: PageState; A: PageActions; o
 function AddBox({ S, A }: { S: PageState; A: PageActions }) {
   const draft = useStore(S.draft);
   const adding = useStore(S.adding);
-  const cfg = useSettings();
-  const researchTakes = researchTime(cfg);
+  // What the server says the box takes and how long research reads; until it
+  // answers, the box says nothing it cannot be sure of.
+  const opts = useStore(S.opts);
+  const research = opts?.research ?? null;
+  const upload = opts?.upload ?? null;
   const topicTyped = draft.trim() !== "" && !draft.includes("http://") && !draft.includes("https://");
   return (
     <>
       <textarea
         aria-label="A link, some text, or a topic"
         value={draft}
-        placeholder={`Paste up to ${MAX_LINKS} links, text, or a topic to research`}
+        placeholder={
+          upload ? `Paste up to ${upload.max_links} links, text, or a topic to research` : "Paste links, text, or a topic to research"
+        }
         onChange={(e) => S.draft.set(e.target.value)}
       />
       <div className="src-actions" role="group" aria-label="Add sources">
@@ -99,7 +101,11 @@ function AddBox({ S, A }: { S: PageState; A: PageActions }) {
         </button>
         <button
           className="ghost"
-          title={`Read the web on this topic for ${researchTakes} and add a written report`}
+          title={
+            research
+              ? `Read the web on this topic for ${research.takes} and add a written report`
+              : "Read the web on this topic and add a written report"
+          }
           disabled={draft.trim() === ""}
           onClick={() => void A.research()}
         >
@@ -108,19 +114,18 @@ function AddBox({ S, A }: { S: PageState; A: PageActions }) {
         </button>
         <button
           className="src-upload"
-          title={`PDF, Word, PowerPoint, Excel, Markdown, text or CSV, up to ${UPLOAD_MAX_MB} MB each. Or drop files on this panel.`}
+          title={upload?.title}
           onClick={() => document.getElementById("src-files")?.click()}
         >
           <Icon name="upload" />
           Upload files
         </button>
-        <p className="src-upload-d">{uploadHint()}</p>
+        {upload && <p className="src-upload-d">{upload.hint}</p>}
       </div>
       {/* A topic in the box: what Research a topic will do with it. */}
-      {topicTyped && cfg.loaded && (
+      {topicTyped && research && (
         <p className="src-hint">
-          {researchTakes === "about a minute" ? "Quick research" : "Standard research"}
-          {` takes ${researchTakes}. `}
+          {`${research.label} takes ${research.takes}. `}
           <SettingsLink tab="defaults" text="Change in Settings › Generation defaults" />
         </p>
       )}
@@ -128,7 +133,7 @@ function AddBox({ S, A }: { S: PageState; A: PageActions }) {
         id="src-files"
         type="file"
         multiple
-        accept={UPLOAD_ACCEPT}
+        accept={upload?.accept}
         hidden
         tabIndex={-1}
         aria-hidden="true"
@@ -155,7 +160,7 @@ function SourceList({ S, A, ro }: { S: PageState; A: PageActions; ro: boolean })
   const addingNote = useStore(S.addingNote);
   const removing = useStore(S.removing);
   const rowErr = useStore(S.rowErr);
-  const researchTakes = researchTime(useSettings());
+  const takes = useStoreSel(S.opts, (o) => o?.research.takes ?? "");
   return (
     <div className="srclist" aria-live="polite">
       {uploading.map(([n, name]) => (
@@ -167,12 +172,12 @@ function SourceList({ S, A, ro }: { S: PageState; A: PageActions; ro: boolean })
           </div>
         </div>
       ))}
-      {researching.map(([n, topic]) => (
+      {researching.map(([n, topic, said]) => (
         <div key={`r-${n}`} className="src run">
           <span className="src-i spin" title="Researching…" />
           <div className="src-t">
             <div className="src-n">{`Researching: ${topic}`}</div>
-            <div className="src-d">{`Reading the web · ${researchTakes}`}</div>
+            <div className="src-d">{said !== "" ? said : takes !== "" ? `Reading the web · ${takes}` : "Reading the web"}</div>
           </div>
         </div>
       ))}

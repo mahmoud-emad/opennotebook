@@ -3,13 +3,12 @@
 // live step, failed with the reason and a retry, or ready to open.
 
 import { memo, useMemo } from "react";
-import type { SessionSummary } from "../api";
+import type { OutputProgress, SessionSummary } from "../api";
 import type { MindMapSummary, StudyNotesSummary } from "../api-studio";
 import { counts } from "../notes";
 import {
   ErrRow,
   ItemRow,
-  LIVE_MAX,
   PendingRow,
   SessionRow,
   madeCreated,
@@ -63,19 +62,8 @@ export function OutputsList({
       ].sort((a, b) => madeCreated(b) - madeCreated(a)),
     [outputs, maps, notes],
   );
-  // Live progress for the newest preparing builds only. Each live row holds
-  // an EventSource, and a browser allows six HTTP/1.1 connections per host: a
-  // stream per row starved every other request of the page once a few were
-  // preparing. The rest say "Preparing" and catch up through the poll.
-  const live = useMemo(
-    () =>
-      outputs
-        .filter((s) => s.state === "preparing")
-        .sort((a, b) => b.created_ms - a.created_ms)
-        .slice(0, LIVE_MAX)
-        .map((s) => s.sid),
-    [outputs],
-  );
+  // How far each output being made is, from the page's one event stream.
+  const progress = useStore(S.progress);
   const openMap = open?.kind === "map" ? open.id : null;
   const openNotes = open?.kind === "notes" ? open.id : null;
 
@@ -135,7 +123,7 @@ export function OutputsList({
               <SessionItem
                 key={madeKey(m)}
                 s={m.s}
-                live={live.includes(m.s.sid)}
+                at={progress[m.s.sid] ?? null}
                 ro={ro}
                 busy={rowBusy[`session:${m.s.sid}`] ?? ""}
                 err={rowErr[`session:${m.s.sid}`] ?? ""}
@@ -174,14 +162,14 @@ export function OutputsList({
  * change, not when another row's do. */
 const SessionItem = memo(function SessionItem({
   s,
-  live,
+  at,
   ro,
   busy,
   err,
   A,
 }: {
   s: SessionSummary;
-  live: boolean;
+  at: OutputProgress | null;
   ro: boolean;
   busy: string;
   err: string;
@@ -189,7 +177,7 @@ const SessionItem = memo(function SessionItem({
 }) {
   return (
     <SessionRow
-      live={live}
+      at={at}
       s={s}
       onChanged={() => void A.load()}
       onRename={ro ? undefined : (t) => A.rename({ kind: "session", id: s.sid }, t)}
@@ -223,6 +211,7 @@ const MapItem = memo(function MapItem({
       icon="diagram-3"
       what="mind map"
       title={x.title}
+      shown={x.display_title}
       facts={`${x.node_count} topics${x.focus === "" ? "" : ` · ${x.focus}`}`}
       whenMs={x.created_ms}
       on={on}
@@ -258,6 +247,7 @@ const NotesItem = memo(function NotesItem({
       icon="journal-text"
       what="study notes"
       title={x.title}
+      shown={x.display_title}
       facts={`${counts(x.ideas, x.questions, x.terms)}${x.focus === "" ? "" : ` · ${x.focus}`}`}
       whenMs={x.created_ms}
       on={on}

@@ -11,6 +11,7 @@ describe("mind maps", () => {
       focus,
       sources,
       title: "",
+      display_title: "Untitled mind map",
       node_count: 0,
       created_ms: 0,
     });

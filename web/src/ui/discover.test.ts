@@ -13,9 +13,11 @@ describe("a shared collection", () => {
     expect(sharedFacts(out("notes", 0, 0))).toBe("Study notes");
   });
 
-  it("shows a shared source as a row with no remove", () => {
-    const s = sharedSrc("a.pdf", "", "", 600);
+  it("shows a shared source as a row with no remove, as the server words it", () => {
+    const s = sharedSrc({ name: "a.pdf", title: "", url: "", chars: 600, detail: "PDF · 100 words", icon: "" });
     expect(s).toEqual({ name: "a.pdf", detail: "PDF · 100 words", ok: true, url: "", icon: "", file: "" });
-    expect(sharedSrc("x.md", "Page", "https://www.example.com/a", 60).detail).toBe("example.com · 10 words");
+    const page = { name: "x.md", title: "Page", url: "https://www.example.com/a", chars: 60 };
+    const row = sharedSrc({ ...page, detail: "example.com · 10 words", icon: "https://www.example.com/favicon.ico" });
+    expect([row.name, row.detail, row.icon]).toEqual(["Page", "example.com · 10 words", "https://www.example.com/favicon.ico"]);
   });
 });

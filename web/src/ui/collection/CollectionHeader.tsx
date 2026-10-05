@@ -1,13 +1,10 @@
 // The head of a collection's Studio column: its cover, its name to edit, what
 // it holds, Share, and the Studio and Ask tabs.
 
-import { useEffect, useState } from "react";
-import { shareView } from "../api-share";
 import { THREAD_ID } from "../chat";
-import { Cover, collTitle } from "../home";
+import { Cover } from "../home";
 import { Icon } from "../Icon";
 import { follow, routeUrl, type View } from "../routes";
-import { keys, useSettings } from "../settings";
 import { READ_ONLY_TAIL, readOnlyOf, reusedLine } from "../share";
 import { focusId } from "../shell";
 import { useStore, useStoreSel } from "../store";
@@ -37,26 +34,15 @@ export function CollectionHeader({ S, A, onShare }: { S: PageState; A: PageActio
   const mmLoaded = useStore(S.mm.loaded);
   const ntLoaded = useStore(S.nt.loaded);
   const counted = srcsLoaded && loaded && mmLoaded && ntLoaded;
-  const cfg = useSettings();
   // A copy whose author did not allow edits: read, asked and played, never
   // changed or shared. The server refuses those; the page does not offer them.
   const ro = !!summary?.read_only;
-  const originId = ro ? (summary?.reused_from ?? "") : "";
-  // A read-only copy's original: its title while its share is there, null
-  // once it is not (or could not be read), undefined until it is known.
-  const [origin, setOrigin] = useState<string | null | undefined>(undefined);
-  useEffect(() => {
-    if (originId === "") return;
-    const ctrl = new AbortController();
-    shareView(originId, ctrl.signal).then(
-      (v) => !ctrl.signal.aborted && setOrigin(v.found && v.card ? collTitle(v.card.title) : null),
-      () => !ctrl.signal.aborted && setOrigin(null),
-    );
-    return () => ctrl.abort();
-  }, [originId]);
-  // Settings the page says something about. Until they are read the hints
-  // stay quiet rather than show a value that may not be the one in force.
-  const naming = cfg.on(keys.AUTO_NAME) && !!summary?.title_auto;
+  // A read-only copy's original: its name while its share is there, as the
+  // server says it; null once it is not.
+  const origin = summary?.reused_from_title ?? null;
+  // The studio names it from its sources, as the server says.
+  const naming = !!summary?.auto_named;
+  const nameNote = summary?.name_note ?? null;
 
   return (
     <div className="studio-head">
@@ -94,17 +80,12 @@ export function CollectionHeader({ S, A, onShare }: { S: PageState; A: PageActio
           ) : (
             <span className="dim">Loading…</span>
           )}
-          {naming && title.trim() === "" && nSrc > 0 ? (
+          {nameNote !== null && (
             <>
               <span>·</span>
-              <span className="sh-auto">Naming it from its sources…</span>
+              <span className="sh-auto">{nameNote}</span>
             </>
-          ) : naming && title.trim() !== "" ? (
-            <>
-              <span>·</span>
-              <span className="sh-auto">Named from its sources</span>
-            </>
-          ) : null}
+          )}
           {renaming && (
             <>
               <span>·</span>
@@ -118,7 +99,7 @@ export function CollectionHeader({ S, A, onShare }: { S: PageState; A: PageActio
             </>
           )}
         </div>
-        {ro && <ReadOnlyNote id={originId} origin={origin} />}
+        {ro && <ReadOnlyNote id={summary?.reused_from ?? ""} origin={origin} />}
       </div>
       {/* Secondary: this page's one primary is its Generate. */}
       {summary && !ro && (
@@ -178,7 +159,7 @@ export function CollectionHeader({ S, A, onShare }: { S: PageState; A: PageActio
 
 /** The line under a read-only copy's header: what it is a copy of, a link to
  * that share while it is there, and why nothing here can be changed. */
-function ReadOnlyNote({ id, origin }: { id: string; origin: string | null | undefined }) {
+function ReadOnlyNote({ id, origin }: { id: string; origin: string | null }) {
   const view: View = { kind: "shared", id };
   return (
     <p className="share-hint ro-note">

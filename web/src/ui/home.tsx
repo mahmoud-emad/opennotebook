@@ -113,12 +113,6 @@ export function ListError({
 /** The width of the canvas a cover is drawn on; it is 16:9, so 900 high. */
 const COVER_W = 1600;
 
-/** Whether the studio is still designing a collection's cover, so a list
- * should look again on its next poll. */
-export function coverPending(c: CollectionSummary, coversOn: boolean): boolean {
-  return coversOn && c.sources > 0 && c.cover_version.startsWith("f-") && Date.now() - c.updated_ms < 3 * 60_000;
-}
-
 /** A collection's cover: its generated page, scaled to fit the box it sits
  * in. A picture, not a control. */
 export function Cover({
@@ -274,7 +268,6 @@ export function CollectionCard({
   c,
   list,
   pickable = false,
-  origin,
   onOpen,
   onChanged,
 }: {
@@ -282,8 +275,6 @@ export function CollectionCard({
   list: boolean;
   /** Whether it can be picked to delete with others (My collections). */
   pickable?: boolean;
-  /** The title of the share it was reused from, while that share exists. */
-  origin?: string;
   onOpen: (cid: string) => void;
   onChanged: () => void;
 }) {
@@ -298,7 +289,10 @@ export function CollectionCard({
   const busy = redrawing || working !== "";
   const selecting = pickable && picks.on;
   const picked = pickable && picks.set.includes(c.cid);
-  const title = collTitle(c.title);
+  const title = c.display_title;
+  // The name of the collection it was reused from, while that one is still
+  // shared, as the server says it.
+  const origin = c.reused_from_title ?? undefined;
   const untitled = c.title.trim() === "";
   const href = routeUrl({ kind: "collection", cid: c.cid, open: null });
   const onClick = (e: MouseEvent) => {

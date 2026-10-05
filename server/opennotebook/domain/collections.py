@@ -8,10 +8,11 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
-from sqlalchemy import Select, delete, func, select, update
+from sqlalchemy import Select, Text, cast, column, delete, exists, func, select, table, update
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 
-from opennotebook import cover
+from opennotebook import cover, jobs
 from opennotebook.db.models import (
     Collection,
     MindMap,
@@ -27,6 +28,20 @@ from opennotebook.errors import Problem, not_found
 # More empty collections than this and starting another is refused, whoever
 # asks: the page, the chat or an agent.
 MAX_EMPTY_COLLECTIONS = 5
+
+# What an untitled collection is called wherever its name is shown.
+UNTITLED = "Untitled collection"
+
+# The queue's own table, for whether a collection's naming and cover are
+# still to be made: its refresh job is waiting or running. Read, never
+# written, so a light table construct rather than a model.
+_queue = table("procrastinate_jobs", column("lock"), column("status"))
+
+
+def display_title(title: str) -> str:
+    """A collection's name as it is shown: its title, or "Untitled
+    collection" while it has none."""
+    return " ".join(title.split()) or UNTITLED
 
 
 @dataclass
@@ -46,6 +61,20 @@ class Summary:
     shared: bool = False
     # How many times its share was reused; 0 when it has none.
     reuses: int = 0
+    # The title of the collection a reuse copied it from, while that one is
+    # still shared; None when it was not reused or the share is gone.
+    reused_title: str | None = None
+    # Its name or cover is still to be made: a refresh is waiting or running.
+    refreshing: bool = False
+    # The studio names it from its sources: automatic naming is on and nobody
+    # has given it a name.
+    auto_named: bool = False
+
+    @property
+    def busy(self) -> bool:
+        """Something in it is still being made: an output, its name or its
+        cover. A page showing it should keep listening."""
+        return self.preparing > 0 or self.refreshing
 
     @property
     def empty(self) -> bool:
@@ -75,10 +104,26 @@ def _names() -> Select[Sequence[str]]:
     return select(func.array_agg(Source.name)).where(Source.collection_id == Collection.id)
 
 
-Row = tuple[Collection, int, int, int, int, int, int, int, Sequence[str] | None, int | None]
+Row = tuple[
+    Collection,
+    int,
+    int,
+    int,
+    int,
+    int,
+    int,
+    int,
+    Sequence[str] | None,
+    int | None,
+    str | None,
+    bool,
+]
 
 
-def _counted() -> Select[Collection, int, int, int, int, int, int, int, Sequence[str], int]:
+def _counted() -> Select[
+    Collection, int, int, int, int, int, int, int, Sequence[str], int, str, bool
+]:
+    original = aliased(Collection)
     return select(
         Collection,
         _count(Source).scalar_subquery(),
@@ -91,12 +136,22 @@ def _counted() -> Select[Collection, int, int, int, int, int, int, int, Sequence
         _names().scalar_subquery(),
         # Its share's reuses; null when it has no share.
         select(Share.reuses).where(Share.collection_id == Collection.id).scalar_subquery(),
+        # The title of the collection it was reused from, while that is shared.
+        select(original.title)
+        .join(Share, Share.collection_id == original.id)
+        .where(Share.id == Collection.reused_from)
+        .scalar_subquery(),
+        # Its refresh is waiting or running (`refresh_lock` names the lock).
+        exists().where(
+            _queue.c.lock == func.concat("refresh:", cast(Collection.id, Text)),
+            cast(_queue.c.status, Text).in_(("todo", "doing")),
+        ),
     )
 
 
 def _summaries(
     owner: uuid.UUID,
-) -> Select[Collection, int, int, int, int, int, int, int, Sequence[str], int]:
+) -> Select[Collection, int, int, int, int, int, int, int, Sequence[str], int, str, bool]:
     return (
         _counted()
         .where(Collection.owner_id == owner)
@@ -104,8 +159,9 @@ def _summaries(
     )
 
 
-def _summary(row: Row, covers_on: bool) -> Summary:
-    c, sources, decks, audios, maps, notes, preparing, failed, names, reuses = row
+def _summary(row: Row, covers_on: bool, naming_on: bool = False) -> Summary:
+    c, sources, decks, audios, maps, notes, preparing, failed, names, reuses = row[:10]
+    reused_title, refreshing = row[10], row[11]
     version = cover.current_version(str(c.id), c.title, c.cover, covers_on, sorted(names or []))
     return Summary(
         c,
@@ -119,6 +175,9 @@ def _summary(row: Row, covers_on: bool) -> Summary:
         version,
         shared=reuses is not None,
         reuses=reuses or 0,
+        reused_title=reused_title,
+        refreshing=bool(refreshing),
+        auto_named=naming_on and c.title_auto,
     )
 
 
@@ -126,17 +185,21 @@ async def _covers_on(s: AsyncSession, owner: uuid.UUID) -> bool:
     return st.is_on(await st.value(s, owner, st.COVERS_KEY))
 
 
+async def _naming_on(s: AsyncSession, owner: uuid.UUID) -> bool:
+    return st.is_on(await st.value(s, owner, st.AUTO_NAME_KEY))
+
+
 async def list_all(s: AsyncSession, owner: uuid.UUID) -> list[Summary]:
     rows = await s.execute(_summaries(owner))
-    covers_on = await _covers_on(s, owner)
-    return [_summary(row, covers_on) for row in rows]
+    covers_on, naming_on = await _covers_on(s, owner), await _naming_on(s, owner)
+    return [_summary(row, covers_on, naming_on) for row in rows]
 
 
 async def summary(s: AsyncSession, owner: uuid.UUID, cid: uuid.UUID) -> Summary:
     row = (await s.execute(_summaries(owner).where(Collection.id == cid))).first()
     if row is None:
         raise not_found("That collection")
-    return _summary(row, await _covers_on(s, owner))
+    return _summary(row, await _covers_on(s, owner), await _naming_on(s, owner))
 
 
 async def of_anyone(s: AsyncSession, cids: list[uuid.UUID]) -> dict[uuid.UUID, Summary]:
@@ -240,7 +303,9 @@ async def remove(s: AsyncSession, owner: uuid.UUID, cid: uuid.UUID) -> None:
 
 
 async def touch(s: AsyncSession, cid: uuid.UUID) -> None:
-    """A source or an output was added or changed."""
+    """A source or an output was added or changed: the pages following the
+    collection hear of it once `s` commits."""
     await s.execute(
         update(Collection).where(Collection.id == cid).values(updated_at=datetime.now(UTC))
     )
+    await jobs.announce(s, cid)

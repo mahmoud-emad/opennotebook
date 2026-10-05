@@ -1,6 +1,16 @@
-from httpx import AsyncClient
+import asyncio
+import uuid
+from collections.abc import AsyncIterator
+from typing import Any
 
+from httpx import AsyncClient
+from sqlalchemy import text
+
+from opennotebook.api.collections import events_of
+from opennotebook.db.session import engine
+from opennotebook.jobs.events import hub
 from tests.conftest import other_person
+from tests.model import add_note
 
 
 async def test_a_collection_is_made_listed_renamed_pinned_and_deleted(client: AsyncClient) -> None:
@@ -82,3 +92,83 @@ async def test_a_bad_request_is_answered_in_a_sentence(client: AsyncClient) -> N
     assert r.status_code == 422 and r.json()["detail"].startswith("Cid:")
     r = await client.get("/api/nowhere")
     assert r.json()["detail"] == "That is no longer there. Reload the page and try again."
+
+
+# ── what a page needs to know, and following one ─────────────────────────────
+
+
+async def _queue_done() -> None:
+    """The worker finished every job: what the queue says once it has."""
+    async with engine().begin() as c:
+        await c.execute(text("UPDATE procrastinate_jobs SET status = 'succeeded'"))
+
+
+async def test_a_collection_says_its_name_and_whether_it_is_still_being_made(
+    client: AsyncClient,
+) -> None:
+    c = (await client.post("/api/collections", json={})).json()
+    assert (c["display_title"], c["auto_named"], c["name_note"], c["busy"]) == (
+        "Untitled collection",
+        True,
+        None,
+        False,
+    )
+    # A source in, its name and cover asked for: busy until the worker is done.
+    await add_note(client, c["id"], "Coral reefs are built by polyps. " * 10)
+    got = (await client.get(f"/api/collections/{c['id']}")).json()["collection"]
+    assert got["busy"] and got["name_note"] == "Naming it from its sources…"
+    await _queue_done()
+    got = (await client.get("/api/collections")).json()[0]
+    assert not got["busy"]
+    # Named by a person: the studio leaves the name alone.
+    got = (await client.patch(f"/api/collections/{c['id']}", json={"title": "Reefs"})).json()
+    assert (got["display_title"], got["auto_named"], got["name_note"]) == ("Reefs", False, None)
+    # Handed back, with naming off in Settings: still the person's to name.
+    r = await client.patch("/api/settings/OPENNOTEBOOK_AUTO_NAME", json={"value": "off"})
+    assert r.status_code == 200, r.text
+    got = (await client.patch(f"/api/collections/{c['id']}", json={"title": ""})).json()
+    assert got["title_auto"] and not got["auto_named"] and got["name_note"] is None
+
+
+async def _next(ev: AsyncIterator[Any]) -> tuple[str, Any]:
+    """The next event that is not a keep-alive."""
+    while True:
+        e = await asyncio.wait_for(anext(ev), 10)
+        if e is not None:
+            return e
+
+
+async def test_a_collection_is_followed_as_it_changes_until_it_is_gone(
+    client: AsyncClient,
+) -> None:
+    owner = uuid.UUID((await client.get("/api/me")).json()["id"])
+    cid = (await client.post("/api/collections", json={"title": "Reefs"})).json()["id"]
+    ev = events_of(owner, uuid.UUID(cid))
+    try:
+        first = [await _next(ev) for _ in range(3)]
+        # Everything when it starts, so a page that connects late misses nothing.
+        assert [n for n, _ in first] == ["collection", "outputs", "sources"]
+        assert first[0][1]["display_title"] == "Reefs"
+        assert (first[1][1], first[2][1]) == ([], [])
+
+        await add_note(client, cid, "Coral reefs are built by polyps. " * 10, title="Polyps")
+        got: dict[str, Any] = {}
+        while "sources" not in got:
+            name, data = await _next(ev)
+            got[name] = data
+        assert [x["title"] for x in got["sources"]] == ["Polyps"]
+
+        assert (await client.delete(f"/api/collections/{cid}")).status_code == 204
+        while (e := await _next(ev))[0] != "gone":
+            pass
+        assert e == ("gone", {"collection_id": cid})
+    finally:
+        await ev.aclose()
+        await hub.close()
+
+
+async def test_only_ones_own_collection_is_followed(client: AsyncClient) -> None:
+    cid = (await client.post("/api/collections", json={"title": "Reefs"})).json()["id"]
+    them = await other_person(client, "them@test")
+    assert (await client.get(f"/api/collections/{cid}/events", headers=them)).status_code == 404
+    assert (await client.get(f"/api/collections/{uuid.uuid4()}/events")).status_code == 404

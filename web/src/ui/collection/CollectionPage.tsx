@@ -8,31 +8,26 @@
 //
 // The page's state lives in stores (`state.ts`) and its work in `actions.ts`.
 // This file puts the parts together and runs what the whole page shares: the
-// poll while anything is moving, the Studio's defaults from the settings, and
+// collection's event stream, the Create panel's options from the server, and
 // the estimate of what would be made.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { sleep } from "../api";
-import { AUDIO_FORMATS } from "../audioFormats";
 import { AskTab, useChatState } from "../chat";
-import { coverPending } from "../home";
 import { Icon } from "../Icon";
 import { MindMapView, estimateMap } from "../mindmap";
 import { NotesView, estimateNotes, installCiteFlip } from "../notes";
 import type { Open } from "../routes";
-import { SETTINGS, keys, settingValue } from "../settings";
+import { SETTINGS } from "../settings";
 import { ShareDialog } from "../share";
 import { isBuild } from "../shell";
 import { SourceDrawer, useCiteOpen } from "../source";
 import { useStore, useStoreSel } from "../store";
-import { STYLES } from "../styles";
 import { pageActions, type PageActions } from "./actions";
 import { CollectionHeader, TABS } from "./CollectionHeader";
 import { OutputsList } from "./OutputsList";
 import { SourcesPanel } from "./SourcesPanel";
 import { CostDialogs, Studio } from "./Studio";
-import { estimateSettings } from "./hints";
-import { fitLength, pageState, staged, type CollectionPageProps, type PageState } from "./state";
+import { pageState, staged, stagedCount, type CollectionPageProps, type PageState } from "./state";
 
 export type { CollectionPageProps } from "./state";
 
@@ -64,8 +59,8 @@ export function CollectionPage(props: CollectionPageProps) {
     return A.dispose;
   }, [A]);
   useEffect(installCiteFlip, []);
-  usePoll(S, A);
-  useDefaults(S);
+  useEffect(() => A.follow(), [A]);
+  useOptions(S, A);
   useEstimate(S, A, cid, ro);
 
   if (missing)
@@ -180,53 +175,27 @@ function Viewer({
   );
 }
 
-/** While anything is moving, look again every few seconds: an output still
- * preparing, a name the studio has not given yet, or a cover still being
- * designed. Idle otherwise. */
-function usePoll(S: PageState, A: PageActions): void {
-  useEffect(() => {
-    const stop = new AbortController();
-    void (async () => {
-      while (!stop.signal.aborted) {
-        await sleep(4000, stop.signal);
-        if (stop.signal.aborted) return;
-        const doc = SETTINGS.get().doc;
-        const c = S.summary.get();
-        const preparing = S.outputs.get().some((s) => s.state === "preparing");
-        const naming =
-          settingValue(doc, keys.AUTO_NAME) !== "off" && !!c && c.title_auto && c.title.trim() === "" && c.sources > 0;
-        const cover = !!c && coverPending(c, settingValue(doc, keys.COVERS) !== "off");
-        if (preparing || naming || cover) await A.load();
-      }
-    })();
-    return () => stop.abort();
-  }, [A, S]);
-}
-
-/** The Create panel starts on the settings' style, format and length, and
- * follows them when they change, until the person picks their own here. */
-function useDefaults(S: PageState): void {
+/** What the Create panel offers, read from the server when the page opens and
+ * again when the settings or the number of sources change, since it words
+ * its hints from both. Its starting picks are followed until the person picks
+ * their own here (`applyDefaults`). */
+function useOptions(S: PageState, A: PageActions): void {
   const doc = useStoreSel(SETTINGS, (s) => s.doc);
+  const nSrc = useStoreSel(S.srcs, stagedCount);
   useEffect(() => {
-    if (S.picked.get()) return;
-    const v = settingValue(doc, keys.STYLE);
-    if (v !== undefined && STYLES.some((s) => s.id === v)) S.style.set(v);
-    const f = settingValue(doc, keys.AUDIO_FORMAT);
-    if (f !== undefined && AUDIO_FORMATS.some((a) => a[0] === f)) S.audioFormat.set(f);
-    const l = settingValue(doc, keys.AUDIO_LENGTH);
-    if (l !== undefined) S.audioLength.set(l);
-    fitLength(S);
-  }, [S, doc]);
+    void A.loadOptions();
+  }, [A, doc, nSrc]);
 }
 
 /** Priced again when what would be made changes, and only then: an estimate
  * for a different build is worse than none, and one asked for again for the
  * same build is a wasted call. What would be made is the kind, what was
  * picked for it here, the sources it would read (which, not how many), and
- * the settings the server prices it by. */
+ * the settings, any change of which is priced again: the server knows which
+ * of them it prices by. */
 function useEstimate(S: PageState, A: PageActions, cid: string, ro: boolean): void {
   const kindNow = useStore(S.chosen);
-  const reads = useStoreSel(SETTINGS, (s) => estimateSettings(s.doc, kindNow));
+  const reads = useStoreSel(SETTINGS, (s) => s.doc);
   const sources = useStoreSel(S.srcs, (v) => staged(v).sort().join("\n"));
   const nSrc = sources === "" ? 0 : sources.split("\n").length;
   const picked = useStoreSel(S.style, (st) => (kindNow === "session" ? st : ""));

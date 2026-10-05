@@ -3,8 +3,7 @@
 // `main.rs` (`Src`, `SrcRow`, `SrcIcon`, `server_sources`, `src_from`).
 
 import { useState } from "react";
-import { sourceList } from "./api";
-import { readable } from "./errors";
+import { sourceList, type ServerSource } from "./api";
 import { str } from "./helpers";
 import { Icon } from "./Icon";
 import { RowErr } from "./common";
@@ -54,19 +53,16 @@ export function shortHost(url: string): string {
 
 const words = (chars: number) => Math.floor(chars / 6);
 
+/** A source the server holds, as the row the sources panel shows: the line
+ * under its name and its icon as the server words them. */
+export function srcOfServer(s: ServerSource): Src {
+  return { detail: s.detail, name: s.title || s.name, file: s.name, ok: true, url: s.url, icon: s.icon };
+}
+
 /** What the server holds as a collection's sources, as the rows the sources
  * panel shows. Throws the reason it could not be read. */
 export async function serverSources(cid: string, signal?: AbortSignal): Promise<Src[]> {
-  return (await sourceList(cid, signal)).map((s) => ({
-    detail: s.url
-      ? `${shortHost(s.url)} · ${words(s.chars)} words`
-      : `${fileKind(s.name)} · ${words(s.chars)} words`,
-    name: s.title || s.name,
-    file: s.name,
-    ok: true,
-    url: s.url,
-    icon: "",
-  }));
+  return (await sourceList(cid, signal)).map(srcOfServer);
 }
 
 /** What a row is known by on the panel: its own key while it is not on the
@@ -86,7 +82,7 @@ export function srcFrom(g: Record<string, unknown>): Src {
     icon: str(g.icon),
     name: name || url,
     detail: !ok
-      ? readable(str(g.error) || "could not read it")
+      ? str(g.error) || "It could not be read. Try a direct link, or paste the text in."
       : url === ""
         ? `note · ${words(chars)} words`
         : `${shortHost(url)} · ${words(chars)} words`,

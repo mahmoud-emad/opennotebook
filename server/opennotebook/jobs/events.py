@@ -2,8 +2,10 @@
 connection, fanned out to every open event stream.
 
 The worker announces each write to a job row with
-`pg_notify('job_progress', <job id>)`, and a change to a playhead is
-announced with `pg_notify('session_change', <output id>)`. Neither payload
+`pg_notify('job_progress', <job id>)`, a change to a playhead is
+announced with `pg_notify('session_change', <output id>)`, and a change to
+a collection's title, cover or sources with
+`pg_notify('collection_change', <collection id>)`. Neither payload
 carries the change itself: a stream that wakes reads the rows, so a
 notification that is missed costs a moment, never a state. A stream also
 reads the rows when it starts and every `REREAD_SECONDS` without a wake-up,
@@ -23,7 +25,7 @@ from collections.abc import AsyncGenerator
 
 import psycopg
 
-from opennotebook.jobs import CHANNEL
+from opennotebook.jobs import CHANNEL, COLLECTION_CHANNEL
 from opennotebook.jobs.app import conninfo
 
 log = logging.getLogger(__name__)
@@ -36,20 +38,24 @@ REREAD_SECONDS = 15.0
 
 
 class Hub:
-    """Wakes every stream that follows an output when its rows change."""
+    """Wakes every stream that follows an output or a collection when its
+    rows change."""
 
     def __init__(self) -> None:
         self._waiters: dict[uuid.UUID, set[asyncio.Event]] = defaultdict(set)
-        # Which output a job belongs to, learnt when a stream subscribes.
-        self._jobs: dict[uuid.UUID, uuid.UUID] = {}
+        # What a job's progress is about, learnt when a stream subscribes:
+        # its output, and its collection.
+        self._jobs: dict[uuid.UUID, set[uuid.UUID]] = defaultdict(set)
         self._task: asyncio.Task[None] | None = None
         # Whether the `LISTEN` connection is up, and why it last failed while
         # it is not: what readiness reports.
         self.connected = False
         self.failure: str | None = None
 
-    def follow_job(self, job_id: uuid.UUID, sid: uuid.UUID) -> None:
-        self._jobs[job_id] = sid
+    def follow_job(self, job_id: uuid.UUID, key: uuid.UUID) -> None:
+        """Wake the streams that follow `key` (an output or a collection)
+        when the job reports."""
+        self._jobs[job_id].add(key)
 
     @contextlib.asynccontextmanager
     async def subscribe(self, sid: uuid.UUID) -> AsyncGenerator[asyncio.Event]:
@@ -82,6 +88,7 @@ class Hub:
                 ) as conn:
                     await conn.execute(f"LISTEN {CHANNEL}")
                     await conn.execute(f"LISTEN {SESSION_CHANNEL}")
+                    await conn.execute(f"LISTEN {COLLECTION_CHANNEL}")
                     self.connected, self.failure = True, None
                     try:
                         async for n in conn.notifies():
@@ -100,10 +107,11 @@ class Hub:
             key = uuid.UUID(payload)
         except ValueError:
             return
-        if channel == SESSION_CHANNEL:
+        if channel in (SESSION_CHANNEL, COLLECTION_CHANNEL):
             self.wake(key)
-        elif (sid := self._jobs.get(key)) is not None:
-            self.wake(sid)
+        elif keys := self._jobs.get(key):
+            for k in list(keys):
+                self.wake(k)
         else:
             # A job no stream has seen yet, a retry say: every stream reads
             # its rows again, which costs a query each and misses nothing.

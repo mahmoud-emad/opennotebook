@@ -9,6 +9,7 @@
 import { apiBase, call, enc, isGone } from "./api";
 import { mapOf, notesOf, playerUrl, type MindMap, type StudyNotes } from "./api-studio";
 import { fromWireKind, ms, toWireKind } from "./helpers";
+import type { Output } from "./shell";
 import type * as Rest from "@/client/types.gen";
 
 
@@ -36,6 +37,8 @@ export type ShareCard = {
   /** The person asking shared it, so they can edit or stop it. */
   mine: boolean;
   title: string;
+  /** The collection's name as it is shown: "Untitled collection" for none. */
+  display_title: string;
   note: string;
   cover_version: string;
   terms: string[];
@@ -52,7 +55,9 @@ export type ShareCard = {
   updated_ms: number;
 };
 
-export type SharedSource = { name: string; title: string; url: string; chars: number };
+/** A shared source, with the line under its name and its icon as the server
+ * words them. */
+export type SharedSource = { name: string; title: string; url: string; chars: number; detail: string; icon: string };
 
 export type SharedOutput = {
   /** The output key, as in `Share.outputs`. */
@@ -60,6 +65,8 @@ export type SharedOutput = {
   /** "session" | "audio" | "mindmap" | "notes". */
   kind: string;
   title: string;
+  /** Its name as it is shown: "Untitled mind map" for none. */
+  display_title: string;
   /** The session's id for a deck or audio overview; "" for a map or notes. */
   sid: string;
   /** "" for a session; the map's or notes' id. */
@@ -81,12 +88,16 @@ export type SharedItem = {
   /** The deck's, audio overview's, map's or notes' id. */
   id: string;
   title: string;
+  /** Its name as it is shown: "Untitled mind map" for none. */
+  display_title: string;
   slide_count: number;
   duration_ms: number;
   created_ms: number;
   share_id: string;
   cid: string;
   collection_title: string;
+  /** Its collection's name as it is shown: "Untitled collection" for none. */
+  collection_display_title: string;
   cover_version: string;
   shared_by: string;
   mine: boolean;
@@ -127,6 +138,7 @@ function cardOf(c: Rest.ShareCard): ShareCard {
     cid: c.collection_id,
     mine: c.mine,
     title: c.title,
+    display_title: c.display_title,
     note: c.note,
     cover_version: c.cover_version,
     terms: c.terms,
@@ -149,6 +161,7 @@ function sharedOutputOf(o: Rest.SharedOutput): SharedOutput {
     key: o.key,
     kind,
     title: o.title,
+    display_title: o.display_title,
     sid: session ? o.id : "",
     id: session ? "" : o.id,
     slide_count: o.parts,
@@ -166,12 +179,14 @@ export function sharedItemOf(i: Rest.SharedItem): SharedItem {
     kind: fromWireKind(i.kind),
     id: i.id,
     title: i.title,
+    display_title: i.display_title,
     slide_count: i.parts,
     duration_ms: i.duration_ms,
     created_ms: ms(i.created_at),
     share_id: i.share_id,
     cid: i.collection_id,
     collection_title: i.collection_title,
+    collection_display_title: i.collection_display_title,
     cover_version: i.cover_version,
     shared_by: i.shared_by,
     mine: i.mine,
@@ -222,7 +237,14 @@ export async function shareView(shareId: string, signal?: AbortSignal): Promise<
     return {
       found: true,
       card: cardOf(v.card),
-      sources: v.sources.map((s) => ({ name: s.name, title: s.title, url: s.url, chars: s.chars })),
+      sources: v.sources.map((s) => ({
+        name: s.name,
+        title: s.title,
+        url: s.url,
+        chars: s.chars,
+        detail: s.detail,
+        icon: s.icon,
+      })),
       outputs: v.outputs.map(sharedOutputOf),
     };
   } catch (e) {
@@ -236,10 +258,35 @@ export async function collectionReuse(shareId: string): Promise<string> {
   return (await call<Rest.CollectionSummary>("POST", `/shares/${enc(shareId)}/reuse`)).id;
 }
 
-/** The share of one of your collections, if it has one. */
-export async function shareGet(cid: string): Promise<Share | null> {
-  const s = await call<Rest.ShareOut | null>("GET", `/collections/${enc(cid)}/share`);
-  return s ? shareOf(s) : null;
+/** One output the share dialog offers, by the key a share names it by. */
+export type Shareable = { key: string; kind: Output; title: string };
+
+/** One of your collections as the share dialog shows it: its share, what it
+ * holds that a share can include, and what the dialog opens on, all as the
+ * server says it. */
+export type ShareState = {
+  share: Share | null;
+  sources: number;
+  items: Shareable[];
+  include_sources: boolean;
+  picked: string[];
+  note: string;
+  allow_edits: boolean;
+  note_max: number;
+};
+
+export async function shareState(cid: string, signal?: AbortSignal): Promise<ShareState> {
+  const d = await call<Rest.ShareState>("GET", `/collections/${enc(cid)}/share`, undefined, { signal });
+  return {
+    share: d.share ? shareOf(d.share) : null,
+    sources: d.sources,
+    items: d.items.map((i) => ({ key: i.key, kind: fromWireKind(i.kind) as Output, title: i.title })),
+    include_sources: d.include_sources,
+    picked: d.picked,
+    note: d.note,
+    allow_edits: d.allow_edits,
+    note_max: d.note_max,
+  };
 }
 
 /** Share a collection, or change what its share includes. */

@@ -28,6 +28,38 @@
         }
       }
     },
+    "/api/ready": {
+      "get": {
+        "tags": [
+          "account"
+        ],
+        "summary": "Ready",
+        "description": "Whether the studio can take work: the database answers, the progress\nlistener is connected when it is needed, and a worker is running. 503\nwith the same body when any is not. `/api/health` only says the api is\nup.",
+        "operationId": "ready",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Readiness"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Not ready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Readiness"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/me": {
       "get": {
         "tags": [
@@ -459,6 +491,46 @@
         }
       }
     },
+    "/api/collections/{cid}/events": {
+      "get": {
+        "tags": [
+          "collections"
+        ],
+        "summary": "Collection Events",
+        "description": "Server-sent events while a collection is open: `collection` (its\nsummary, as the list has it), `outputs` (its decks and audio overviews),\n`progress` (`session_id`, `step`, `steps_done`, `steps_total` of one being\nmade), `sources` (its sources), each when the stream starts and again when\nit changes, and `gone` once it is deleted. A page follows this rather than\nreading the collection again on a timer.",
+        "operationId": "collection_events",
+        "parameters": [
+          {
+            "name": "cid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Cid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Server-sent events",
+            "content": {
+              "text/event-stream": {}
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/collections/{cid}/sources": {
       "get": {
         "tags": [
@@ -584,7 +656,7 @@
           "sources"
         ],
         "summary": "Add Files",
-        "description": "Add documents to a collection. Each is read into text verbatim and\ntitled by its file name; a result says why when one could not be read.",
+        "description": "Add documents to a collection, at most ten at a time. Each is read\ninto text verbatim and titled by its file name; a result says why when\none could not be read.",
         "operationId": "add_files",
         "parameters": [
           {
@@ -1138,6 +1210,50 @@
         "responses": {
           "204": {
             "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/sessions/{sid}/retry": {
+      "post": {
+        "tags": [
+          "outputs"
+        ],
+        "summary": "Retry Session",
+        "description": "Make a failed output again, with the options it was made with, as a\nnew output in the same collection. One step: the new one is started and\nthe failed one removed together, or, when the new one is refused (no\nsources any more, over the spending limit, no AI key), neither, and the\nfailed one stays with its reason.",
+        "operationId": "retry_session",
+        "parameters": [
+          {
+            "name": "sid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Sid"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionSummary"
+                }
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -1864,7 +1980,7 @@
           "mindmaps"
         ],
         "summary": "Estimate Mindmap",
-        "description": "What making a mind map of every source would cost, before making it.",
+        "description": "What making a mind map of every source would cost, before making it,\nitemised the way a build's estimate is.",
         "operationId": "estimate_mindmap",
         "parameters": [
           {
@@ -1884,7 +2000,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Estimate"
+                  "$ref": "#/components/schemas/SessionEstimate"
                 }
               }
             }
@@ -2166,7 +2282,7 @@
           "notes"
         ],
         "summary": "Estimate Notes",
-        "description": "What writing study notes of every source would cost, before writing them.",
+        "description": "What writing study notes of every source would cost, before writing\nthem, itemised the way a build's estimate is.",
         "operationId": "estimate_notes",
         "parameters": [
           {
@@ -2186,7 +2302,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Estimate"
+                  "$ref": "#/components/schemas/SessionEstimate"
                 }
               }
             }
@@ -2644,13 +2760,57 @@
         }
       }
     },
+    "/api/collections/{cid}/options": {
+      "get": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Get Studio Options",
+        "description": "What the Create panel offers for a collection, from the person's\nsettings: the styles and formats with their pictures and lengths, the\nstarting picks, the lines it shows (a deck's slides and voices, the\noutput language), how long research takes, and what an upload takes.",
+        "operationId": "get_studio_options",
+        "parameters": [
+          {
+            "name": "cid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Cid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StudioOptions"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/styles": {
       "get": {
         "tags": [
           "settings"
         ],
         "summary": "List Styles",
-        "description": "The slide styles a deck can be built in, the default first.",
+        "description": "The slide styles a deck can be built in, the default first, each with\nits picture.",
         "operationId": "list_styles",
         "responses": {
           "200": {
@@ -2659,7 +2819,7 @@
               "application/json": {
                 "schema": {
                   "items": {
-                    "$ref": "#/components/schemas/Style"
+                    "$ref": "#/components/schemas/StyleChoice"
                   },
                   "type": "array",
                   "title": "Response List Styles"
@@ -3312,7 +3472,7 @@
           "shares"
         ],
         "summary": "Get Collection Share",
-        "description": "The share of one of your collections; null when it is not shared.",
+        "description": "One of your collections as the share dialog shows it: its share, if it\nhas one, what it holds that a share can include, and what the dialog\nopens on.",
         "operationId": "get_collection_share",
         "parameters": [
           {
@@ -3332,15 +3492,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "anyOf": [
-                    {
-                      "$ref": "#/components/schemas/ShareOut"
-                    },
-                    {
-                      "type": "null"
-                    }
-                  ],
-                  "title": "Response Get Collection Share"
+                  "$ref": "#/components/schemas/ShareState"
                 }
               }
             }
@@ -3682,6 +3834,25 @@
         ],
         "title": "BuildReq"
       },
+      "Check": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "title": "Ok"
+          },
+          "detail": {
+            "type": "string",
+            "title": "Detail",
+            "description": "What was found, in a sentence"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ok",
+          "detail"
+        ],
+        "title": "Check"
+      },
       "Citation": {
         "properties": {
           "n": {
@@ -3793,6 +3964,11 @@
             "type": "string",
             "title": "Title"
           },
+          "display_title": {
+            "type": "string",
+            "title": "Display Title",
+            "description": "Its name as it is shown: the title, or `Untitled collection` while it has none"
+          },
           "title_auto": {
             "type": "boolean",
             "title": "Title Auto",
@@ -3876,12 +4052,47 @@
             "type": "boolean",
             "title": "Read Only",
             "description": "A copy whose share did not allow edits: it can be read, asked, pinned and deleted, but nothing in it changes and it cannot be shared"
+          },
+          "reused_from_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reused From Title",
+            "description": "The name of the collection it was reused from, as it is shown now; null when it was not reused or that share is gone"
+          },
+          "busy": {
+            "type": "boolean",
+            "title": "Busy",
+            "description": "Something in it is still being made: an output, its name or its cover. Follow /api/collections/{cid}/events while it is"
+          },
+          "auto_named": {
+            "type": "boolean",
+            "title": "Auto Named",
+            "description": "The studio names it from its sources: automatic naming is on in Settings and nobody has given it a name"
+          },
+          "name_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name Note",
+            "description": "What the studio is doing with its name, in words: `Naming it from its sources\u2026` or `Named from its sources`; null when the name is a person's"
           }
         },
         "type": "object",
         "required": [
           "id",
           "title",
+          "display_title",
           "title_auto",
           "pinned",
           "created_at",
@@ -3897,7 +4108,11 @@
           "reused_from",
           "shared",
           "reuses",
-          "read_only"
+          "read_only",
+          "reused_from_title",
+          "busy",
+          "auto_named",
+          "name_note"
         ],
         "title": "CollectionSummary"
       },
@@ -4054,58 +4269,44 @@
         "title": "CostLine",
         "description": "One step of a build and what it costs: low, typical and high."
       },
-      "Estimate": {
+      "FormatChoice": {
         "properties": {
-          "sources": {
-            "type": "integer",
-            "title": "Sources"
-          },
-          "chars": {
-            "type": "integer",
-            "title": "Chars",
-            "description": "Characters of source text"
-          },
-          "model": {
+          "id": {
             "type": "string",
-            "title": "Model"
+            "title": "Id"
           },
-          "input_tokens": {
-            "type": "integer",
-            "title": "Input Tokens"
+          "label": {
+            "type": "string",
+            "title": "Label"
           },
-          "output_tokens": {
-            "type": "integer",
-            "title": "Output Tokens"
+          "blurb": {
+            "type": "string",
+            "title": "Blurb"
           },
-          "cost_usd": {
-            "type": "number",
-            "title": "Cost Usd",
-            "description": "The typical cost; 0 when the model has no price"
+          "lengths": {
+            "items": {
+              "$ref": "#/components/schemas/LengthChoice"
+            },
+            "type": "array",
+            "title": "Lengths",
+            "description": "The lengths it offers to choose from; empty when it has one, as Brief does"
           },
-          "cost_high_usd": {
-            "type": "number",
-            "title": "Cost High Usd",
-            "description": "Twice the typical cost: a second attempt"
-          },
-          "priced": {
-            "type": "boolean",
-            "title": "Priced",
-            "description": "False when the model's price is not known"
+          "voices": {
+            "type": "string",
+            "title": "Voices",
+            "description": "Who it is read by, in a sentence: `Voices: Ava and Andrew.`"
           }
         },
         "type": "object",
         "required": [
-          "sources",
-          "chars",
-          "model",
-          "input_tokens",
-          "output_tokens",
-          "cost_usd",
-          "cost_high_usd",
-          "priced"
+          "id",
+          "label",
+          "blurb",
+          "lengths",
+          "voices"
         ],
-        "title": "Estimate",
-        "description": "What one call over a collection's sources would cost, before making it."
+        "title": "FormatChoice",
+        "description": "An audio overview's format, as the Create panel offers it."
       },
       "HTTPValidationError": {
         "properties": {
@@ -4209,6 +4410,18 @@
             "type": "string",
             "format": "date-time",
             "title": "Created At"
+          },
+          "waiting": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Waiting",
+            "description": "Why queued work has not started, in a sentence: no worker is running. Null otherwise"
           }
         },
         "type": "object",
@@ -4270,6 +4483,24 @@
           "last_used_at"
         ],
         "title": "KeyOut"
+      },
+      "LengthChoice": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "label"
+        ],
+        "title": "LengthChoice"
       },
       "MadeKey": {
         "properties": {
@@ -4490,6 +4721,12 @@
           },
           "root": {
             "$ref": "#/components/schemas/MindNode"
+          },
+          "display_title": {
+            "type": "string",
+            "title": "Display Title",
+            "description": "Its name as it is shown: the title, or `Untitled mind map` while it has none",
+            "readOnly": true
           }
         },
         "type": "object",
@@ -4506,7 +4743,8 @@
           "model",
           "dropped",
           "unchecked",
-          "root"
+          "root",
+          "display_title"
         ],
         "title": "MindMapOut"
       },
@@ -4553,6 +4791,12 @@
             "type": "string",
             "format": "date-time",
             "title": "Created At"
+          },
+          "display_title": {
+            "type": "string",
+            "title": "Display Title",
+            "description": "Its name as it is shown: the title, or `Untitled mind map` while it has none",
+            "readOnly": true
           }
         },
         "type": "object",
@@ -4564,7 +4808,8 @@
           "node_count",
           "sources",
           "shape",
-          "created_at"
+          "created_at",
+          "display_title"
         ],
         "title": "MindMapSummary"
       },
@@ -4674,6 +4919,11 @@
             "type": "string",
             "title": "Title"
           },
+          "display_title": {
+            "type": "string",
+            "title": "Display Title",
+            "description": "Its name as it is shown: the title, or `Untitled study notes` while it has none"
+          },
           "focus": {
             "type": "string",
             "title": "Focus"
@@ -4776,6 +5026,7 @@
           "id",
           "collection_id",
           "title",
+          "display_title",
           "focus",
           "sources",
           "created_at",
@@ -4812,6 +5063,11 @@
           "title": {
             "type": "string",
             "title": "Title"
+          },
+          "display_title": {
+            "type": "string",
+            "title": "Display Title",
+            "description": "Its name as it is shown: the title, or `Untitled study notes` while it has none"
           },
           "focus": {
             "type": "string",
@@ -4854,6 +5110,7 @@
           "id",
           "collection_id",
           "title",
+          "display_title",
           "focus",
           "sources",
           "created_at",
@@ -4896,6 +5153,54 @@
         },
         "type": "object",
         "title": "Playhead"
+      },
+      "Readiness": {
+        "properties": {
+          "ready": {
+            "type": "boolean",
+            "title": "Ready",
+            "description": "Everything below is ok: the studio can take work"
+          },
+          "database": {
+            "$ref": "#/components/schemas/Check"
+          },
+          "listener": {
+            "$ref": "#/components/schemas/Check",
+            "description": "The connection that carries progress to open pages"
+          },
+          "worker": {
+            "$ref": "#/components/schemas/Check",
+            "description": "The process that runs builds and research"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ready",
+          "database",
+          "listener",
+          "worker"
+        ],
+        "title": "Readiness"
+      },
+      "ResearchHint": {
+        "properties": {
+          "label": {
+            "type": "string",
+            "title": "Label",
+            "description": "`Quick research` or `Standard research`"
+          },
+          "takes": {
+            "type": "string",
+            "title": "Takes",
+            "description": "How long it reads the web: `about a minute`"
+          }
+        },
+        "type": "object",
+        "required": [
+          "label",
+          "takes"
+        ],
+        "title": "ResearchHint"
       },
       "ResearchReq": {
         "properties": {
@@ -5130,6 +5435,11 @@
             "type": "string",
             "title": "Title"
           },
+          "display_title": {
+            "type": "string",
+            "title": "Display Title",
+            "description": "Its name as it is shown: the title, or `Untitled narrated slides` / `Untitled audio overview` while it has none"
+          },
           "description": {
             "type": "string",
             "title": "Description"
@@ -5153,7 +5463,19 @@
               }
             ],
             "title": "Failure",
-            "description": "Why it failed, in a sentence; null unless failed"
+            "description": "Why it failed, in a sentence with what to do; null unless failed"
+          },
+          "failure_detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Failure Detail",
+            "description": "The failure's technical detail, for whoever is debugging; null when there is none beyond the sentence"
           },
           "parts": {
             "type": "integer",
@@ -5168,6 +5490,11 @@
             "type": "string",
             "title": "Audio Format",
             "description": "An audio overview's format; empty for a deck"
+          },
+          "audio_label": {
+            "type": "string",
+            "title": "Audio Label",
+            "description": "An audio overview's format as a person reads it: `Deep Dive`; empty for a deck"
           },
           "duration_ms": {
             "type": "integer",
@@ -5253,6 +5580,14 @@
             ],
             "title": "Audio",
             "description": "Format, length, focus and minutes"
+          },
+          "speaker_names": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Speaker Names",
+            "description": "What to call each speaker, by speaker id: their own name, or their voice's when they have only a role word such as `Host`"
           }
         },
         "type": "object",
@@ -5261,12 +5596,14 @@
           "collection_id",
           "kind",
           "title",
+          "display_title",
           "description",
           "state",
           "failure",
           "parts",
           "speakers",
           "audio_format",
+          "audio_label",
           "duration_ms",
           "pinned",
           "spent_usd",
@@ -5275,7 +5612,8 @@
           "style",
           "speaker_list",
           "slides",
-          "audio"
+          "audio",
+          "speaker_names"
         ],
         "title": "SessionDetail"
       },
@@ -5351,6 +5689,19 @@
             "type": "boolean",
             "title": "Over Limit",
             "description": "The high estimate is over the limit: a build is refused"
+          },
+          "model": {
+            "type": "string",
+            "title": "Model",
+            "description": "The model that does most of the writing: the script's, or the one that makes a mind map or study notes"
+          },
+          "facts": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Facts",
+            "description": "What it is made of, in words, as the cost dialog lists them: `5 slides`, `about 5 minutes`, `2 voices`, `3 sources \u00b7 12.4k characters`\u2026"
           }
         },
         "type": "object",
@@ -5369,7 +5720,9 @@
           "priced_at",
           "minutes",
           "limit_usd",
-          "over_limit"
+          "over_limit",
+          "model",
+          "facts"
         ],
         "title": "SessionEstimate",
         "description": "What a build would cost, step by step: every input measured, every\noutput a low / typical / high range."
@@ -5428,6 +5781,11 @@
             "type": "string",
             "title": "Title"
           },
+          "display_title": {
+            "type": "string",
+            "title": "Display Title",
+            "description": "Its name as it is shown: the title, or `Untitled narrated slides` / `Untitled audio overview` while it has none"
+          },
           "description": {
             "type": "string",
             "title": "Description"
@@ -5451,7 +5809,19 @@
               }
             ],
             "title": "Failure",
-            "description": "Why it failed, in a sentence; null unless failed"
+            "description": "Why it failed, in a sentence with what to do; null unless failed"
+          },
+          "failure_detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Failure Detail",
+            "description": "The failure's technical detail, for whoever is debugging; null when there is none beyond the sentence"
           },
           "parts": {
             "type": "integer",
@@ -5466,6 +5836,11 @@
             "type": "string",
             "title": "Audio Format",
             "description": "An audio overview's format; empty for a deck"
+          },
+          "audio_label": {
+            "type": "string",
+            "title": "Audio Label",
+            "description": "An audio overview's format as a person reads it: `Deep Dive`; empty for a deck"
           },
           "duration_ms": {
             "type": "integer",
@@ -5517,12 +5892,14 @@
           "collection_id",
           "kind",
           "title",
+          "display_title",
           "description",
           "state",
           "failure",
           "parts",
           "speakers",
           "audio_format",
+          "audio_label",
           "duration_ms",
           "pinned",
           "spent_usd",
@@ -5821,6 +6198,12 @@
             "type": "string",
             "format": "date-time",
             "title": "Updated At"
+          },
+          "display_title": {
+            "type": "string",
+            "title": "Display Title",
+            "description": "The collection's name as it is shown: its title, or `Untitled collection`",
+            "readOnly": true
           }
         },
         "type": "object",
@@ -5841,7 +6224,8 @@
           "reuses",
           "allow_edits",
           "created_at",
-          "updated_at"
+          "updated_at",
+          "display_title"
         ],
         "title": "ShareCard",
         "description": "A share as the feed shows it. Counts are of what it includes and is\nstill there."
@@ -6002,6 +6386,74 @@
         ],
         "title": "ShareSet"
       },
+      "ShareState": {
+        "properties": {
+          "share": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ShareOut"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Its share; null when it is not shared"
+          },
+          "sources": {
+            "type": "integer",
+            "title": "Sources",
+            "description": "How many sources it has to include"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/Shareable"
+            },
+            "type": "array",
+            "title": "Items",
+            "description": "Its outputs that can be shared, newest first. Only ready ones: one still being made has nothing to show yet, and a failed one never will"
+          },
+          "include_sources": {
+            "type": "boolean",
+            "title": "Include Sources",
+            "description": "Whether the dialog opens with the sources on"
+          },
+          "picked": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Picked",
+            "description": "The keys of the items the dialog opens ticked"
+          },
+          "note": {
+            "type": "string",
+            "title": "Note"
+          },
+          "allow_edits": {
+            "type": "boolean",
+            "title": "Allow Edits",
+            "description": "Off unless the share says so: a copy is read-only"
+          },
+          "note_max": {
+            "type": "integer",
+            "title": "Note Max",
+            "description": "The longest note a share keeps, in characters"
+          }
+        },
+        "type": "object",
+        "required": [
+          "share",
+          "sources",
+          "items",
+          "include_sources",
+          "picked",
+          "note",
+          "allow_edits",
+          "note_max"
+        ],
+        "title": "ShareState",
+        "description": "Everything the share dialog shows for one of your collections, and\nwhat it opens on: the share's own choices, or, for a collection not\nshared yet, everything there is."
+      },
       "ShareView": {
         "properties": {
           "card": {
@@ -6032,6 +6484,44 @@
         ],
         "title": "ShareView",
         "description": "One shared collection as a visitor sees it."
+      },
+      "Shareable": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key",
+            "description": "What a share names it by: `session:<id>` (a deck or an audio overview), `mindmap:<id>` or `notes:<id>`"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "slides",
+              "audio",
+              "mindmap",
+              "notes"
+            ],
+            "title": "Kind"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title",
+            "description": "Its name, or its kind while it has none"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "kind",
+          "title",
+          "created_at"
+        ],
+        "title": "Shareable",
+        "description": "One output a share can include: ready, by the key a share names it by."
       },
       "SharedItem": {
         "properties": {
@@ -6110,6 +6600,18 @@
             "type": "integer",
             "title": "Reuses",
             "description": "How many times its share was reused: the reused order"
+          },
+          "display_title": {
+            "type": "string",
+            "title": "Display Title",
+            "description": "Its name as it is shown: the title, or `Untitled mind map`\u2026",
+            "readOnly": true
+          },
+          "collection_display_title": {
+            "type": "string",
+            "title": "Collection Display Title",
+            "description": "Its collection's name as it is shown: the title, or `Untitled collection`",
+            "readOnly": true
           }
         },
         "type": "object",
@@ -6127,7 +6629,9 @@
           "cover_version",
           "shared_by",
           "mine",
-          "reuses"
+          "reuses",
+          "display_title",
+          "collection_display_title"
         ],
         "title": "SharedItem",
         "description": "One output a share includes, as Discover lists it on its own: to play\nor read without opening its collection first."
@@ -6203,6 +6707,12 @@
             "type": "string",
             "format": "date-time",
             "title": "Created At"
+          },
+          "display_title": {
+            "type": "string",
+            "title": "Display Title",
+            "description": "Its name as it is shown: the title, or `Untitled mind map`\u2026",
+            "readOnly": true
           }
         },
         "type": "object",
@@ -6213,7 +6723,8 @@
           "title",
           "parts",
           "duration_ms",
-          "created_at"
+          "created_at",
+          "display_title"
         ],
         "title": "SharedOutput"
       },
@@ -6252,6 +6763,24 @@
             "type": "string",
             "format": "date-time",
             "title": "Created At"
+          },
+          "words": {
+            "type": "integer",
+            "title": "Words",
+            "description": "About how many words it holds",
+            "readOnly": true
+          },
+          "detail": {
+            "type": "string",
+            "title": "Detail",
+            "description": "The line under its name: where it came from and how long it is, `example.org \u00b7 1200 words` or `PDF \u00b7 300 words`",
+            "readOnly": true
+          },
+          "icon": {
+            "type": "string",
+            "title": "Icon",
+            "description": "The picture to lead its row with: its site's icon, loaded from the site itself; empty for a note, a file or a report",
+            "readOnly": true
           }
         },
         "type": "object",
@@ -6261,7 +6790,10 @@
           "title",
           "url",
           "chars",
-          "created_at"
+          "created_at",
+          "words",
+          "detail",
+          "icon"
         ],
         "title": "SourceOut"
       },
@@ -6305,6 +6837,24 @@
             "type": "string",
             "title": "Text",
             "description": "The source verbatim, as Markdown"
+          },
+          "words": {
+            "type": "integer",
+            "title": "Words",
+            "description": "About how many words it holds",
+            "readOnly": true
+          },
+          "detail": {
+            "type": "string",
+            "title": "Detail",
+            "description": "The line under its name: where it came from and how long it is, `example.org \u00b7 1200 words` or `PDF \u00b7 300 words`",
+            "readOnly": true
+          },
+          "icon": {
+            "type": "string",
+            "title": "Icon",
+            "description": "The picture to lead its row with: its site's icon, loaded from the site itself; empty for a note, a file or a report",
+            "readOnly": true
           }
         },
         "type": "object",
@@ -6315,11 +6865,100 @@
           "url",
           "chars",
           "created_at",
-          "text"
+          "text",
+          "words",
+          "detail",
+          "icon"
         ],
         "title": "SourceText"
       },
-      "Style": {
+      "StudioOptions": {
+        "properties": {
+          "styles": {
+            "items": {
+              "$ref": "#/components/schemas/StyleChoice"
+            },
+            "type": "array",
+            "title": "Styles"
+          },
+          "audio_formats": {
+            "items": {
+              "$ref": "#/components/schemas/FormatChoice"
+            },
+            "type": "array",
+            "title": "Audio Formats"
+          },
+          "default_style": {
+            "type": "string",
+            "title": "Default Style"
+          },
+          "default_audio_format": {
+            "type": "string",
+            "title": "Default Audio Format"
+          },
+          "default_audio_length": {
+            "type": "string",
+            "title": "Default Audio Length"
+          },
+          "deck_summary": {
+            "type": "string",
+            "title": "Deck Summary",
+            "description": "What a deck of this collection is made with: `5 slides \u00b7 about 5 min \u00b7 Host and Expert`"
+          },
+          "language_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Language Note",
+            "description": "The output language when it is not English: `Writing in French.`"
+          },
+          "build_language_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Build Language Note",
+            "description": "The same for a deck or an audio overview, saying when the voices keep their English accent"
+          },
+          "show_cost": {
+            "type": "boolean",
+            "title": "Show Cost",
+            "description": "Say what a tool costs before it is made"
+          },
+          "research": {
+            "$ref": "#/components/schemas/ResearchHint"
+          },
+          "upload": {
+            "$ref": "#/components/schemas/UploadRules"
+          }
+        },
+        "type": "object",
+        "required": [
+          "styles",
+          "audio_formats",
+          "default_style",
+          "default_audio_format",
+          "default_audio_length",
+          "deck_summary",
+          "language_note",
+          "build_language_note",
+          "show_cost",
+          "research",
+          "upload"
+        ],
+        "title": "StudioOptions",
+        "description": "Everything the Create panel offers for one collection, and how it says\nit: the choices, the starting picks from the person's settings, and the\nlines it shows from them."
+      },
+      "StyleChoice": {
         "properties": {
           "id": {
             "type": "string",
@@ -6332,15 +6971,80 @@
           "blurb": {
             "type": "string",
             "title": "Blurb"
+          },
+          "thumbnail": {
+            "type": "string",
+            "title": "Thumbnail",
+            "description": "The style's picture, relative to the web app's mount: `assets/styles/\u2026`"
           }
         },
         "type": "object",
         "required": [
           "id",
           "label",
-          "blurb"
+          "blurb",
+          "thumbnail"
         ],
-        "title": "Style"
+        "title": "StyleChoice"
+      },
+      "UploadRules": {
+        "properties": {
+          "extensions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Extensions",
+            "description": "Without the dot, lower case"
+          },
+          "accept": {
+            "type": "string",
+            "title": "Accept",
+            "description": "The file picker's `accept`, from the same list"
+          },
+          "kinds": {
+            "type": "string",
+            "title": "Kinds",
+            "description": "What can be uploaded, in words"
+          },
+          "max_mb": {
+            "type": "integer",
+            "title": "Max Mb"
+          },
+          "max_files": {
+            "type": "integer",
+            "title": "Max Files",
+            "description": "Files one upload takes"
+          },
+          "max_links": {
+            "type": "integer",
+            "title": "Max Links",
+            "description": "Links one add takes"
+          },
+          "hint": {
+            "type": "string",
+            "title": "Hint",
+            "description": "What can be uploaded, as the add box says it"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title",
+            "description": "The same, as the Upload button's tooltip"
+          }
+        },
+        "type": "object",
+        "required": [
+          "extensions",
+          "accept",
+          "kinds",
+          "max_mb",
+          "max_files",
+          "max_links",
+          "hint",
+          "title"
+        ],
+        "title": "UploadRules",
+        "description": "What the sources panel takes. The server refuses anything else."
       },
       "ValidationError": {
         "properties": {

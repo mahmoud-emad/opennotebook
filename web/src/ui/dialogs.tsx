@@ -3,7 +3,7 @@
 
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { Icon } from "./Icon";
-import { SettingsLink, modelName, styleLabel } from "./settings";
+import { SettingsLink } from "./settings";
 import { store, useStore } from "./store";
 
 /** Money for a person, not a ledger. Sub-cent amounts keep two significant
@@ -82,6 +82,10 @@ export type Estimate = {
   minutes: number;
   limit_usd: number;
   over_limit: boolean;
+  /** The model that does most of the writing. */
+  model: string;
+  /** What it is made of, in the server's words: "5 slides", "2 voices"… */
+  facts: string[];
 };
 
 /** Whether a step's model has no price in the catalog. */
@@ -122,19 +126,16 @@ export function CostDialog({
   onClose,
   onRetry,
   onBuild,
-  facts,
   verb = "Build",
 }: {
   est: Estimate | null;
-  audio: string | null;
+  /** An audio overview: over the limit, a shorter length is the advice. */
+  audio: boolean;
   loading: boolean;
   err: string;
   onClose: () => void;
   onRetry: () => void;
   onBuild: () => void;
-  /** Facts to show instead of a build's slides, voices and style: a map's or
-   * notes' sources and model. */
-  facts?: string[];
   /** What the button does: "Build" a deck or audio, "Make" a map or notes. */
   verb?: string;
 }) {
@@ -200,36 +201,14 @@ export function CostDialog({
                 </div>
               </div>
               <div className="est-facts">
-                {facts ? (
-                  facts.map((f) => (
-                    <span key={f} className="est-fact">
-                      {f}
-                    </span>
-                  ))
-                ) : (
-                  <>
-                    {audio ? (
-                      <span className="est-fact">{audio}</span>
-                    ) : (
-                      <span className="est-fact">{est.slides} slides</span>
-                    )}
-                    {est.minutes > 0 && <span className="est-fact">about {est.minutes} minutes</span>}
-                    <span className="est-fact">{est.speakers === 1 ? "1 voice" : `${est.speakers} voices`}</span>
-                    <span className="est-fact">
-                      {est.sources === 1 ? "1 source" : `${est.sources} sources`}
-                      {` · ${countShort(est.source_chars)} characters`}
-                    </span>
-                    {!audio && (
-                      <>
-                        <span className="est-fact">{styleLabel(est.style)} style</span>
-                        <span className="est-fact">slides by {modelName(est.slides_tier)}</span>
-                      </>
-                    )}
-                  </>
-                )}
+                {est.facts.map((f) => (
+                  <span key={f} className="est-fact">
+                    {f}
+                  </span>
+                ))}
               </div>
               {est.over_limit ? (
-                <LimitNote e={est} audio={!!audio} className="set-note err est-limit" />
+                <LimitNote e={est} audio={audio} className="set-note err est-limit" />
               ) : est.limit_usd > 0 ? (
                 <div className="est-fine est-limit">
                   Within your {usd(est.limit_usd)} limit per output. <SettingsLink tab="costs" />

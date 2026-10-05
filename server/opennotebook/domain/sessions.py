@@ -15,6 +15,7 @@ from typing import Any
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from opennotebook import errors
 from opennotebook.db.models import Job, Session
 from opennotebook.domain import settings as st
 from opennotebook.domain import styles
@@ -30,6 +31,16 @@ FORMAT_LABELS = {
     "critique": "Critique",
     "debate": "Debate",
 }
+
+
+# What each format is, in a line under its name in the Create panel.
+FORMAT_BLURBS = {
+    "deep_dive": "Two hosts in a lively conversation that unpacks your sources",
+    "brief": "One host, the key points in about two minutes",
+    "critique": "An expert review of your sources, with constructive feedback",
+    "debate": "Two hosts argue different sides of what your sources raise",
+}
+LENGTH_LABELS = {"shorter": "Shorter", "default": "Default", "longer": "Longer"}
 
 
 def parse_format(s: str) -> str:
@@ -76,6 +87,12 @@ class AudioSpec:
         """The length it really gets: one its format does not offer falls back
         to Default."""
         return self.length if self.length in format_lengths(self.format) else "default"
+
+    def said(self) -> str:
+        """Its format and length as a person reads them: "Brief", "Deep Dive ·
+        shorter". The default length goes unsaid."""
+        n = self.real_length()
+        return self.label if n == "default" else f"{self.label} · {n}"
 
     def minutes(self) -> int:
         """About how many minutes of audio. Brief is "under two minutes"; a
@@ -351,6 +368,39 @@ def plan(ask: Ask, d: BuildDefaults) -> Planned:
             f"“{want}” is not a slide style. Pick one of the styles listed in the Create panel."
         )
     return Planned(speakers, slide_count, want or d.style, audio)
+
+
+def display_title(title: str, audio: bool) -> str:
+    """An output's name as it is shown: its title, or what it is while it has
+    none, "Untitled audio overview"."""
+    return " ".join(title.split()) or (
+        "Untitled audio overview" if audio else "Untitled narrated slides"
+    )
+
+
+# What a failed output says when it has no sentence of its own: one that
+# failed before the studio worded its failures, or that wrote nothing.
+FAILED_PLAIN = (
+    "Something went wrong while making this. Your sources are kept, so you can try again "
+    "or change them."
+)
+_SENTENCE = re.compile(r"[A-Z][^{}<>]*[.!?]")
+_HTTP = re.compile(r"\bHTTP \d{3}\b")
+
+
+def failure_said(raw: str | None, detail: str | None) -> tuple[str, str | None]:
+    """Why an output failed, as a person reads it, and the technical detail
+    kept apart for whoever is debugging. A build writes a sentence, which is
+    said as it is, with its job's own words as the detail when they differ.
+    An older row whose reason is raw words gets the known sentence for them,
+    else a plain one, and keeps the raw words as the detail."""
+    r = (raw or "").strip()
+    d = (detail or "").strip() or None
+    if not r:
+        return FAILED_PLAIN, d
+    if _SENTENCE.fullmatch(r) and not _HTTP.search(r):
+        return r, None if d == r else d
+    return errors.known(r) or FAILED_PLAIN, r
 
 
 def one_line(s: str) -> str:

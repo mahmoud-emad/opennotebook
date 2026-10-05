@@ -40,7 +40,7 @@ from opennotebook.ai import client
 from opennotebook.ai.prices import Price
 from opennotebook.db.models import Source
 from opennotebook.domain import settings as st
-from opennotebook.domain.sessions import Shape
+from opennotebook.domain.sessions import AudioSpec, Shape
 from opennotebook.memory import qa
 from opennotebook.script import budget
 
@@ -193,6 +193,28 @@ class Estimate:
 def grouped(n: int) -> str:
     """44072 → "44,072"."""
     return f"{n:,}"
+
+
+def count_short(n: int) -> str:
+    """850, 12.4k, 1.2M: a count someone can take in at a glance."""
+    if n >= 1_000_000:
+        return f"{n / 1e6:.1f}M"
+    if n >= 10_000:
+        return f"{n / 1e3:.0f}k"
+    if n >= 1_000:
+        return f"{n / 1e3:.1f}k"
+    return str(n)
+
+
+def model_name(model: str) -> str:
+    """A model id as a person reads it: `anthropic/claude-haiku-4.5` is
+    "Claude Haiku 4.5"."""
+    name = model.rsplit("/", 1)[-1]
+    return " ".join(w[0].upper() + w[1:] if w[:1].isalpha() else w for w in name.split("-"))
+
+
+def sources_said(n: int) -> str:
+    return f"{n} source{_plural(n)}"
 
 
 def tokens(chars: int) -> int:
@@ -615,6 +637,8 @@ class Live:
     style: str
     priced_at: str
     limit_usd: float
+    # An audio overview's format, length and focus; None for a deck.
+    audio: AudioSpec | None = None
 
     @property
     def over_limit(self) -> bool:
@@ -674,8 +698,13 @@ async def compute(
         # A local server (Ollama, LM Studio) lists models without prices.
         raise NoPrices
     limit = st.parse_limit(v[st.MAX_BUILD_USD_KEY]) or 0.0
-    stamp = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
-    return Live(estimate(inputs, prices), inputs, style, stamp, limit)
+    stamp = stamp_now()
+    return Live(estimate(inputs, prices), inputs, style, stamp, limit, sh.audio)
+
+
+def stamp_now() -> str:
+    """Now, as the time prices were read, RFC 3339."""
+    return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def cent_up(x: float) -> float:

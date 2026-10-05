@@ -2,122 +2,26 @@
 // an audio overview, a map or a set of notes, each saying where it is. A port
 // of the old app's `outputs.rs`.
 
-import { useEffect, useState } from "react";
-import { errText, type SessionSummary } from "./api";
+import { useState } from "react";
+import { errText, type OutputProgress, type SessionSummary } from "./api";
 import {
-  buildOutput,
-  getSession,
   mindmapDelete,
   mindmapRetitle,
   notesDelete,
   notesRetitle,
   playerUrl,
+  retryOutput,
   sessionDelete,
-  sessionEventsUrl,
   sessionRetitle,
-  type BuildReq,
   type MindMapSummary,
   type StudyNotesSummary,
 } from "./api-studio";
-import { audioFormatName } from "./audioFormats";
 import { CardMenu } from "./CardMenu";
 import { RowErr } from "./common";
 import { askConfirm, askPrompt, usd } from "./dialogs";
-import { known } from "./errors";
-import { collTitle } from "./home";
 import { Icon } from "./Icon";
 import { phaseLabel } from "./phases";
-import { mmss, report, when } from "./shell";
-
-/** Start a failed output again, as a new output in the same collection.
- *
- * The new one is started FIRST, and the failed row is deleted only once that
- * has been accepted. The other way round (delete, then start) lost the failed
- * row, its reason included, every time the second call was refused: no
- * sources any more, over the cost limit, the studio down.
- *
- * What is kept: the title, the collection, the style, the audio format,
- * length and focus, the slide count, and the output's OWN number of voices,
- * all read back from it. Voices are deliberately not re-read from settings —
- * somebody editing their voices between the failure and the retry should not
- * silently change what this output sounds like. Whatever the output does not
- * record (an older one has no style; a prep that failed before its outline
- * has no slides) is left out, and the server fills it from the settings as it
- * does for a new build.
- *
- * Resolves to a note when the retry started but left the failed row behind. */
-export async function retryPrep(sid: string, title: string): Promise<string | null> {
-  const old = await getSession(sid);
-  const cid = old.collection;
-  const a = old.audio;
-  const style = old.style && old.style.trim() !== "" ? old.style : null;
-  const req: BuildReq = a
-    ? {
-        kind: "audio",
-        title,
-        speakers: old.speakers || null,
-        audio_format: a.format as BuildReq["audio_format"],
-        audio_length: a.length as BuildReq["audio_length"],
-        focus: a.focus,
-      }
-    : {
-        kind: "slides",
-        title,
-        speakers: old.speakers || null,
-        slide_count: old.slides > 0 ? old.slides : null,
-        style,
-      };
-  await buildOutput(cid, req);
-  // The new one is on its way; the failed one can go.
-  try {
-    await sessionDelete(sid);
-    return null;
-  } catch (e) {
-    return `It started again, but the failed one could not be removed. ${errText(e)}`;
-  }
-}
-
-/** What a failed prep says to the person who started it, and what it keeps back.
- *
- * Returns [plain, detail]. `plain` is the only thing shown by default: one
- * sentence, no ids, no internal nouns, and where possible the action that
- * fixes it. `detail` is the prep's own words, kept behind a disclosure for
- * whoever is debugging.
- *
- * The split exists because the unsplit version shipped and was wrong: a
- * person who asked for a slide deck was shown four internal identifiers, an
- * instruction naming two calls they cannot make, and no mention of the
- * actual cause, which was an exhausted billing account. */
-export function prepFailureText(raw: string): [string, string] {
-  const r = raw.trim();
-  if (r === "") return ["Something went wrong while making this. Your sources are kept.", ""];
-  const low = r.toLowerCase();
-  // The new server writes the reason as a sentence a person can act on; it is
-  // the message itself, not a detail to hide behind a disclosure.
-  if (/^[A-Z][^{}<>]*[.!?]$/.test(r) && !/\bHTTP \d{3}\b/.test(r)) return [r, ""];
-  // The AI provider's failures read the same here as everywhere else.
-  let plain = known(r);
-  if (plain === null) {
-    if (low.includes("name conflict") && low.includes("theme"))
-      plain = "That visual style could not be applied. Pick a different style and try again.";
-    else if (low.includes("no extracted pairs") || low.includes("q&a door is empty") || low.includes("not a bot"))
-      plain =
-        "Your sources could not be read. A link behind a sign-in or a bot check saves " +
-        "the warning page instead of the document, so try a direct link or paste the " +
-        "text in.";
-    else if (low.includes("timed out") || low.includes("timeout"))
-      plain =
-        "The slides took too long to draw and this was stopped. Trying again " + "with fewer slides usually works.";
-    else if (low.includes("rendered") || low.includes("nothing rendered"))
-      plain =
-        "The slides could not be drawn, so there is no deck to narrate. Your sources " +
-        "are kept: try again, or change them.";
-    else
-      plain =
-        "Something went wrong while making this. Your sources are kept, so you " + "can try again or change them.";
-  }
-  return [plain, r];
-}
+import { mmss, when } from "./shell";
 
 /** One thing made from the collection, for the outputs list: every kind in one
  * list, newest first. */
@@ -272,6 +176,7 @@ export function ItemRow({
   icon,
   what,
   title,
+  shown,
   facts,
   whenMs,
   on = false,
@@ -286,7 +191,10 @@ export function ItemRow({
   icon: string;
   /** What it is, for the delete question: "mind map", "study notes". */
   what: string;
+  /** Its name as stored, where a rename starts from; may be empty. */
   title: string;
+  /** Its name as the server says to show it: "Untitled mind map" for none. */
+  shown: string;
   facts: string;
   whenMs: number;
   /** Whether it is the one open in the viewer. */
@@ -303,7 +211,6 @@ export function ItemRow({
   err?: string;
   onDismissErr?: () => void;
 }) {
-  const shown = title.trim() === "" ? `Untitled ${what}` : title;
   const w = when(whenMs);
   const body = (
     <>
@@ -363,7 +270,7 @@ export function ItemRow({
  * and offers the way out. */
 export function SessionRow({
   s,
-  live,
+  at = null,
   onChanged,
   onRename,
   onDelete,
@@ -372,8 +279,9 @@ export function SessionRow({
   onDismissErr,
 }: {
   s: SessionSummary;
-  /** Whether this row follows its prep's event stream; see `LIVE_MAX`. */
-  live: boolean;
+  /** How far its prep is, from the collection's event stream; null until it
+   * says. */
+  at?: OutputProgress | null;
   onChanged: () => void;
   /** Without these the row has no menu: an output of a read-only copy. */
   onRename?: (next: string) => void;
@@ -386,24 +294,21 @@ export function SessionRow({
 }) {
   const audio = s.kind === "audio";
   const icon = audio ? "soundwave" : "easel";
-  const shown = s.title.trim() === "" ? collTitle("") : s.title;
+  const shown = s.display_title;
   const state = s.state;
   const [retrying, setRetrying] = useState(false);
   // Why the last Retry could not start, said under the row it is about.
   const [retryErr, setRetryErr] = useState("");
-  // A failed prep's reason, from the output itself.
-  const why = state === "failed" ? prepFailureText(s.failure) : null;
+  // A failed prep's reason and its technical detail, both as the server says.
+  const why = state === "failed" ? [s.failure, s.failure_detail] : null;
   const w = when(s.created_ms);
 
   const retry = () => {
     if (retrying) return;
     setRetrying(true);
     setRetryErr("");
-    retryPrep(s.sid, s.title)
-      .then(
-        (note) => note && report(note),
-        (e) => setRetryErr(`It could not be started again. ${errText(e)}`),
-      )
+    retryOutput(s.sid)
+      .catch((e) => setRetryErr(`It could not be started again. ${errText(e)}`))
       .finally(() => {
         setRetrying(false);
         onChanged();
@@ -418,12 +323,7 @@ export function SessionRow({
       <span className="out-main">
         <span className="out-t">{shown}</span>
         {state === "preparing" ? (
-          // Keyed apart, so a row that becomes live opens its stream.
-          live ? (
-            <Progress key={`live-${s.sid}`} sid={s.sid} waiting={s.waiting} />
-          ) : (
-            <Progress key={`idle-${s.sid}`} sid="" waiting={s.waiting} />
-          )
+          <Progress at={at} waiting={s.waiting} />
         ) : state === "failed" ? (
           <span className="out-d bad">
             <span className="badge failed">Failed</span> {why?.[0] ?? ""}
@@ -432,7 +332,7 @@ export function SessionRow({
           <span className="out-d num">
             {audio ? (
               <>
-                {audioFormatName(s.audio_format) ?? "Deep Dive"}
+                {s.audio_label}
                 {s.duration_ms > 0 && ` · ${mmss(s.duration_ms)}`}
               </>
             ) : (
@@ -505,64 +405,23 @@ export function SessionRow({
   );
 }
 
-/** How many preparing rows follow their prep live at once. */
-export const LIVE_MAX = 2;
-
-/** A prep's progress: the step it is on and how far, from the studio's event
- * stream for that output. The stream belongs to the row and closes with it,
- * so a list of preparing outputs does not leave connections behind. An empty
- * `sid` follows nothing and shows only that it is preparing. */
-export function Progress({ sid, waiting = "" }: { sid: string; waiting?: string }) {
-  const [at, setAt] = useState<[string, number, number]>(["", 0, 0]);
-  // Why the build has not started (no worker yet): what the stream last said,
-  // and until it says anything, what the list says, read again on each poll.
-  const [streamHeld, setHeld] = useState<string | null>(null);
-  const held = streamHeld ?? waiting;
-  useEffect(() => {
-    if (sid === "") return;
-    let es: EventSource;
-    try {
-      es = new EventSource(sessionEventsUrl(sid));
-    } catch {
-      return;
-    }
-    const onProg = (e: MessageEvent) => {
-      let v: Record<string, unknown>;
-      try {
-        v = JSON.parse(String(e.data)) as Record<string, unknown>;
-      } catch {
-        return;
-      }
-      if (typeof v.step !== "string" && typeof v.steps_total !== "number") return;
-      const n = (x: unknown) => (typeof x === "number" && x > 0 ? Math.floor(x) : 0);
-      setAt([typeof v.step === "string" ? v.step : "", n(v.steps_done), n(v.steps_total)]);
-    };
-    // The old stream named its event `prep.progress`; the new one `progress`.
-    es.addEventListener("prep.progress", onProg);
-    es.addEventListener("progress", onProg);
-    es.addEventListener("message", onProg);
-    es.addEventListener("prep.waiting", (e: MessageEvent) => {
-      try {
-        const v = JSON.parse(String(e.data)) as { waiting?: unknown } | string | null;
-        const why = typeof v === "string" ? v : v && typeof v.waiting === "string" ? v.waiting : "";
-        setHeld(why);
-      } catch {
-        setHeld("");
-      }
-    });
-    return () => es.close();
-  }, [sid]);
-  const [step, done, total] = at;
+/** A prep's progress: the step it is on and how far, as the collection's
+ * event stream says it (`at`), null until it has. Until a step has started,
+ * why the build has not started yet, when the server says one is waiting. */
+export function Progress({ at, waiting = "" }: { at: OutputProgress | null; waiting?: string }) {
+  const step = at?.step ?? "";
+  const done = at?.steps_done ?? 0;
+  const total = at?.steps_total ?? 0;
   const label = phaseLabel(step) ?? "Starting";
   const pct = total > 0 ? Math.floor((done * 100) / total) : 0;
   return (
     <>
       <span className="out-d num">
         <span className="badge preparing">Preparing</span>
-        {sid !== "" && ` ${label}`}
+        {` ${label}`}
         {total > 0 && ` · ${done}/${total}`}
       </span>
-      {held && step === "" && <span className="out-d">{held}</span>}
+      {waiting !== "" && step === "" && <span className="out-d">{waiting}</span>}
       {/* Indeterminate until a step count is known: no value to announce. */}
       <span
         className="pbar wide"

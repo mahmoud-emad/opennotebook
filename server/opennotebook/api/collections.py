@@ -1,20 +1,29 @@
 """Collections: start one, list them, read one with its outputs, rename, pin,
-delete."""
+delete, and follow one as it changes."""
 
+import asyncio
+import json
 import uuid
+from collections.abc import AsyncGenerator, AsyncIterator
 from datetime import datetime
-from typing import Annotated
+from typing import Annotated, Any
 
-from fastapi import APIRouter, BackgroundTasks, Query
-from fastapi.responses import HTMLResponse
+from fastapi import APIRouter, BackgroundTasks, Query, Request
+from fastapi.responses import HTMLResponse, StreamingResponse
 from pydantic import BaseModel, Field
+from sqlalchemy import select
 
 from opennotebook import storage
 from opennotebook.api.deps import SANDBOXED, Db, Me
 from opennotebook.api.sessions import SessionSummary, summaries_of
+from opennotebook.api.sources import SourceOut
+from opennotebook.auth import current_user
 from opennotebook.cover import Theme
-from opennotebook.db.session import release
-from opennotebook.domain import collections, covers, refresh
+from opennotebook.db.models import Source
+from opennotebook.db.session import release, sessionmaker
+from opennotebook.domain import collections, covers, refresh, sessions
+from opennotebook.errors import Problem
+from opennotebook.jobs.events import REREAD_SECONDS, hub
 
 router = APIRouter(prefix="/api/collections", tags=["collections"])
 
@@ -22,6 +31,9 @@ router = APIRouter(prefix="/api/collections", tags=["collections"])
 class CollectionSummary(BaseModel):
     id: uuid.UUID
     title: str
+    display_title: str = Field(
+        description="Its name as it is shown: the title, or `Untitled collection` while it has none"
+    )
     title_auto: bool = Field(description="The studio named it; a person's title is never replaced")
     pinned: bool
     created_at: datetime
@@ -49,13 +61,35 @@ class CollectionSummary(BaseModel):
         description="A copy whose share did not allow edits: it can be read, asked, pinned "
         "and deleted, but nothing in it changes and it cannot be shared"
     )
+    reused_from_title: str | None = Field(
+        description="The name of the collection it was reused from, as it is shown now; "
+        "null when it was not reused or that share is gone"
+    )
+    busy: bool = Field(
+        description="Something in it is still being made: an output, its name or its cover. "
+        "Follow /api/collections/{cid}/events while it is"
+    )
+    auto_named: bool = Field(
+        description="The studio names it from its sources: automatic naming is on in "
+        "Settings and nobody has given it a name"
+    )
+    name_note: str | None = Field(
+        description="What the studio is doing with its name, in words: `Naming it from its "
+        "sources…` or `Named from its sources`; null when the name is a person's"
+    )
 
     @classmethod
     def of(cls, s: collections.Summary) -> CollectionSummary:
         c = s.collection
+        note = None
+        if s.auto_named and c.title.strip():
+            note = "Named from its sources"
+        elif s.auto_named and s.sources > 0:
+            note = "Naming it from its sources…"
         return cls(
             id=c.id,
             title=c.title,
+            display_title=collections.display_title(c.title),
             title_auto=c.title_auto,
             pinned=c.pinned,
             created_at=c.created_at,
@@ -72,6 +106,12 @@ class CollectionSummary(BaseModel):
             shared=s.shared,
             reuses=s.reuses,
             read_only=c.read_only,
+            reused_from_title=None
+            if s.reused_title is None
+            else collections.display_title(s.reused_title),
+            busy=s.busy,
+            auto_named=s.auto_named,
+            name_note=note,
         )
 
 
@@ -179,3 +219,113 @@ async def read_cover(
     html, version = await covers.page(s, me.id, cid, Theme.parse(theme))
     cache = "private, max-age=31536000, immutable" if v == version else "no-cache"
     return HTMLResponse(html, headers={"Cache-Control": cache, **SANDBOXED})
+
+
+# ── following one ────────────────────────────────────────────────────────────
+
+# How often a busy collection is read again with nothing announced: the end of
+# its naming or cover job is not announced, only what it wrote.
+BUSY_REREAD_SECONDS = 3.0
+
+Event = tuple[str, Any]
+
+
+async def _read(owner: uuid.UUID, cid: uuid.UUID) -> dict[str, Any] | None:
+    """The collection as the page shows it now: its summary, its decks and
+    audio overviews, the progress of those being made, and its sources. None
+    once it is gone."""
+    async with sessionmaker()() as s, s.begin():
+        try:
+            summary = await collections.summary(s, owner, cid)
+        except Problem:
+            return None
+        outputs = await summaries_of(s, owner, cid)
+        progress: dict[str, dict[str, Any]] = {}
+        for o in outputs:
+            if o.state != "preparing":
+                continue
+            job, _ = await sessions.job_status(s, o.id)
+            if job is None:
+                continue
+            # Its job's reports wake this collection's streams.
+            hub.follow_job(job.id, cid)
+            if job.steps_total:
+                progress[str(o.id)] = {
+                    "session_id": str(o.id),
+                    "step": job.step,
+                    "steps_done": job.steps_done,
+                    "steps_total": job.steps_total,
+                }
+        rows = await s.scalars(
+            select(Source)
+            .where(Source.collection_id == cid, Source.owner_id == owner)
+            .order_by(Source.created_at)
+        )
+        return {
+            "collection": CollectionSummary.of(summary).model_dump(mode="json"),
+            "outputs": [o.model_dump(mode="json") for o in outputs],
+            "sources": [SourceOut.of(r).model_dump(mode="json") for r in rows],
+            "progress": progress,
+        }
+
+
+async def events_of(owner: uuid.UUID, cid: uuid.UUID) -> AsyncGenerator[Event | None]:
+    """A collection's events as they happen; None is a keep-alive. Each part
+    is sent when the stream starts and again whenever it changes, so a page
+    that connects late misses nothing. Ends with `gone` when the collection
+    is deleted."""
+    last: dict[str, Any] = {}
+    sent: dict[str, Any] = {}
+    async with hub.subscribe(cid) as woken:
+        while True:
+            woken.clear()
+            now = await _read(owner, cid)
+            if now is None:
+                yield ("gone", {"collection_id": str(cid)})
+                return
+            for part in ("collection", "outputs", "sources"):
+                if last.get(part) != now[part]:
+                    yield (part, now[part])
+                    last[part] = now[part]
+            for sid, p in now["progress"].items():
+                if sent.get(sid) != p:
+                    yield ("progress", p)
+                    sent[sid] = p
+            wait = BUSY_REREAD_SECONDS if now["collection"]["busy"] else REREAD_SECONDS
+            try:
+                async with asyncio.timeout(wait):
+                    await woken.wait()
+            except TimeoutError:
+                yield None
+
+
+async def _frames(owner: uuid.UUID, cid: uuid.UUID) -> AsyncIterator[str]:
+    async for e in events_of(owner, cid):
+        # A comment frame when nothing changed: proxies close a silent
+        # connection.
+        yield ": keepalive\n\n" if e is None else f"event: {e[0]}\ndata: {json.dumps(e[1])}\n\n"
+
+
+@router.get(
+    "/{cid}/events",
+    response_class=StreamingResponse,
+    responses={200: {"content": {"text/event-stream": {}}, "description": "Server-sent events"}},
+)
+async def collection_events(cid: uuid.UUID, request: Request) -> StreamingResponse:
+    """Server-sent events while a collection is open: `collection` (its
+    summary, as the list has it), `outputs` (its decks and audio overviews),
+    `progress` (`session_id`, `step`, `steps_done`, `steps_total` of one being
+    made), `sources` (its sources), each when the stream starts and again when
+    it changes, and `gone` once it is deleted. A page follows this rather than
+    reading the collection again on a timer."""
+    # Signed in and checked on a session of its own, closed before the
+    # stream starts: a stream lasts as long as the page, and holds no
+    # transaction.
+    async with sessionmaker()() as s, s.begin():
+        me = await current_user(request, s)
+        await collections.summary(s, me.id, cid)
+    return StreamingResponse(
+        _frames(me.id, cid),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )

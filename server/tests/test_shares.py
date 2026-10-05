@@ -334,7 +334,7 @@ async def test_a_share_is_reused_counted_and_removed_with_its_collection(
     assert up.status_code == 201, up.text
     made = await _rows(me, cid)
 
-    assert (await client.get(f"/api/collections/{cid}/share")).json() is None
+    assert (await client.get(f"/api/collections/{cid}/share")).json()["share"] is None
     r = await client.post(
         f"/api/collections/{cid}/shares",
         json={"include_sources": False, "outputs": ["mindmap:nope"]},
@@ -351,7 +351,7 @@ async def test_a_share_is_reused_counted_and_removed_with_its_collection(
     assert r.status_code == 200, r.text
     sh = r.json()
     assert (sh["note"], sh["reuses"], sh["collection_id"]) == ("hi", 0, cid)
-    assert (await client.get(f"/api/collections/{cid}/share")).json()["id"] == sh["id"]
+    assert (await client.get(f"/api/collections/{cid}/share")).json()["share"]["id"] == sh["id"]
     listed = (await client.get(f"/api/collections/{cid}")).json()["collection"]
     assert listed["shared"] and listed["reused_from"] is None
 
@@ -363,7 +363,7 @@ async def test_a_share_is_reused_counted_and_removed_with_its_collection(
     assert copy["title"] == "zz share test" and not copy["title_auto"]
     assert copy["reused_from"] == sh["id"] and not copy["shared"]
     assert (copy["sources"], copy["decks"], copy["maps"], copy["notes"]) == (2, 1, 1, 0)
-    again = (await client.get(f"/api/collections/{cid}/share")).json()
+    again = (await client.get(f"/api/collections/{cid}/share")).json()["share"]
     assert again["reuses"] == 1, "counted"
     assert again["created_at"] == sh["created_at"]
     assert [c["id"] for c in (await client.get("/api/collections", headers=them)).json()] == [
@@ -466,7 +466,7 @@ async def test_a_failed_reuse_leaves_nothing_of_the_copy(
             await shares.reuse(s, uuid.UUID(await _me(client, them)), uuid.UUID(sh["id"]))
     assert (await client.get("/api/collections", headers=them)).json() == []
     assert _tree(files) == before, "no file left"
-    assert (await client.get(f"/api/collections/{cid}/share")).json()["reuses"] == 0
+    assert (await client.get(f"/api/collections/{cid}/share")).json()["share"]["reuses"] == 0
 
 
 async def test_a_copy_keeps_the_cover_when_it_holds_everything(client: AsyncClient) -> None:
@@ -576,7 +576,7 @@ async def test_only_the_owner_changes_or_stops_a_share(client: AsyncClient) -> N
     assert r.status_code == 422, "nothing would be left to share"
 
     assert (await client.delete(f"/api/shares/{sh['id']}")).status_code == 204
-    assert (await client.get(f"/api/collections/{cid}/share")).json() is None
+    assert (await client.get(f"/api/collections/{cid}/share")).json()["share"] is None
     r = await client.delete(f"/api/shares/{sh['id']}")
     assert r.status_code == 404
     assert r.json()["detail"].startswith("That shared collection is no longer there.")
@@ -650,7 +650,7 @@ async def test_what_a_share_leaves_out_is_not_reachable(client: AsyncClient) -> 
     assert view["card"]["decks"] == 0
     assert (
         f"session:{made['deck']}"
-        in (await client.get(f"/api/collections/{cid}/share")).json()["outputs"]
+        in (await client.get(f"/api/collections/{cid}/share")).json()["share"]["outputs"]
     )
 
 
@@ -682,6 +682,17 @@ async def test_a_reused_and_shared_collection_says_so_in_the_list(client: AsyncC
     assert listed[copy["id"]]["reused_from"] == sh["id"] and not listed[copy["id"]]["shared"]
     assert listed[cid]["reused_from"] is None, "none when it was not reused"
     assert listed[cid]["shared"]
+    # The original's name, as it is now, for as long as its share is there.
+    assert (listed[copy["id"]]["reused_from_title"], listed[cid]["reused_from_title"]) == (
+        "Reefs",
+        None,
+    )
+    await client.patch(f"/api/collections/{cid}", json={"title": "Coral reefs"})
+    got = (await client.get(f"/api/collections/{copy['id']}")).json()["collection"]
+    assert got["reused_from_title"] == "Coral reefs"
+    assert (await client.delete(f"/api/shares/{sh['id']}")).status_code == 204
+    got = (await client.get(f"/api/collections/{copy['id']}")).json()["collection"]
+    assert got["reused_from"] == sh["id"] and got["reused_from_title"] is None
 
 
 # ── how often it was reused, and read-only copies ─────────────────────────────
@@ -869,7 +880,7 @@ async def test_a_read_only_copy_refuses_every_change(client: AsyncClient) -> Non
         assert r.status_code == 403, (method, path, r.text)
         assert r.json()["detail"] == refusal("Reefs"), (method, path)
     assert await _held(client, cid, them) == before, "nothing changed"
-    assert (await client.get(f"/api/collections/{cid}/share", headers=them)).json() is None
+    assert (await client.get(f"/api/collections/{cid}/share", headers=them)).json()["share"] is None
 
 
 async def test_a_read_only_copy_still_reads_asks_pins_plays_and_goes(
@@ -975,3 +986,78 @@ async def test_an_ordinary_collection_is_not_read_only(client: AsyncClient) -> N
     assert got["read_only"] is False and got["reuses"] == 0
     r = await client.patch(f"/api/collections/{cid}", json={"title": "Coral"})
     assert r.status_code == 200
+
+
+async def test_the_share_dialog_opens_on_what_can_be_shared(client: AsyncClient) -> None:
+    cid = await _collection(client, "Reefs")
+    await _note(client, cid, REEF)
+    me = await _me(client)
+    made = await _rows(me, cid)
+    async with engine().begin() as c:
+        await c.execute(text("UPDATE mindmaps SET title = '' WHERE id = :m"), {"m": made["map"]})
+        # A deck still being made cannot be shared yet.
+        await c.execute(
+            text(
+                "INSERT INTO sessions (owner_id, collection_id, kind, title, state)"
+                " VALUES (:o, :c, 'slides', 'Later', 'preparing')"
+            ),
+            {"o": me, "c": cid},
+        )
+    d = (await client.get(f"/api/collections/{cid}/share")).json()
+    assert d["share"] is None and d["sources"] == 1 and d["note_max"] == 280
+    keys = {i["key"]: i for i in d["items"]}
+    assert set(keys) == {
+        f"session:{made['deck']}",
+        f"mindmap:{made['map']}",
+        f"notes:{made['notes']}",
+    }
+    assert keys[f"session:{made['deck']}"]["kind"] == "slides"
+    # An output with no name is called by its kind.
+    assert keys[f"mindmap:{made['map']}"]["title"] == "Mind map"
+    # Not shared yet: everything there is, ticked; edits off.
+    assert d["include_sources"] and sorted(d["picked"]) == sorted(keys)
+    assert (d["note"], d["allow_edits"]) == ("", False)
+
+    sh = await client.post(
+        f"/api/collections/{cid}/shares",
+        json={
+            "include_sources": False,
+            "outputs": [f"notes:{made['notes']}"],
+            "note": "for divers",
+            "allow_edits": True,
+        },
+    )
+    assert sh.status_code == 200, sh.text
+    d = (await client.get(f"/api/collections/{cid}/share")).json()
+    # Shared: the share's own choices.
+    assert d["share"]["id"] == sh.json()["id"]
+    assert (d["include_sources"], d["picked"], d["note"], d["allow_edits"]) == (
+        False,
+        [f"notes:{made['notes']}"],
+        "for divers",
+        True,
+    )
+
+
+async def test_untitled_shared_things_are_shown_by_what_they_are(client: AsyncClient) -> None:
+    cid = await _collection(client, "")
+    await _note(client, cid, REEF)
+    made = await _rows(await _me(client), cid)
+    async with engine().begin() as c:
+        await c.execute(text("UPDATE mindmaps SET title = '' WHERE id = :m"), {"m": made["map"]})
+        await c.execute(text("UPDATE collections SET title = '' WHERE id = :c"), {"c": cid})
+    sh = (
+        await client.post(
+            f"/api/collections/{cid}/shares",
+            json={"include_sources": True, "outputs": [f"mindmap:{made['map']}"]},
+        )
+    ).json()
+    view = (await client.get(f"/api/shares/{sh['id']}")).json()
+    assert view["card"]["display_title"] == "Untitled collection"
+    assert [o["display_title"] for o in view["outputs"]] == ["Untitled mind map"]
+    # Its sources come described, as a collection's own do.
+    assert view["sources"][0]["detail"].startswith("note · ")
+    items = (await client.get("/api/shares/items", params={"kind": "mindmap"})).json()["items"]
+    assert [(i["display_title"], i["collection_display_title"]) for i in items] == [
+        ("Untitled mind map", "Untitled collection")
+    ]

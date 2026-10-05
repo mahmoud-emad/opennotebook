@@ -13,9 +13,10 @@ import {
   type ShareCard,
   type SharedItem,
   type SharedOutput,
+  type SharedSource,
   type ShareView,
 } from "./api-share";
-import { Cover, ListError, OutputBadges, SkelGrid, collTitle } from "./home";
+import { Cover, ListError, OutputBadges, SkelGrid } from "./home";
 import { Icon } from "./Icon";
 import { follow, go, routeUrl, type View } from "./routes";
 import {
@@ -33,7 +34,7 @@ import {
   type FeedSort,
 } from "./share";
 import { isBuild, mmss, notify, outputIcon, outputLabel, when, type Output } from "./shell";
-import { SrcRow, fileKind, shortHost, type Src } from "./sources";
+import { SrcRow, type Src } from "./sources";
 
 // A shared map or notes opens in the collection page's viewers, which load
 // with it the first time one is opened, so Discover stays small.
@@ -304,19 +305,13 @@ export function DiscoverPage() {
 /** The items of one kind Discover holds, with where the next page starts. */
 type Listed = { kind: FeedKind; list: SharedItem[]; next: number | null };
 
-/** What a shared output's card says it is: "Untitled mind map" when it has no
- * name. */
-export function itemTitle(it: Pick<SharedItem, "kind" | "title">): string {
-  return it.title.trim() === "" ? `Untitled ${WHAT[outputKind(it.kind)]}` : it.title;
-}
-
 /** Where a shared output's card comes from: its collection, and who shared it. */
-export function itemFrom(it: Pick<SharedItem, "collection_title" | "shared_by" | "mine">): {
+export function itemFrom(it: Pick<SharedItem, "collection_display_title" | "shared_by" | "mine">): {
   collection: string;
   by: string;
 } {
   return {
-    collection: collTitle(it.collection_title),
+    collection: it.collection_display_title,
     by: it.mine ? "Shared by you" : it.shared_by.trim() === "" ? "" : `Shared by ${it.shared_by.trim()}`,
   };
 }
@@ -336,7 +331,7 @@ export function ItemTile({
   onOpen: (v: SharedViewing) => void;
 }) {
   const k = outputKind(it.kind);
-  const title = itemTitle(it);
+  const title = it.display_title;
   const act = itemAction(k);
   const from = itemFrom(it);
   const made = when(it.created_ms);
@@ -404,7 +399,7 @@ export function ItemTile({
  * own, with its note, what it includes, and how often it was reused. */
 function ShareTile({ s }: { s: ShareCard }) {
   const view: View = { kind: "shared", id: s.share_id };
-  const title = collTitle(s.title);
+  const title = s.display_title;
   const untitled = s.title.trim() === "";
   const shared = when(s.updated_ms);
   return (
@@ -445,14 +440,14 @@ export function sharedFacts(o: Pick<SharedOutput, "kind" | "slide_count" | "dura
 }
 
 /** A shared source as the read-only row the sources panel draws. */
-export function sharedSrc(name: string, title: string, url: string, chars: number): Src {
-  const words = Math.floor(chars / 6);
+export function sharedSrc(s: SharedSource): Src {
   return {
-    name: title === "" ? name : title,
-    detail: url === "" ? `${fileKind(name)} · ${words} words` : `${shortHost(url)} · ${words} words`,
+    name: s.title === "" ? s.name : s.title,
+    // Where it came from and how long it is, as the server words it.
+    detail: s.detail,
     ok: true,
-    url,
-    icon: "",
+    url: s.url,
+    icon: s.icon,
     // Empty: not one of yours, so the row offers no remove.
     file: "",
   };
@@ -528,7 +523,7 @@ export function SharedRow({
   onOpen: () => void;
 }) {
   const k = outputKind(o.kind);
-  const shown = o.title.trim() === "" ? `Untitled ${WHAT[k]}` : o.title;
+  const shown = o.display_title;
   const act = itemAction(k);
   const w = when(o.created_ms);
   const body = (
@@ -564,14 +559,6 @@ export function SharedRow({
   );
 }
 
-/** What a shared output is called in a sentence. */
-const WHAT: Record<Output, string> = {
-  audio: "audio overview",
-  mindmap: "mind map",
-  notes: "study notes",
-  session: "narrated slides",
-};
-
 /** One shared collection as a visitor sees it: what it is, what it includes,
  * and Reuse collection, which copies it into a new collection of one's own. */
 export function SharedPage({
@@ -595,7 +582,7 @@ export function SharedPage({
     try {
       const v = await shareView(shareId);
       const card = v.found ? v.card : undefined;
-      setCrumb(card ? collTitle(card.title) : "");
+      setCrumb(card ? card.display_title : "");
       setGot(v);
     } catch (e) {
       setErr(errText(e));
@@ -665,9 +652,9 @@ export function SharedPage({
         </div>
       </main>
     );
-  const title = collTitle(card.title);
+  const title = card.display_title;
   const shared = when(card.updated_ms);
-  const srcs = got.sources.map((s) => sharedSrc(s.name, s.title, s.url, s.chars));
+  const srcs = got.sources.map(sharedSrc);
   return (
     <>
       <main className="share-page">

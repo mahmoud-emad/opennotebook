@@ -1,16 +1,19 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { sharedItemOf, wireKind, type SharedItem, type SharedOutput } from "./api-share";
-import { ItemTile, SharedRow, itemFrom, itemTitle, sharedFacts } from "./discover";
+import { ItemTile, SharedRow, itemFrom, sharedFacts } from "./discover";
 import { ICONS } from "./icons";
 import { FEED_KINDS, appendItems, feedKindLabel, itemAction } from "./share";
 import { outputIcon } from "./shell";
 
+// Its names as the server sends them: shown as titled unless a test says.
 const item = (over: Partial<SharedItem> = {}): SharedItem => ({
   key: "session:d1",
   kind: "session",
   id: "d1",
   title: "Reef deck",
+  display_title: over.title ?? "Reef deck",
+  collection_display_title: over.collection_title ?? "Coral reefs",
   slide_count: 12,
   duration_ms: 522_000,
   created_ms: 0,
@@ -64,6 +67,8 @@ describe("Discover's kinds", () => {
       kind: "slides",
       id: "d1",
       title: "Deck",
+      display_title: "Deck",
+      collection_display_title: "Coral reefs",
       parts: 12,
       duration_ms: 522_000,
       created_at: "2026-10-01T00:00:00Z",
@@ -91,11 +96,9 @@ describe("Discover's kinds", () => {
   it("says an item's length, name and origin", () => {
     expect(sharedFacts(item())).toBe("12 slides · 8:42");
     expect(sharedFacts(item({ kind: "audio", duration_ms: 61_000 }))).toBe("Audio overview · 1:01");
-    expect(itemTitle(item({ kind: "mindmap", title: "  " }))).toBe("Untitled mind map");
-    expect(itemTitle(item())).toBe("Reef deck");
     expect(itemFrom(item())).toEqual({ collection: "Coral reefs", by: "Shared by Sam" });
     expect(itemFrom(item({ mine: true }))).toEqual({ collection: "Coral reefs", by: "Shared by you" });
-    expect(itemFrom(item({ collection_title: "", shared_by: "" }))).toEqual({
+    expect(itemFrom(item({ collection_display_title: "Untitled collection", shared_by: "" }))).toEqual({
       collection: "Untitled collection",
       by: "",
     });
@@ -137,6 +140,7 @@ describe("a shared collection's outputs", () => {
     key: "session:d1",
     kind: "session",
     title: "Deck",
+    display_title: over.title ?? "Deck",
     sid: "d1",
     id: "",
     slide_count: 4,
@@ -154,7 +158,7 @@ describe("a shared collection's outputs", () => {
     const onOpen = vi.fn();
     rerender(
       <SharedRow
-        o={out({ key: "notes:n1", kind: "notes", title: "", sid: "", id: "n1" })}
+        o={out({ key: "notes:n1", kind: "notes", title: "", display_title: "Untitled study notes", sid: "", id: "n1" })}
         shareId="sh1"
         on={false}
         onOpen={onOpen}

@@ -2,10 +2,9 @@
 // knows them. A port of the shared half of the old app's `settings.rs`; the
 // dialog itself is `SettingsDialog.tsx`.
 
-import { readable } from "./errors";
-import { serviceRoot, settingsLoad, storage, type SettingItem, type SettingsDoc } from "./api";
+import { UNKNOWN } from "./errors";
+import { settingsLoad, storage, type SettingItem, type SettingsDoc } from "./api";
 import { store, useStore } from "./store";
-import { STYLES } from "./styles";
 
 /** The setting keys the app reads for its hints and defaults. */
 export const keys = {
@@ -112,7 +111,7 @@ export async function reloadSettings(): Promise<void> {
     const doc = await settingsLoad();
     SETTINGS.set((s) => ({ ...s, doc, err: "", loaded: true }));
   } catch (e) {
-    const err = e instanceof Error ? e.message : readable(String(e));
+    const err = e instanceof Error ? e.message : UNKNOWN;
     SETTINGS.set((s) => ({ ...s, err, loaded: true }));
   }
 }
@@ -196,16 +195,4 @@ export function SettingsLink({ tab, text }: { tab: string; text?: string }) {
       {text ?? `Settings › ${label}`}
     </button>
   );
-}
-
-/** The thumbnail URL for a style, relative to the bundle's mount. */
-export function thumbUrl(id: string): string {
-  const known = ["professional", "bento", "instructional", "scientific", "sketchnote", "clay", "bricks"];
-  // Under the bundle's mount, so it resolves on every page, /ui/c/<cid> too.
-  return `${serviceRoot()}/ui/assets/styles/${known.includes(id) ? id : "editorial"}.jpg`;
-}
-
-/** The display name of a style id, falling back to the id itself. */
-export function styleLabel(id: string): string {
-  return STYLES.find((s) => s.id === id)?.label ?? id;
 }

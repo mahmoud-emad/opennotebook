@@ -11,15 +11,11 @@
 // the owner is whoever opened the studio.
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { errText, getCollection } from "./api";
-import { shareGet, shareRemove, shareSet, type FeedKind, type Share } from "./api-share";
-import { mindmapList, notesList } from "./api-studio";
+import { errText } from "./api";
+import { shareRemove, shareSet, shareState, type FeedKind, type ShareState } from "./api-share";
 import { collTitle } from "./home";
 import { Icon } from "./Icon";
 import { notify, outputIcon, outputLabel, type Output } from "./shell";
-
-/** The longest note a share carries: the server cuts it to this too. */
-export const NOTE_MAX = 280;
 
 /** The feed's two orders. */
 export type FeedSort = "newest" | "reused";
@@ -89,67 +85,11 @@ export const READ_ONLY_TAIL = " — its author did not allow edits.";
 /** The whole note a read-only copy shows under its header, in words. */
 export const readOnlyLine = (origin: string | null) => `Read-only copy of ${readOnlyOf(origin)}${READ_ONLY_TAIL}`;
 
-/** The key a share names an output by: `session:<sid>` for a deck or an audio
- * overview, `mindmap:<id>`, `notes:<id>`. */
-export function outputKey(kind: Output, id: string): string {
-  switch (kind) {
-    case "session":
-    case "audio":
-      return `session:${id}`;
-    case "mindmap":
-      return `mindmap:${id}`;
-    case "notes":
-      return `notes:${id}`;
-  }
-}
-
 /** What a shared output is, from the wire's kind: "session", "audio",
  * "mindmap", "notes". */
 export function outputKind(wire: string): Output {
   if (wire === "audio" || wire === "mindmap" || wire === "notes") return wire;
   return "session";
-}
-
-/** One output that can be shared: ready, with its key, kind and name. */
-type Shareable = { key: string; kind: Output; title: string; created_ms: number };
-
-/** What a collection holds that a share can include, and its share if any. */
-type Holding = { sources: number; outputs: Shareable[]; share: Share | null };
-
-/** An output's name, or its kind while it has none. */
-function named(title: string, kind: Output): string {
-  return title.trim() === "" ? outputLabel[kind] : title;
-}
-
-/** Read what `cid` holds and its share. Only ready outputs can be shared: a
- * deck still preparing has nothing to show yet, and a failed one never will. */
-async function holding(cid: string): Promise<Holding> {
-  const g = await getCollection(cid);
-  if (!g.found) throw new Error("This collection is no longer there.");
-  const sources = g.collection?.sources ?? 0;
-  const outputs: Shareable[] = g.outputs
-    .filter((s) => s.state === "ready")
-    .map((s) => {
-      const kind: Output = s.kind === "audio" ? "audio" : "session";
-      return { key: outputKey(kind, s.sid), kind, title: named(s.title, kind), created_ms: s.created_ms };
-    });
-  const [maps, notes, share] = await Promise.all([mindmapList(cid), notesList(cid), shareGet(cid)]);
-  outputs.push(
-    ...maps.map((m) => ({
-      key: outputKey("mindmap", m.id),
-      kind: "mindmap" as Output,
-      title: named(m.title, "mindmap"),
-      created_ms: m.created_ms,
-    })),
-    ...notes.map((n) => ({
-      key: outputKey("notes", n.id),
-      kind: "notes" as Output,
-      title: named(n.title, "notes"),
-      created_ms: n.created_ms,
-    })),
-  );
-  outputs.sort((a, b) => b.created_ms - a.created_ms);
-  return { sources, outputs, share };
 }
 
 /** Whether a share of this choice would hold anything: the server refuses an
@@ -160,10 +100,11 @@ export function shareHasContent(includeSources: boolean, sources: number, picked
 
 /** Share a collection, or change or stop its share.
  *
- * What it holds is read when it opens, so the dialog is the same from the
- * collection's own page and from its card. A collection already shared opens
- * on what its share includes; one that is not opens with everything ticked,
- * for the owner to take away what should stay theirs.
+ * What it holds is read from the server when it opens, so the dialog is the
+ * same from the collection's own page and from its card. The server says
+ * what it opens on: a collection already shared on what its share includes,
+ * one that is not with everything ticked, for the owner to take away what
+ * should stay theirs.
  *
  * `onClose` says whether the share changed, so the page behind it can read it
  * again. */
@@ -176,7 +117,7 @@ export function ShareDialog({
   title: string;
   onClose: (changed: boolean) => void;
 }) {
-  const [held, setHeld] = useState<{ ok: Holding } | { err: string } | null>(null);
+  const [held, setHeld] = useState<{ ok: ShareState } | { err: string } | null>(null);
   const [withSources, setWithSources] = useState(true);
   const [picked, setPicked] = useState<string[]>([]);
   const [note, setNote] = useState("");
@@ -191,17 +132,11 @@ export function ShareDialog({
   const load = useCallback(async () => {
     setHeld(null);
     try {
-      const h = await holding(cid);
-      if (h.share) {
-        const s = h.share;
-        setWithSources(s.include_sources && h.sources > 0);
-        setPicked(s.outputs.filter((k) => h.outputs.some((o) => o.key === k)));
-        setNote(s.note);
-        setAllowEdits(s.allow_edits);
-      } else {
-        setWithSources(h.sources > 0);
-        setPicked(h.outputs.map((o) => o.key));
-      }
+      const h = await shareState(cid);
+      setWithSources(h.include_sources);
+      setPicked(h.picked);
+      setNote(h.note);
+      setAllowEdits(h.allow_edits);
       setHeld({ ok: h });
     } catch (e) {
       setHeld({ err: errText(e) });
@@ -215,6 +150,7 @@ export function ShareDialog({
 
   const h = held && "ok" in held ? held.ok : null;
   const sources = h?.sources ?? 0;
+  const noteMax = h?.note_max ?? 0;
   const shared = !!h?.share;
   const hasContent = shareHasContent(withSources, sources, picked.length);
   const ready = h !== null;
@@ -317,12 +253,12 @@ export function ShareDialog({
               </div>
               <fieldset className="share-outs">
                 <legend className="sec-t">Outputs</legend>
-                {held.ok.outputs.length === 0 && (
+                {held.ok.items.length === 0 && (
                   <p className="set-help">
                     Nothing ready to share yet. Outputs still being made or failed cannot be shared.
                   </p>
                 )}
-                {held.ok.outputs.map((o) => (
+                {held.ok.items.map((o) => (
                   <label key={o.key} className="share-out">
                     <input
                       type="checkbox"
@@ -363,13 +299,13 @@ export function ShareDialog({
                 <label htmlFor="share-note">Note (optional)</label>
                 <textarea
                   id="share-note"
-                  maxLength={NOTE_MAX}
+                  maxLength={noteMax}
                   placeholder="What it is, who it is for"
                   value={note}
-                  onChange={(e) => setNote([...e.target.value].slice(0, NOTE_MAX).join(""))}
+                  onChange={(e) => setNote([...e.target.value].slice(0, noteMax).join(""))}
                 />
                 <div className="share-count num">
-                  {[...note].length}/{NOTE_MAX}
+                  {[...note].length}/{noteMax}
                 </div>
               </div>
             </>

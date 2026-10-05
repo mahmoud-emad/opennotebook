@@ -110,6 +110,7 @@ describe("the player, mounted twice", () => {
       title: "",
       state: "preparing",
       speaker_list: [],
+      speaker_names: {},
       slides: [],
       audio: null,
     };

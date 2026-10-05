@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ICONS } from "./icons";
-import { outputKey, outputKind, reusedLine, shareHasContent } from "./share";
+import { outputKind, reusedLine, shareHasContent } from "./share";
 
 describe("sharing", () => {
   it("reads a reuse count as words", () => {
@@ -9,13 +9,7 @@ describe("sharing", () => {
     expect(reusedLine(12)).toBe("Reused 12 times");
   });
 
-  // The keys are the server's: a deck and an audio overview are both a
-  // session.
-  it("keys outputs as the server keys them", () => {
-    expect(outputKey("session", "s1")).toBe("session:s1");
-    expect(outputKey("audio", "s2")).toBe("session:s2");
-    expect(outputKey("mindmap", "m1")).toBe("mindmap:m1");
-    expect(outputKey("notes", "n1")).toBe("notes:n1");
+  it("reads an output's kind from the wire's", () => {
     expect(outputKind("audio")).toBe("audio");
     expect(outputKind("mindmap")).toBe("mindmap");
     expect(outputKind("notes")).toBe("notes");

@@ -15,6 +15,7 @@ from dataclasses import dataclass, field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from opennotebook import jobs
 from opennotebook.ai import ledger
 from opennotebook.ai.client import ai
 from opennotebook.ai.errors import AiError
@@ -274,3 +275,4 @@ async def name(owner: uuid.UUID, cid: uuid.UUID) -> None:
             return
         now.title = title
         now.titled_from = signature
+        await jobs.announce(s, cid)

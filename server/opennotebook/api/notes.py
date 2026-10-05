@@ -10,10 +10,11 @@ from fastapi import APIRouter
 from pydantic import BaseModel, Field
 from sqlalchemy import delete, select
 
-from opennotebook.ai import ledger
+from opennotebook.ai import client, ledger
 from opennotebook.ai.errors import AiError
 from opennotebook.api.deps import Db, Me
 from opennotebook.api.mindmaps import MakeReq, Retitle
+from opennotebook.api.sessions import SessionEstimate
 from opennotebook.db.models import StudyNotes
 from opennotebook.db.session import release
 from opennotebook.domain import collections, reading
@@ -54,6 +55,10 @@ class NotesSummary(BaseModel):
     id: uuid.UUID
     collection_id: uuid.UUID
     title: str
+    display_title: str = Field(
+        description="Its name as it is shown: the title, or `Untitled study notes` while it "
+        "has none"
+    )
     focus: str
     sources: list[str]
     created_at: datetime
@@ -69,6 +74,7 @@ class NotesSummary(BaseModel):
             id=n.id,
             collection_id=n.collection_id,
             title=n.title,
+            display_title=" ".join(n.title.split()) or "Untitled study notes",
             focus=n.focus,
             sources=n.sources,
             created_at=n.created_at,
@@ -231,18 +237,26 @@ async def make_notes(cid: uuid.UUID, body: MakeReq, s: Db, me: Me) -> NotesOut:
     return NotesOut.full(n)
 
 
-@router.get("/estimate")
-async def estimate_notes(cid: uuid.UUID, s: Db, me: Me) -> Estimate:
-    """What writing study notes of every source would cost, before writing them."""
-    await collections.summary(s, me.id, cid)
-    docs = await reading.read_docs(s, me.id, cid, None)
-    model = await config.value(s, me.id, config.NOTES_MODEL_KEY)
-    limit = await reading.limit_of(s, me.id)
+async def one_call(s: Db, owner: uuid.UUID, cid: uuid.UUID) -> Estimate:
+    """What the one call that writes notes of every source would cost."""
+    await collections.summary(s, owner, cid)
+    docs = await reading.read_docs(s, owner, cid, None)
+    model = await config.value(s, owner, config.NOTES_MODEL_KEY)
+    limit = await reading.limit_of(s, owner)
     # The price list can take seconds to read; no transaction waits for it.
     await release(s)
     return await reading.estimate(
         docs, model, lambda chars: (tokens_in(chars), OUTPUT_TOKENS), limit
     )
+
+
+@router.get("/estimate")
+async def estimate_notes(cid: uuid.UUID, s: Db, me: Me) -> SessionEstimate:
+    """What writing study notes of every source would cost, before writing
+    them, itemised the way a build's estimate is."""
+    q = await one_call(s, me.id, cid)
+    price = await client.ai().catalogue.price(q.model)
+    return SessionEstimate.one_call(q, price, "Study notes", "Write the study notes")
 
 
 @router.get("/{nid}")

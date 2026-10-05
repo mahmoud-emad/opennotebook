@@ -217,3 +217,30 @@ def test_nothing_changed_emits_nothing() -> None:
     # A stream that repeats itself teaches a client to ignore it.
     h = Head("playing", 0, "s0l0", 500)
     assert playback_events(h, h, lookup()) == []
+
+
+def test_an_audio_overview_is_said_by_its_format_and_a_length_it_offers() -> None:
+    said = [
+        d.AudioSpec(f, n).said()
+        for f, n in (("brief", "default"), ("brief", "shorter"), ("deep_dive", "shorter"))
+    ]
+    assert said == ["Brief", "Brief", "Deep Dive · shorter"]
+    assert d.AudioSpec("debate", "longer").said() == "Debate"
+
+
+def test_a_failure_is_said_as_a_sentence_and_its_detail_kept_apart() -> None:
+    said = "The slides took too long to draw. Try again with fewer slides."
+    assert d.failure_said(said, "TimeoutError after 600s") == (said, "TimeoutError after 600s")
+    assert d.failure_said(said, said) == (said, None), "no detail beyond the sentence"
+    assert d.failure_said("", None) == (d.FAILED_PLAIN, None)
+    # Raw words from an older row: a known failure in its sentence, else a
+    # plain one, the words kept as the detail.
+    raw = 'HTTP 402: {"error": {"message": "insufficient_quota"}}'
+    plain, detail = d.failure_said(raw, None)
+    assert plain.startswith("The AI account is out of credit") and detail == raw
+    assert d.failure_said("name conflict on theme", None) == (
+        d.FAILED_PLAIN,
+        "name conflict on theme",
+    )
+    assert d.display_title("  ", audio=True) == "Untitled audio overview"
+    assert d.display_title("Reefs", audio=False) == "Reefs"

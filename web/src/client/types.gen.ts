@@ -158,6 +158,22 @@ export type BuildReq = {
 };
 
 /**
+ * Check
+ */
+export type Check = {
+    /**
+     * Ok
+     */
+    ok: boolean;
+    /**
+     * Detail
+     *
+     * What was found, in a sentence
+     */
+    detail: string;
+};
+
+/**
  * Citation
  */
 export type Citation = {
@@ -243,6 +259,12 @@ export type CollectionSummary = {
      */
     title: string;
     /**
+     * Display Title
+     *
+     * Its name as it is shown: the title, or `Untitled collection` while it has none
+     */
+    display_title: string;
+    /**
      * Title Auto
      *
      * The studio named it; a person's title is never replaced
@@ -326,6 +348,30 @@ export type CollectionSummary = {
      * A copy whose share did not allow edits: it can be read, asked, pinned and deleted, but nothing in it changes and it cannot be shared
      */
     read_only: boolean;
+    /**
+     * Reused From Title
+     *
+     * The name of the collection it was reused from, as it is shown now; null when it was not reused or that share is gone
+     */
+    reused_from_title: string | null;
+    /**
+     * Busy
+     *
+     * Something in it is still being made: an output, its name or its cover. Follow /api/collections/{cid}/events while it is
+     */
+    busy: boolean;
+    /**
+     * Auto Named
+     *
+     * The studio names it from its sources: automatic naming is on in Settings and nobody has given it a name
+     */
+    auto_named: boolean;
+    /**
+     * Name Note
+     *
+     * What the studio is doing with its name, in words: `Naming it from its sources…` or `Named from its sources`; null when the name is a person's
+     */
+    name_note: string | null;
 };
 
 /**
@@ -449,51 +495,35 @@ export type CostLine = {
 };
 
 /**
- * Estimate
+ * FormatChoice
  *
- * What one call over a collection's sources would cost, before making it.
+ * An audio overview's format, as the Create panel offers it.
  */
-export type Estimate = {
+export type FormatChoice = {
     /**
-     * Sources
+     * Id
      */
-    sources: number;
+    id: string;
     /**
-     * Chars
+     * Label
+     */
+    label: string;
+    /**
+     * Blurb
+     */
+    blurb: string;
+    /**
+     * Lengths
      *
-     * Characters of source text
+     * The lengths it offers to choose from; empty when it has one, as Brief does
      */
-    chars: number;
+    lengths: Array<LengthChoice>;
     /**
-     * Model
-     */
-    model: string;
-    /**
-     * Input Tokens
-     */
-    input_tokens: number;
-    /**
-     * Output Tokens
-     */
-    output_tokens: number;
-    /**
-     * Cost Usd
+     * Voices
      *
-     * The typical cost; 0 when the model has no price
+     * Who it is read by, in a sentence: `Voices: Ava and Andrew.`
      */
-    cost_usd: number;
-    /**
-     * Cost High Usd
-     *
-     * Twice the typical cost: a second attempt
-     */
-    cost_high_usd: number;
-    /**
-     * Priced
-     *
-     * False when the model's price is not known
-     */
-    priced: boolean;
+    voices: string;
 };
 
 /**
@@ -568,6 +598,12 @@ export type JobOut = {
      * Created At
      */
     created_at: string;
+    /**
+     * Waiting
+     *
+     * Why queued work has not started, in a sentence: no worker is running. Null otherwise
+     */
+    waiting?: string | null;
 };
 
 /**
@@ -596,6 +632,20 @@ export type KeyOut = {
      * Last Used At
      */
     last_used_at: string | null;
+};
+
+/**
+ * LengthChoice
+ */
+export type LengthChoice = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Label
+     */
+    label: string;
 };
 
 /**
@@ -763,6 +813,12 @@ export type MindMapOut = {
      */
     unchecked: boolean;
     root: MindNode;
+    /**
+     * Display Title
+     *
+     * Its name as it is shown: the title, or `Untitled mind map` while it has none
+     */
+    readonly display_title: string;
 };
 
 /**
@@ -803,6 +859,12 @@ export type MindMapSummary = {
      * Created At
      */
     created_at: string;
+    /**
+     * Display Title
+     *
+     * Its name as it is shown: the title, or `Untitled mind map` while it has none
+     */
+    readonly display_title: string;
 };
 
 /**
@@ -889,6 +951,12 @@ export type NotesOut = {
      * Title
      */
     title: string;
+    /**
+     * Display Title
+     *
+     * Its name as it is shown: the title, or `Untitled study notes` while it has none
+     */
+    display_title: string;
     /**
      * Focus
      */
@@ -984,6 +1052,12 @@ export type NotesSummary = {
      */
     title: string;
     /**
+     * Display Title
+     *
+     * Its name as it is shown: the title, or `Untitled study notes` while it has none
+     */
+    display_title: string;
+    /**
      * Focus
      */
     focus: string;
@@ -1035,6 +1109,45 @@ export type Playhead = {
      * State
      */
     state?: 'idle' | 'playing' | 'paused' | 'finished';
+};
+
+/**
+ * Readiness
+ */
+export type Readiness = {
+    /**
+     * Ready
+     *
+     * Everything below is ok: the studio can take work
+     */
+    ready: boolean;
+    database: Check;
+    /**
+     * The connection that carries progress to open pages
+     */
+    listener: Check;
+    /**
+     * The process that runs builds and research
+     */
+    worker: Check;
+};
+
+/**
+ * ResearchHint
+ */
+export type ResearchHint = {
+    /**
+     * Label
+     *
+     * `Quick research` or `Standard research`
+     */
+    label: string;
+    /**
+     * Takes
+     *
+     * How long it reads the web: `about a minute`
+     */
+    takes: string;
 };
 
 /**
@@ -1166,6 +1279,12 @@ export type SessionDetail = {
      */
     title: string;
     /**
+     * Display Title
+     *
+     * Its name as it is shown: the title, or `Untitled narrated slides` / `Untitled audio overview` while it has none
+     */
+    display_title: string;
+    /**
      * Description
      */
     description: string;
@@ -1176,9 +1295,15 @@ export type SessionDetail = {
     /**
      * Failure
      *
-     * Why it failed, in a sentence; null unless failed
+     * Why it failed, in a sentence with what to do; null unless failed
      */
     failure: string | null;
+    /**
+     * Failure Detail
+     *
+     * The failure's technical detail, for whoever is debugging; null when there is none beyond the sentence
+     */
+    failure_detail?: string | null;
     /**
      * Parts
      *
@@ -1195,6 +1320,12 @@ export type SessionDetail = {
      * An audio overview's format; empty for a deck
      */
     audio_format: string;
+    /**
+     * Audio Label
+     *
+     * An audio overview's format as a person reads it: `Deep Dive`; empty for a deck
+     */
+    audio_label: string;
     /**
      * Duration Ms
      *
@@ -1253,6 +1384,14 @@ export type SessionDetail = {
     audio: {
         [key: string]: unknown;
     } | null;
+    /**
+     * Speaker Names
+     *
+     * What to call each speaker, by speaker id: their own name, or their voice's when they have only a role word such as `Host`
+     */
+    speaker_names: {
+        [key: string]: string;
+    };
 };
 
 /**
@@ -1332,6 +1471,18 @@ export type SessionEstimate = {
      * The high estimate is over the limit: a build is refused
      */
     over_limit: boolean;
+    /**
+     * Model
+     *
+     * The model that does most of the writing: the script's, or the one that makes a mind map or study notes
+     */
+    model: string;
+    /**
+     * Facts
+     *
+     * What it is made of, in words, as the cost dialog lists them: `5 slides`, `about 5 minutes`, `2 voices`, `3 sources · 12.4k characters`…
+     */
+    facts: Array<string>;
 };
 
 /**
@@ -1369,6 +1520,12 @@ export type SessionSummary = {
      */
     title: string;
     /**
+     * Display Title
+     *
+     * Its name as it is shown: the title, or `Untitled narrated slides` / `Untitled audio overview` while it has none
+     */
+    display_title: string;
+    /**
      * Description
      */
     description: string;
@@ -1379,9 +1536,15 @@ export type SessionSummary = {
     /**
      * Failure
      *
-     * Why it failed, in a sentence; null unless failed
+     * Why it failed, in a sentence with what to do; null unless failed
      */
     failure: string | null;
+    /**
+     * Failure Detail
+     *
+     * The failure's technical detail, for whoever is debugging; null when there is none beyond the sentence
+     */
+    failure_detail?: string | null;
     /**
      * Parts
      *
@@ -1398,6 +1561,12 @@ export type SessionSummary = {
      * An audio overview's format; empty for a deck
      */
     audio_format: string;
+    /**
+     * Audio Label
+     *
+     * An audio overview's format as a person reads it: `Deep Dive`; empty for a deck
+     */
+    audio_label: string;
     /**
      * Duration Ms
      *
@@ -1673,6 +1842,12 @@ export type ShareCard = {
      * Updated At
      */
     updated_at: string;
+    /**
+     * Display Title
+     *
+     * The collection's name as it is shown: its title, or `Untitled collection`
+     */
+    readonly display_title: string;
 };
 
 /**
@@ -1780,6 +1955,60 @@ export type ShareSet = {
 };
 
 /**
+ * ShareState
+ *
+ * Everything the share dialog shows for one of your collections, and
+ * what it opens on: the share's own choices, or, for a collection not
+ * shared yet, everything there is.
+ */
+export type ShareState = {
+    /**
+     * Its share; null when it is not shared
+     */
+    share: ShareOut | null;
+    /**
+     * Sources
+     *
+     * How many sources it has to include
+     */
+    sources: number;
+    /**
+     * Items
+     *
+     * Its outputs that can be shared, newest first. Only ready ones: one still being made has nothing to show yet, and a failed one never will
+     */
+    items: Array<Shareable>;
+    /**
+     * Include Sources
+     *
+     * Whether the dialog opens with the sources on
+     */
+    include_sources: boolean;
+    /**
+     * Picked
+     *
+     * The keys of the items the dialog opens ticked
+     */
+    picked: Array<string>;
+    /**
+     * Note
+     */
+    note: string;
+    /**
+     * Allow Edits
+     *
+     * Off unless the share says so: a copy is read-only
+     */
+    allow_edits: boolean;
+    /**
+     * Note Max
+     *
+     * The longest note a share keeps, in characters
+     */
+    note_max: number;
+};
+
+/**
  * ShareView
  *
  * One shared collection as a visitor sees it.
@@ -1798,6 +2027,34 @@ export type ShareView = {
      * In the order the owner picked them
      */
     outputs: Array<SharedOutput>;
+};
+
+/**
+ * Shareable
+ *
+ * One output a share can include: ready, by the key a share names it by.
+ */
+export type Shareable = {
+    /**
+     * Key
+     *
+     * What a share names it by: `session:<id>` (a deck or an audio overview), `mindmap:<id>` or `notes:<id>`
+     */
+    key: string;
+    /**
+     * Kind
+     */
+    kind: 'slides' | 'audio' | 'mindmap' | 'notes';
+    /**
+     * Title
+     *
+     * Its name, or its kind while it has none
+     */
+    title: string;
+    /**
+     * Created At
+     */
+    created_at: string;
 };
 
 /**
@@ -1883,6 +2140,18 @@ export type SharedItem = {
      * How many times its share was reused: the reused order
      */
     reuses: number;
+    /**
+     * Display Title
+     *
+     * Its name as it is shown: the title, or `Untitled mind map`…
+     */
+    readonly display_title: string;
+    /**
+     * Collection Display Title
+     *
+     * Its collection's name as it is shown: the title, or `Untitled collection`
+     */
+    readonly collection_display_title: string;
 };
 
 /**
@@ -1943,6 +2212,12 @@ export type SharedOutput = {
      * Created At
      */
     created_at: string;
+    /**
+     * Display Title
+     *
+     * Its name as it is shown: the title, or `Untitled mind map`…
+     */
+    readonly display_title: string;
 };
 
 /**
@@ -1979,6 +2254,24 @@ export type SourceOut = {
      * Created At
      */
     created_at: string;
+    /**
+     * Words
+     *
+     * About how many words it holds
+     */
+    readonly words: number;
+    /**
+     * Detail
+     *
+     * The line under its name: where it came from and how long it is, `example.org · 1200 words` or `PDF · 300 words`
+     */
+    readonly detail: string;
+    /**
+     * Icon
+     *
+     * The picture to lead its row with: its site's icon, loaded from the site itself; empty for a note, a file or a report
+     */
+    readonly icon: string;
 };
 
 /**
@@ -2021,12 +2314,86 @@ export type SourceText = {
      * The source verbatim, as Markdown
      */
     text: string;
+    /**
+     * Words
+     *
+     * About how many words it holds
+     */
+    readonly words: number;
+    /**
+     * Detail
+     *
+     * The line under its name: where it came from and how long it is, `example.org · 1200 words` or `PDF · 300 words`
+     */
+    readonly detail: string;
+    /**
+     * Icon
+     *
+     * The picture to lead its row with: its site's icon, loaded from the site itself; empty for a note, a file or a report
+     */
+    readonly icon: string;
 };
 
 /**
- * Style
+ * StudioOptions
+ *
+ * Everything the Create panel offers for one collection, and how it says
+ * it: the choices, the starting picks from the person's settings, and the
+ * lines it shows from them.
  */
-export type Style = {
+export type StudioOptions = {
+    /**
+     * Styles
+     */
+    styles: Array<StyleChoice>;
+    /**
+     * Audio Formats
+     */
+    audio_formats: Array<FormatChoice>;
+    /**
+     * Default Style
+     */
+    default_style: string;
+    /**
+     * Default Audio Format
+     */
+    default_audio_format: string;
+    /**
+     * Default Audio Length
+     */
+    default_audio_length: string;
+    /**
+     * Deck Summary
+     *
+     * What a deck of this collection is made with: `5 slides · about 5 min · Host and Expert`
+     */
+    deck_summary: string;
+    /**
+     * Language Note
+     *
+     * The output language when it is not English: `Writing in French.`
+     */
+    language_note: string | null;
+    /**
+     * Build Language Note
+     *
+     * The same for a deck or an audio overview, saying when the voices keep their English accent
+     */
+    build_language_note: string | null;
+    /**
+     * Show Cost
+     *
+     * Say what a tool costs before it is made
+     */
+    show_cost: boolean;
+    research: ResearchHint;
+    upload: UploadRules;
+};
+
+/**
+ * StyleChoice
+ */
+export type StyleChoice = {
     /**
      * Id
      */
@@ -2039,6 +2406,66 @@ export type Style = {
      * Blurb
      */
     blurb: string;
+    /**
+     * Thumbnail
+     *
+     * The style's picture, relative to the web app's mount: `assets/styles/…`
+     */
+    thumbnail: string;
+};
+
+/**
+ * UploadRules
+ *
+ * What the sources panel takes. The server refuses anything else.
+ */
+export type UploadRules = {
+    /**
+     * Extensions
+     *
+     * Without the dot, lower case
+     */
+    extensions: Array<string>;
+    /**
+     * Accept
+     *
+     * The file picker's `accept`, from the same list
+     */
+    accept: string;
+    /**
+     * Kinds
+     *
+     * What can be uploaded, in words
+     */
+    kinds: string;
+    /**
+     * Max Mb
+     */
+    max_mb: number;
+    /**
+     * Max Files
+     *
+     * Files one upload takes
+     */
+    max_files: number;
+    /**
+     * Max Links
+     *
+     * Links one add takes
+     */
+    max_links: number;
+    /**
+     * Hint
+     *
+     * What can be uploaded, as the add box says it
+     */
+    hint: string;
+    /**
+     * Title
+     *
+     * The same, as the Upload button's tooltip
+     */
+    title: string;
 };
 
 /**
@@ -2087,6 +2514,469 @@ export type WebHit = {
     snippet: string;
 };
 
+/**
+ * AddResult
+ *
+ * What happened to one thing asked to be added.
+ */
+export type AddResultWritable = {
+    /**
+     * Url
+     *
+     * The page asked for; empty for a note or a file
+     */
+    url: string;
+    /**
+     * Ok
+     */
+    ok: boolean;
+    source?: SourceOutWritable | null;
+    /**
+     * Error
+     *
+     * Why it was not added, in a sentence; empty when ok
+     */
+    error: string;
+};
+
+/**
+ * MindMapOut
+ */
+export type MindMapOutWritable = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Collection Id
+     */
+    collection_id: string;
+    /**
+     * Title
+     */
+    title: string;
+    /**
+     * Focus
+     */
+    focus: string;
+    /**
+     * Node Count
+     */
+    node_count: number;
+    /**
+     * Sources
+     */
+    sources: Array<string>;
+    /**
+     * Shape
+     *
+     * Subtopics per main topic, in order: the outline
+     */
+    shape: Array<number>;
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Excerpted
+     *
+     * The sources were cut to excerpts to fit
+     */
+    excerpted: boolean;
+    /**
+     * Model
+     */
+    model: string;
+    /**
+     * Dropped
+     *
+     * Nodes removed because the sources never mention them
+     */
+    dropped: number;
+    /**
+     * Unchecked
+     *
+     * The check against the sources did not run
+     */
+    unchecked: boolean;
+    root: MindNode;
+};
+
+/**
+ * MindMapSummary
+ */
+export type MindMapSummaryWritable = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Collection Id
+     */
+    collection_id: string;
+    /**
+     * Title
+     */
+    title: string;
+    /**
+     * Focus
+     */
+    focus: string;
+    /**
+     * Node Count
+     */
+    node_count: number;
+    /**
+     * Sources
+     */
+    sources: Array<string>;
+    /**
+     * Shape
+     *
+     * Subtopics per main topic, in order: the outline
+     */
+    shape: Array<number>;
+    /**
+     * Created At
+     */
+    created_at: string;
+};
+
+/**
+ * ShareCard
+ *
+ * A share as the feed shows it. Counts are of what it includes and is
+ * still there.
+ */
+export type ShareCardWritable = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Collection Id
+     */
+    collection_id: string;
+    /**
+     * Mine
+     *
+     * The person asking shared it, so they can edit or stop it
+     */
+    mine: boolean;
+    /**
+     * Shared By
+     *
+     * The sharer's display name; empty when they have none
+     */
+    shared_by: string;
+    /**
+     * Title
+     *
+     * The collection's current title
+     */
+    title: string;
+    /**
+     * Note
+     */
+    note: string;
+    /**
+     * Cover Version
+     *
+     * Load the cover from /api/shares/{id}/cover with it as `v`
+     */
+    cover_version: string;
+    /**
+     * Terms
+     *
+     * The cover's terms
+     */
+    terms: Array<string>;
+    /**
+     * Sources
+     *
+     * 0 when sources are not included
+     */
+    sources: number;
+    /**
+     * Decks
+     */
+    decks: number;
+    /**
+     * Audios
+     */
+    audios: number;
+    /**
+     * Maps
+     */
+    maps: number;
+    /**
+     * Notes
+     */
+    notes: number;
+    /**
+     * Reuses
+     */
+    reuses: number;
+    /**
+     * Allow Edits
+     *
+     * A copy made now is the reuser's to change and share again; else it is read-only
+     */
+    allow_edits: boolean;
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Updated At
+     */
+    updated_at: string;
+};
+
+/**
+ * ShareView
+ *
+ * One shared collection as a visitor sees it.
+ */
+export type ShareViewWritable = {
+    card: ShareCardWritable;
+    /**
+     * Sources
+     *
+     * Empty when the sources are not included
+     */
+    sources: Array<SourceOutWritable>;
+    /**
+     * Outputs
+     *
+     * In the order the owner picked them
+     */
+    outputs: Array<SharedOutputWritable>;
+};
+
+/**
+ * SharedItem
+ *
+ * One output a share includes, as Discover lists it on its own: to play
+ * or read without opening its collection first.
+ */
+export type SharedItemWritable = {
+    /**
+     * Key
+     *
+     * The output key, as in the share's outputs
+     */
+    key: string;
+    /**
+     * Kind
+     */
+    kind: 'slides' | 'audio' | 'mindmap' | 'notes';
+    /**
+     * Id
+     *
+     * Read it at /api/shares/{share_id}/{sessions|mindmaps|notes}/{id}; a deck or audio overview plays at /ui/play/{id}?share={share_id}
+     */
+    id: string;
+    /**
+     * Title
+     */
+    title: string;
+    /**
+     * Parts
+     *
+     * Slides of a deck, chapters of an audio overview; else 0
+     */
+    parts: number;
+    /**
+     * Duration Ms
+     *
+     * Narration length; 0 before it is voiced, or for a map
+     */
+    duration_ms: number;
+    /**
+     * Created At
+     *
+     * When it was made: the newest order
+     */
+    created_at: string;
+    /**
+     * Share Id
+     */
+    share_id: string;
+    /**
+     * Collection Id
+     */
+    collection_id: string;
+    /**
+     * Collection Title
+     *
+     * Its collection's current title
+     */
+    collection_title: string;
+    /**
+     * Cover Version
+     *
+     * Load its collection's cover from /api/shares/{share_id}/cover with it as `v`
+     */
+    cover_version: string;
+    /**
+     * Shared By
+     *
+     * The sharer's display name; empty when they have none
+     */
+    shared_by: string;
+    /**
+     * Mine
+     *
+     * The person asking shared it
+     */
+    mine: boolean;
+    /**
+     * Reuses
+     *
+     * How many times its share was reused: the reused order
+     */
+    reuses: number;
+};
+
+/**
+ * SharedItems
+ *
+ * One page of Discover's items.
+ */
+export type SharedItemsWritable = {
+    /**
+     * Items
+     */
+    items: Array<SharedItemWritable>;
+    /**
+     * Next Offset
+     *
+     * Ask again with it as `offset` for the next page; null on the last
+     */
+    next_offset: number | null;
+};
+
+/**
+ * SharedOutput
+ */
+export type SharedOutputWritable = {
+    /**
+     * Key
+     *
+     * The output key, as in the share's outputs
+     */
+    key: string;
+    /**
+     * Kind
+     */
+    kind: 'slides' | 'audio' | 'mindmap' | 'notes';
+    /**
+     * Id
+     *
+     * Read it at /api/shares/{share}/{sessions|mindmaps|notes}/{id}
+     */
+    id: string;
+    /**
+     * Title
+     */
+    title: string;
+    /**
+     * Parts
+     *
+     * Slides of a deck, chapters of an audio overview; else 0
+     */
+    parts: number;
+    /**
+     * Duration Ms
+     *
+     * Narration length; 0 before it is voiced, or for a map
+     */
+    duration_ms: number;
+    /**
+     * Created At
+     */
+    created_at: string;
+};
+
+/**
+ * SourceOut
+ */
+export type SourceOutWritable = {
+    /**
+     * Name
+     *
+     * Stable within its collection; address the source by it
+     */
+    name: string;
+    /**
+     * Kind
+     */
+    kind: 'url' | 'text' | 'file' | 'research';
+    /**
+     * Title
+     */
+    title: string;
+    /**
+     * Url
+     *
+     * Where it was read from; empty for a note, a file or a report
+     */
+    url: string;
+    /**
+     * Chars
+     *
+     * Length of the readable text
+     */
+    chars: number;
+    /**
+     * Created At
+     */
+    created_at: string;
+};
+
+/**
+ * SourceText
+ */
+export type SourceTextWritable = {
+    /**
+     * Name
+     *
+     * Stable within its collection; address the source by it
+     */
+    name: string;
+    /**
+     * Kind
+     */
+    kind: 'url' | 'text' | 'file' | 'research';
+    /**
+     * Title
+     */
+    title: string;
+    /**
+     * Url
+     *
+     * Where it was read from; empty for a note, a file or a report
+     */
+    url: string;
+    /**
+     * Chars
+     *
+     * Length of the readable text
+     */
+    chars: number;
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Text
+     *
+     * The source verbatim, as Markdown
+     */
+    text: string;
+};
+
 export type HealthData = {
     body?: never;
     path?: never;
@@ -2102,6 +2992,31 @@ export type HealthResponses = {
 };
 
 export type HealthResponse = HealthResponses[keyof HealthResponses];
+
+export type ReadyData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/ready';
+};
+
+export type ReadyErrors = {
+    /**
+     * Not ready
+     */
+    503: Readiness;
+};
+
+export type ReadyError = ReadyErrors[keyof ReadyErrors];
+
+export type ReadyResponses = {
+    /**
+     * Successful Response
+     */
+    200: Readiness;
+};
+
+export type ReadyResponse = ReadyResponses[keyof ReadyResponses];
 
 export type MeData = {
     body?: never;
@@ -2397,6 +3312,34 @@ export type RefreshCoverResponses = {
 };
 
 export type RefreshCoverResponse = RefreshCoverResponses[keyof RefreshCoverResponses];
+
+export type CollectionEventsData = {
+    body?: never;
+    path: {
+        /**
+         * Cid
+         */
+        cid: string;
+    };
+    query?: never;
+    url: '/api/collections/{cid}/events';
+};
+
+export type CollectionEventsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type CollectionEventsError = CollectionEventsErrors[keyof CollectionEventsErrors];
+
+export type CollectionEventsResponses = {
+    /**
+     * Server-sent events
+     */
+    200: unknown;
+};
 
 export type ListSourcesData = {
     body?: never;
@@ -2823,6 +3766,36 @@ export type UpdateSessionResponses = {
 };
 
 export type UpdateSessionResponse = UpdateSessionResponses[keyof UpdateSessionResponses];
+
+export type RetrySessionData = {
+    body?: never;
+    path: {
+        /**
+         * Sid
+         */
+        sid: string;
+    };
+    query?: never;
+    url: '/api/sessions/{sid}/retry';
+};
+
+export type RetrySessionErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type RetrySessionError = RetrySessionErrors[keyof RetrySessionErrors];
+
+export type RetrySessionResponses = {
+    /**
+     * Successful Response
+     */
+    202: SessionSummary;
+};
+
+export type RetrySessionResponse = RetrySessionResponses[keyof RetrySessionResponses];
 
 export type GetPlaybackData = {
     body?: never;
@@ -3297,7 +4270,7 @@ export type EstimateMindmapResponses = {
     /**
      * Successful Response
      */
-    200: Estimate;
+    200: SessionEstimate;
 };
 
 export type EstimateMindmapResponse = EstimateMindmapResponses[keyof EstimateMindmapResponses];
@@ -3491,7 +4464,7 @@ export type EstimateNotesResponses = {
     /**
      * Successful Response
      */
-    200: Estimate;
+    200: SessionEstimate;
 };
 
 export type EstimateNotesResponse = EstimateNotesResponses[keyof EstimateNotesResponses];
@@ -3780,6 +4753,36 @@ export type SetSettingResponses = {
 
 export type SetSettingResponse = SetSettingResponses[keyof SetSettingResponses];
 
+export type GetStudioOptionsData = {
+    body?: never;
+    path: {
+        /**
+         * Cid
+         */
+        cid: string;
+    };
+    query?: never;
+    url: '/api/collections/{cid}/options';
+};
+
+export type GetStudioOptionsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetStudioOptionsError = GetStudioOptionsErrors[keyof GetStudioOptionsErrors];
+
+export type GetStudioOptionsResponses = {
+    /**
+     * Successful Response
+     */
+    200: StudioOptions;
+};
+
+export type GetStudioOptionsResponse = GetStudioOptionsResponses[keyof GetStudioOptionsResponses];
+
 export type ListStylesData = {
     body?: never;
     path?: never;
@@ -3793,7 +4796,7 @@ export type ListStylesResponses = {
      *
      * Successful Response
      */
-    200: Array<Style>;
+    200: Array<StyleChoice>;
 };
 
 export type ListStylesResponse = ListStylesResponses[keyof ListStylesResponses];
@@ -4212,11 +5215,9 @@ export type GetCollectionShareError = GetCollectionShareErrors[keyof GetCollecti
 
 export type GetCollectionShareResponses = {
     /**
-     * Response Get Collection Share
-     *
      * Successful Response
      */
-    200: ShareOut | null;
+    200: ShareState;
 };
 
 export type GetCollectionShareResponse = GetCollectionShareResponses[keyof GetCollectionShareResponses];

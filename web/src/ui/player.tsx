@@ -6,7 +6,6 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import "../styles/player.css";
 import { Icon } from "./Icon";
-import { audioFormatName } from "./audioFormats";
 import { PlayerEngine } from "./playerEngine";
 import { displayName, fitBox, initialsOf, metaOf, slideName, speakerName, tocLine, transcript, voiceIndex } from "./playerModel";
 import { useStore } from "./store";
@@ -127,7 +126,7 @@ export function PlayerPage({ sid, share }: { sid: string; share: string | null }
               />
               {/* An audio overview's stage, in place of the slide. */}
               <div id="astage" hidden={!audioMode} className={v.now.name && v.now.moving ? "moving" : ""}>
-                <div id="as-fmt">{s?.audio ? `${audioFormatName(s.audio.format) ?? "Audio"} · audio overview` : ""}</div>
+                <div id="as-fmt">{s?.audio ? `${s.audio.label || "Audio"} · audio overview` : ""}</div>
                 <h2 id="as-title">{s?.title ?? ""}</h2>
                 <div id="as-chap">{v.chapter}</div>
                 <div id="as-hosts">

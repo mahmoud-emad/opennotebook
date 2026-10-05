@@ -58,3 +58,15 @@ async def test_a_titled_note_keeps_its_title_as_a_heading(client: AsyncClient) -
     assert src["title"] == "Reefs" and src["chars"] == len(NOTE) + len("# Reefs\n\n")
     read = (await client.get(f"/api/collections/{cid}/sources/{src['name']}")).json()
     assert read["text"] == f"# Reefs\n\n{NOTE}"
+
+
+def test_a_source_is_described_by_where_it_came_from_and_its_length() -> None:
+    from opennotebook.domain.sources import described
+
+    assert described("p.md", "https://www.example.org/a/b", 1200) == (
+        200,
+        "example.org · 200 words",
+        "https://www.example.org/favicon.ico",
+    )
+    assert described("report.pdf", "", 600) == (100, "PDF · 100 words", "")
+    assert described("note.md", "", 60) == (10, "note · 10 words", "")

@@ -1,6 +1,8 @@
 """Outputs, mind maps, notes and the conversation, read and managed. Their
 making is ported later; rows are written directly here."""
 
+import json
+
 from httpx import AsyncClient
 from sqlalchemy import text
 
@@ -107,3 +109,95 @@ async def test_the_conversation_is_kept_and_cleared(client: AsyncClient) -> None
 
     commands = [c["name"] for c in (await client.get("/api/commands")).json()]
     assert commands[:4] == ["slides", "audio", "mindmap", "notes"] and "help" in commands
+
+
+async def test_untitled_outputs_are_shown_by_what_they_are(client: AsyncClient) -> None:
+    cid, owner = await _setup(client)
+    async with engine().begin() as c:
+        for kind in ("slides", "audio"):
+            await c.execute(
+                text(
+                    "INSERT INTO sessions (owner_id, collection_id, kind, title, state, slides,"
+                    " speakers) VALUES (:o, :c, :k, '', 'ready', '[]', '[]')"
+                ),
+                {"o": owner, "c": cid, "k": kind},
+            )
+        await c.execute(
+            text(
+                "INSERT INTO mindmaps (owner_id, collection_id, title, root, node_count)"
+                ' VALUES (:o, :c, \' \', \'{"name": "Reefs", "children": []}\', 1)'
+            ),
+            {"o": owner, "c": cid},
+        )
+        await c.execute(
+            text(
+                "INSERT INTO study_notes (owner_id, collection_id, title, body)"
+                " VALUES (:o, :c, '', '{}')"
+            ),
+            {"o": owner, "c": cid},
+        )
+    outs = (await client.get(f"/api/collections/{cid}")).json()["outputs"]
+    # Not "Untitled collection": an untitled deck is said as a deck.
+    assert sorted(o["display_title"] for o in outs) == [
+        "Untitled audio overview",
+        "Untitled narrated slides",
+    ]
+    maps = (await client.get(f"/api/collections/{cid}/mindmaps")).json()
+    notes = (await client.get(f"/api/collections/{cid}/notes")).json()
+    assert (maps[0]["display_title"], notes[0]["display_title"]) == (
+        "Untitled mind map",
+        "Untitled study notes",
+    )
+
+
+async def test_a_failure_is_a_sentence_with_its_detail_apart(client: AsyncClient) -> None:
+    cid, owner = await _setup(client)
+    said = "The AI account is out of credit. Add credit, then try again."
+    async with engine().begin() as c:
+        sid = (
+            await c.execute(
+                text(
+                    "INSERT INTO sessions (owner_id, collection_id, kind, title, state, failure,"
+                    " slides, speakers) VALUES (:o, :c, 'slides', 'Deck', 'failed', :f, '[]',"
+                    " CAST(:sp AS jsonb))"
+                    " RETURNING id"
+                ),
+                {
+                    "o": owner,
+                    "c": cid,
+                    "f": said,
+                    "sp": json.dumps(
+                        [{"speaker_id": "host", "voice_id": "af_bella", "display_name": "Host"}]
+                    ),
+                },
+            )
+        ).scalar_one()
+        await c.execute(
+            text(
+                "INSERT INTO jobs (owner_id, kind, status, error, session_id, collection_id)"
+                " VALUES (:o, 'prep', 'failed', :e, :s, :c)"
+            ),
+            {"o": owner, "c": cid, "s": sid, "e": "HTTP 402: insufficient_quota"},
+        )
+        old = (
+            await c.execute(
+                text(
+                    "INSERT INTO sessions (owner_id, collection_id, kind, title, state, failure,"
+                    " slides, speakers) VALUES (:o, :c, 'slides', 'Old', 'failed',"
+                    " 'deck came back failed after 600s (0/5 rendered)', '[]', '[]') RETURNING id"
+                ),
+                {"o": owner, "c": cid},
+            )
+        ).scalar_one()
+    outs = {o["id"]: o for o in (await client.get(f"/api/collections/{cid}")).json()["outputs"]}
+    assert (outs[str(sid)]["failure"], outs[str(sid)]["failure_detail"]) == (
+        said,
+        "HTTP 402: insufficient_quota",
+    )
+    # An older row's raw words are kept back as the detail.
+    assert outs[str(old)]["failure"].startswith("Something went wrong while making this.")
+    assert outs[str(old)]["failure_detail"] == "deck came back failed after 600s (0/5 rendered)"
+    full = (await client.get(f"/api/sessions/{sid}")).json()
+    assert full["failure_detail"] == "HTTP 402: insufficient_quota"
+    # A role word for a name: the speaker is called by their voice.
+    assert full["speaker_names"] == {"host": "Bella"}

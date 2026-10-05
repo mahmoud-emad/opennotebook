@@ -20,12 +20,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from opennotebook import jobs, storage
 from opennotebook.ai import client
+from opennotebook.ai.prices import Price
 from opennotebook.api.deps import Db, Me
 from opennotebook.auth import current_user
 from opennotebook.build import narrate, pipeline, slides
 from opennotebook.db.models import Job, Playback, Session
 from opennotebook.db.session import release, sessionmaker
-from opennotebook.domain import collections, sessions, voice
+from opennotebook.domain import collections, reading, sessions, styles, voice
 from opennotebook.domain import sessions_estimate as est
 from opennotebook.domain import settings as st
 from opennotebook.domain.sessions_events import SESSION_CHANNEL_SQL, stream
@@ -47,12 +48,26 @@ class SessionSummary(BaseModel):
     collection_id: uuid.UUID
     kind: Kind
     title: str
+    display_title: str = Field(
+        description="Its name as it is shown: the title, or `Untitled narrated slides` / "
+        "`Untitled audio overview` while it has none"
+    )
     description: str
     state: State
-    failure: str | None = Field(description="Why it failed, in a sentence; null unless failed")
+    failure: str | None = Field(
+        description="Why it failed, in a sentence with what to do; null unless failed"
+    )
+    failure_detail: str | None = Field(
+        default=None,
+        description="The failure's technical detail, for whoever is debugging; null when "
+        "there is none beyond the sentence",
+    )
     parts: int = Field(description="Slides of a deck, chapters of an audio overview")
     speakers: int
     audio_format: str = Field(description="An audio overview's format; empty for a deck")
+    audio_label: str = Field(
+        description="An audio overview's format as a person reads it: `Deep Dive`; empty for a deck"
+    )
     duration_ms: int = Field(description="Measured narration length; 0 before it is voiced")
     pinned: bool
     spent_usd: Decimal | None
@@ -71,12 +86,18 @@ class SessionSummary(BaseModel):
             collection_id=o.collection_id,
             kind=o.kind,  # pyright: ignore[reportArgumentType]
             title=o.title,
+            display_title=sessions.display_title(o.title, o.kind == "audio"),
             description=o.description,
             state=o.state,  # pyright: ignore[reportArgumentType]
-            failure=o.failure,
+            failure=sessions.failure_said(o.failure, None)[0] if o.state == "failed" else None,
             parts=len(o.slides),
             speakers=len(o.speakers),
             audio_format=str((o.audio or {}).get("format", "")),
+            audio_label=sessions.FORMAT_LABELS[
+                sessions.parse_format(str(o.audio.get("format", "")))
+            ]
+            if o.audio
+            else "",
             duration_ms=o.duration_ms,
             pinned=o.pinned,
             spent_usd=o.spent_usd,
@@ -90,11 +111,20 @@ class SessionDetail(SessionSummary):
     speaker_list: list[dict[str, Any]] = Field(description="Speakers with their voices")
     slides: list[dict[str, Any]] = Field(description="The parts with their narration lines")
     audio: dict[str, Any] | None = Field(description="Format, length, focus and minutes")
+    speaker_names: dict[str, str] = Field(
+        description="What to call each speaker, by speaker id: their own name, or their "
+        "voice's when they have only a role word such as `Host`"
+    )
 
     @classmethod
     def full(cls, o: Session) -> SessionDetail:
+        named = [sessions.Speaker.of_json(sp) for sp in o.speakers]
         return cls(
             **SessionSummary.of(o).model_dump(),
+            speaker_names={
+                sp.speaker_id: sessions.display_name(sp.display_name, sp.voice_id) or sp.speaker_id
+                for sp in named
+            },
             style=o.style,
             speaker_list=o.speakers,
             slides=o.slides,
@@ -199,10 +229,28 @@ class SessionEstimate(BaseModel):
     minutes: int
     limit_usd: float = Field(description="The spending limit; 0 is none")
     over_limit: bool = Field(description="The high estimate is over the limit: a build is refused")
+    model: str = Field(
+        description="The model that does most of the writing: the script's, or the one that "
+        "makes a mind map or study notes"
+    )
+    facts: list[str] = Field(
+        description="What it is made of, in words, as the cost dialog lists them: "
+        "`5 slides`, `about 5 minutes`, `2 voices`, `3 sources · 12.4k characters`…"
+    )
 
     @classmethod
     def of(cls, live: est.Live) -> SessionEstimate:
         e, i = live.estimate, live.inputs
+        facts = [live.audio.said() if live.audio else f"{i.slides} slides"]
+        if i.minutes > 0:
+            facts.append(f"about {i.minutes} minutes")
+        facts.append("1 voice" if i.speakers == 1 else f"{i.speakers} voices")
+        chars = est.count_short(e.source_chars)
+        facts.append(f"{est.sources_said(len(i.source_chars))} · {chars} characters")
+        if not i.audio:
+            found = styles.style(live.style)
+            facts.append(f"{found.label if found else live.style} style")
+            facts.append(f"slides by {est.model_name(i.slide_model)}")
         return cls(
             total_low_usd=e.total[0],
             total_typical_usd=e.total[1],
@@ -219,6 +267,72 @@ class SessionEstimate(BaseModel):
             minutes=i.minutes,
             limit_usd=live.limit_usd,
             over_limit=live.over_limit,
+            model=i.script_model,
+            facts=facts,
+        )
+
+    @classmethod
+    def one_call(
+        cls, q: reading.Estimate, price: Price | None, group: str, step: str
+    ) -> SessionEstimate:
+        """A mind map's or study notes' estimate in a build's itemised shape,
+        so every tool is said and checked the same way: one step, one model,
+        one call, and a second when the first answer comes back too thin."""
+        twice = q.cost_high_usd > q.cost_usd
+        line = CostLine(
+            group=group,
+            step=step,
+            detail="Reads every source whole in one call; a second call when the first answer "
+            "comes back too thin.",
+            model=q.model,
+            via=est.SCRIPT_VIA,
+            calls_low=1,
+            calls_typical=1,
+            calls_high=2 if twice else 1,
+            input_tokens=q.input_tokens,
+            output_tokens_low=q.output_tokens,
+            output_tokens_typical=q.output_tokens,
+            output_tokens_high=2 * q.output_tokens if twice else q.output_tokens,
+            cost_low_usd=q.cost_usd,
+            cost_typical_usd=q.cost_usd,
+            cost_high_usd=q.cost_high_usd,
+            free=False,
+            unpriced=not q.priced,
+            price_in_per_million=None if price is None else price.input_per_token * 1_000_000,
+            price_out_per_million=None if price is None else price.output_per_token * 1_000_000,
+        )
+        assumptions = [
+            f"Measured: {est.sources_said(q.sources)} ({est.grouped(q.chars)} characters), "
+            "today's prices.",
+            "Tokens are counted at about four characters each, the prompt included.",
+            "Prices are the model's list prices on the AI endpoint.",
+        ]
+        if not q.priced:
+            assumptions.append(
+                'A model with no price in the catalog is counted as $0 and marked "no price"; '
+                "the real cost is higher."
+            )
+        return cls(
+            total_low_usd=q.cost_usd,
+            total_typical_usd=q.cost_usd,
+            total_high_usd=q.cost_high_usd,
+            lines=[line],
+            assumptions=assumptions,
+            sources=q.sources,
+            source_chars=q.chars,
+            slides=0,
+            speakers=0,
+            style="",
+            slides_tier="",
+            priced_at=est.stamp_now(),
+            minutes=0,
+            limit_usd=q.limit_usd,
+            over_limit=q.over_limit,
+            model=q.model,
+            facts=[
+                f"{est.sources_said(q.sources)} · {est.grouped(q.chars)} characters",
+                f"by {est.model_name(q.model)}",
+            ],
         )
 
 
@@ -235,6 +349,11 @@ class JobOut(BaseModel):
     session_id: uuid.UUID | None
     collection_id: uuid.UUID | None
     created_at: datetime
+    waiting: str | None = Field(
+        default=None,
+        description="Why queued work has not started, in a sentence: no worker is running. "
+        "Null otherwise",
+    )
 
     @classmethod
     def of(cls, j: Job) -> JobOut:
@@ -254,11 +373,24 @@ async def summaries_of(s: AsyncSession, owner: uuid.UUID, cid: uuid.UUID) -> lis
 
 
 async def _summary(s: AsyncSession, o: Session) -> SessionSummary:
-    """An output as a list shows it, reconciled, and saying why it waits."""
+    """An output as a list shows it, reconciled, saying why it waits, and why
+    it failed with its detail."""
     o = await sessions.reconcile(s, o)
     out = SessionSummary.of(o)
     out.waiting = await sessions.waiting(s, o)
+    await _failure(s, o, out)
     return out
+
+
+async def _failure(s: AsyncSession, o: Session, out: SessionSummary) -> None:
+    """A failed output's reason and, apart from it, the technical detail its
+    build's job recorded."""
+    if o.state != "failed":
+        return
+    job, _ = await sessions.job_status(s, o.id)
+    out.failure, out.failure_detail = sessions.failure_said(
+        o.failure, job.error if job is not None else None
+    )
 
 
 async def _one(s: AsyncSession, owner: uuid.UUID, sid: uuid.UUID) -> Session:
@@ -308,7 +440,14 @@ async def build(cid: uuid.UUID, body: BuildReq, s: Db, me: Me) -> SessionSummary
     sources, with the person's settings for what the request leaves out.
     Takes minutes; follow it on /api/sessions/{sid}/events. Refused when its
     high estimate is over the spending limit."""
-    await collections.editable(s, me.id, cid)
+    return SessionSummary.of(await _start(s, me.id, cid, body))
+
+
+async def _start(s: AsyncSession, owner: uuid.UUID, cid: uuid.UUID, body: BuildReq) -> Session:
+    """Check a build, write its row as `preparing` and queue its job: the
+    one way an output starts, new or tried again. Nothing is written when it
+    is refused."""
+    await collections.editable(s, owner, cid)
     if not client.ai().has_key:
         # Refused at once rather than queued: a build with no key fails at
         # its first call, minutes later, after waiting its turn.
@@ -316,24 +455,24 @@ async def build(cid: uuid.UUID, body: BuildReq, s: Db, me: Me) -> SessionSummary
     # The price list, which can take seconds to read, is read before the
     # lock is taken and with no transaction open. Only with a limit to check.
     prices = None
-    if st.parse_limit(await st.value(s, me.id, st.MAX_BUILD_USD_KEY)) is not None:
+    if st.parse_limit(await st.value(s, owner, st.MAX_BUILD_USD_KEY)) is not None:
         await release(s)
         prices = await client.ai().catalogue.prices()
     # Under the collection's lock: a build never lands in a collection being
     # deleted, and a deleted output is never written back.
-    await collections.lock(s, me.id, cid)
-    chars = await est.source_chars(s, me.id, cid)
+    await collections.lock(s, owner, cid)
+    chars = await est.source_chars(s, owner, cid)
     research = body.research.strip()
     if not chars and not research:
         raise Problem(422, NO_SOURCES)
-    planned = await _planned(s, me.id, body, len(chars))
+    planned = await _planned(s, owner, body, len(chars))
     # Before anything is written or queued: a refused build leaves no row
     # and no job behind, only the reason. Priced on the shape the pipeline
     # will build, so an audio overview is checked on its chapters and its
     # format's voices.
     if prices is not None and (
         why := await est.refuse_over_limit(
-            s, me.id, chars, planned.shape(), bool(research), prices=prices
+            s, owner, chars, planned.shape(), bool(research), prices=prices
         )
     ):
         raise Problem(422, why)
@@ -343,7 +482,7 @@ async def build(cid: uuid.UUID, body: BuildReq, s: Db, me: Me) -> SessionSummary
     # The row goes in before the job, as `preparing`: a refresh or a restart
     # while the build waits its turn still finds it, with its progress.
     o = Session(
-        owner_id=me.id,
+        owner_id=owner,
         collection_id=cid,
         kind="audio" if audio else "slides",
         title=sessions.output_title(body.title, style, audio),
@@ -357,12 +496,12 @@ async def build(cid: uuid.UUID, body: BuildReq, s: Db, me: Me) -> SessionSummary
     await s.flush()
     await s.refresh(o)
     job = await jobs.create(
-        s, me.id, "prep", collection_id=cid, session_id=o.id, steps_total=len(pipeline.PHASES)
+        s, owner, "prep", collection_id=cid, session_id=o.id, steps_total=len(pipeline.PHASES)
     )
     spec = pipeline.PrepSpec(
         job_id=job.id,
         session_id=o.id,
-        owner_id=me.id,
+        owner_id=owner,
         collection_id=cid,
         speakers=[sp.as_json() for sp in speakers],
         slide_count=planned.slide_count,
@@ -376,7 +515,7 @@ async def build(cid: uuid.UUID, body: BuildReq, s: Db, me: Me) -> SessionSummary
         s, job, PREP_TASK, spec.model_dump(mode="json"), queue=PREP_QUEUE, lock=PREP_LOCK
     )
     await collections.touch(s, cid)
-    return SessionSummary.of(o)
+    return o
 
 
 @router.post("/collections/{cid}/outputs/estimate")
@@ -421,6 +560,7 @@ async def get_session(sid: uuid.UUID, s: Db, me: Me) -> SessionDetail:
     o = await sessions.reconcile(s, await _one(s, me.id, sid))
     out = SessionDetail.full(o)
     out.waiting = await sessions.waiting(s, o)
+    await _failure(s, o, out)
     return out
 
 
@@ -449,6 +589,64 @@ async def delete_session(sid: uuid.UUID, s: Db, me: Me, after: BackgroundTasks) 
     await collections.touch(s, o.collection_id)
     after.add_task(storage.remove_tree, narrate.audio_dir(sid))
     after.add_task(storage.remove_tree, slides.deck_dir(sid))
+
+
+NOT_FAILED = "Only an output that failed can be tried again. Reload the page to see where it is."
+
+
+def retry_request(o: Session) -> BuildReq:
+    """What a failed output was asked to be, read back from its row: its
+    title, kind, style, slide count, audio format, length and focus, and its
+    own number of voices. Voices are not read again from the settings, so a
+    change there between the failure and the retry does not change what it
+    sounds like. What the row does not record (an older one has no style; a
+    build that failed before its outline has no slides) is left out, and the
+    settings fill it as they do for a new build."""
+    speakers = len(o.speakers) if len(o.speakers) in (1, 2) else None
+    audio = sessions.AudioSpec.of_json(o.audio)
+    if audio is not None:
+        return BuildReq(
+            kind="audio",
+            title=o.title,
+            speakers=speakers,
+            audio_format=audio.format,  # pyright: ignore[reportArgumentType]
+            audio_length=audio.real_length(),  # pyright: ignore[reportArgumentType]
+            focus=audio.focus,
+        )
+    # A style since retired is left to the settings rather than refused.
+    style = o.style if o.style and styles.style(o.style) is not None else None
+    return BuildReq(
+        kind="slides",
+        title=o.title,
+        speakers=speakers,
+        slide_count=len(o.slides) or None,
+        style=style,
+    )
+
+
+@router.post("/sessions/{sid}/retry", status_code=202)
+async def retry_session(sid: uuid.UUID, s: Db, me: Me, after: BackgroundTasks) -> SessionSummary:
+    """Make a failed output again, with the options it was made with, as a
+    new output in the same collection. One step: the new one is started and
+    the failed one removed together, or, when the new one is refused (no
+    sources any more, over the spending limit, no AI key), neither, and the
+    failed one stays with its reason."""
+    old = await sessions.reconcile(s, await _one(s, me.id, sid))
+    if old.state != "failed":
+        raise Problem(409, NOT_FAILED)
+    o = await _start(s, me.id, old.collection_id, retry_request(old))
+    # Read again under the collection's lock `_start` holds: another tab may
+    # have removed or retried it while the price list was read.
+    gone = await s.execute(
+        delete(Session).where(
+            Session.id == sid, Session.owner_id == me.id, Session.state == "failed"
+        )
+    )
+    if not gone.rowcount:  # pyright: ignore[reportAttributeAccessIssue]
+        raise Problem(409, NOT_FAILED)
+    after.add_task(storage.remove_tree, narrate.audio_dir(sid))
+    after.add_task(storage.remove_tree, slides.deck_dir(sid))
+    return SessionSummary.of(o)
 
 
 @router.get("/sessions/{sid}/playback")
@@ -518,7 +716,10 @@ async def get_job(job_id: uuid.UUID, s: Db, me: Me) -> JobOut:
     j = await s.scalar(select(Job).where(Job.id == job_id, Job.owner_id == me.id))
     if j is None:
         raise not_found("That piece of work")
-    return JobOut.of(j)
+    out = JobOut.of(j)
+    if j.status == jobs.QUEUED and not await sessions.worker_alive(s):
+        out.waiting = sessions.WAITING
+    return out
 
 
 def _sse(frames: AsyncIterator[voice.Frame]) -> StreamingResponse:

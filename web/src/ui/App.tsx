@@ -2,8 +2,7 @@
 // port of the old app's `main.rs` `App`, screen for screen.
 
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { createCollection, errText, listCollections, sleep, type CollectionSummary } from "./api";
-import { shareFeed } from "./api-share";
+import { createCollection, errText, followCollection, listCollections, sleep, type CollectionSummary } from "./api";
 import { AskDialog } from "./dialogs";
 import { DiscoverPage, SharedPage } from "./discover";
 import {
@@ -13,7 +12,6 @@ import {
   PageSkel,
   SkelGrid,
   collTitle,
-  coverPending,
   ordered,
   sortLabel,
   type Sort,
@@ -21,7 +19,7 @@ import {
 import { Icon } from "./Icon";
 import { EMPTY, ORDER, PICKS, PickBar, keep, start } from "./pick";
 import { follow, routeFromLocation, routeUrl, sameView, setNav, setRoute, type Open, type View } from "./routes";
-import { GENERAL, SETTINGS, keys, openSettings, reloadSettings, settingValue } from "./settings";
+import { GENERAL, SETTINGS, openSettings, reloadSettings } from "./settings";
 import { FLASH, NOTICE, SNACK, SNACK_MS, snack, type Output } from "./shell";
 import { useStore } from "./store";
 
@@ -31,6 +29,11 @@ const CollectionPage = lazy(() =>
   import("./collection/CollectionPage").then((m) => ({ default: m.CollectionPage })),
 );
 // Settings load the first time they are opened: most visits never open them.
+/** How many cards of My collections follow their collection's stream at once. */
+const FOLLOW_MAX = 3;
+/** How often My collections is read again while a card cannot follow its stream. */
+const LIST_FALLBACK_MS = 30_000;
+
 const SettingsDialog = lazy(() => import("./SettingsDialog").then((m) => ({ default: m.SettingsDialog })));
 // The player is a page of its own, loaded when an output is first played.
 const PlayerPage = lazy(() => import("./player").then((m) => ({ default: m.PlayerPage })));
@@ -52,10 +55,6 @@ export function App() {
   const [crumb, setCrumb] = useState("");
   const flash = useStore(FLASH);
   const notice = useStore(NOTICE);
-  // The titles of the shares collections were reused from, by share id, for a
-  // card's "Reused from" line. Only shares that still exist are here, so only
-  // they are offered as a way back to the original.
-  const [origins, setOrigins] = useState<Record<string, string>>({});
   const snackS = useStore(SNACK);
   const settings = useStore(SETTINGS);
   const picks = useStore(PICKS);
@@ -104,17 +103,6 @@ export function App() {
       if (my !== reloadSeq.current) return;
       setCollections(got);
       setLoadErr("");
-      // Best effort: a card says only "Reused" until this answers, and keeps
-      // saying so if it cannot.
-      if (got.some((c) => c.reused_from !== "")) {
-        try {
-          const feed = await shareFeed("", "newest");
-          if (my !== reloadSeq.current) return;
-          setOrigins(Object.fromEntries(feed.map((s) => [s.share_id, collTitle(s.title)])));
-        } catch {
-          // The cards say "Reused from a shared collection" instead.
-        }
-      }
     } catch (e) {
       if (my !== reloadSeq.current) return;
       setLoadErr(errText(e));
@@ -209,33 +197,45 @@ export function App() {
       .finally(() => setCreating(false));
   };
 
-  // While a list is on screen and something on it is still changing, look
-  // again every few seconds, so a card catches up on its own.
-  const listRef = useRef(collections);
+  // While My collections is on screen, a card whose collection is still being
+  // made (an output, its name, its cover) follows that collection's event
+  // stream until the server says it is done; nothing is read on a timer. A
+  // browser holds only a few connections to one host, so only the first few
+  // follow; past those, or while a stream is down, the list is read again,
+  // slowly.
+  const following = useMemo(
+    () =>
+      view.kind === "mine"
+        ? collections
+            .filter((c) => c.busy)
+            .map((c) => c.cid)
+            .join(",")
+        : "",
+    [collections, view.kind],
+  );
   useEffect(() => {
-    listRef.current = collections;
-  }, [collections]);
-  useEffect(() => {
+    if (following === "") return;
+    const ids = following.split(",");
+    const down = new Set<string>(ids.slice(FOLLOW_MAX));
+    const closes = ids.slice(0, FOLLOW_MAX).map((cid) =>
+      followCollection(cid, {
+        collection: (c) => setCollections((v) => v.map((x) => (x.cid === c.cid ? c : x))),
+        gone: () => setCollections((v) => v.filter((x) => x.cid !== cid)),
+        up: (ok) => (ok ? down.delete(cid) : down.add(cid)),
+      }),
+    );
     const stop = new AbortController();
     void (async () => {
       while (!stop.signal.aborted) {
-        await sleep(5000, stop.signal);
-        if (stop.signal.aborted) return;
-        const v = viewRef.current;
-        const doc = SETTINGS.get().doc;
-        const autoName = settingValue(doc, keys.AUTO_NAME) !== "off";
-        const coversOn = settingValue(doc, keys.COVERS) !== "off";
-        const moving = listRef.current.some(
-          (c) =>
-            c.preparing > 0 ||
-            (autoName && c.title_auto && c.title.trim() === "" && c.sources > 0) ||
-            coverPending(c, coversOn),
-        );
-        if (v.kind === "mine" && moving) await reload();
+        await sleep(LIST_FALLBACK_MS, stop.signal);
+        if (!stop.signal.aborted && down.size > 0) await reload();
       }
     })();
-    return () => stop.abort();
-  }, [reload]);
+    return () => {
+      stop.abort();
+      closes.forEach((close) => close());
+    };
+  }, [following, reload]);
 
   const openColl = (cid: string) => {
     setPreselect(null);
@@ -479,7 +479,6 @@ export function App() {
                     <CollectionCard
                       key={c.cid}
                       c={c}
-                      origin={origins[c.reused_from]}
                       list={!grid}
                       pickable
                       onOpen={openColl}

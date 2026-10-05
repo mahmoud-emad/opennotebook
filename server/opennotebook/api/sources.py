@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, BackgroundTasks, File, UploadFile
-from pydantic import BaseModel, Field, HttpUrl
+from pydantic import BaseModel, Field, HttpUrl, computed_field
 from sqlalchemy import delete, select
 
 from opennotebook import jobs, research, storage
@@ -33,6 +33,27 @@ class SourceOut(BaseModel):
     url: str = Field(description="Where it was read from; empty for a note, a file or a report")
     chars: int = Field(description="Length of the readable text")
     created_at: datetime
+
+    @computed_field(description="About how many words it holds")
+    @property
+    def words(self) -> int:
+        return sources.described(self.name, self.url, self.chars)[0]
+
+    @computed_field(
+        description="The line under its name: where it came from and how long it is, "
+        "`example.org · 1200 words` or `PDF · 300 words`"
+    )
+    @property
+    def detail(self) -> str:
+        return sources.described(self.name, self.url, self.chars)[1]
+
+    @computed_field(
+        description="The picture to lead its row with: its site's icon, loaded from the site "
+        "itself; empty for a note, a file or a report"
+    )
+    @property
+    def icon(self) -> str:
+        return sources.described(self.name, self.url, self.chars)[2]
 
     @classmethod
     def of(cls, src: Source) -> SourceOut:

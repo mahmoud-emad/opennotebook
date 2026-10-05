@@ -35,6 +35,8 @@ QUEUED, RUNNING, DONE, FAILED, CANCELLED = "queued", "running", "done", "failed"
 LIVE = (QUEUED, RUNNING)
 
 CHANNEL = "job_progress"
+# A collection's title, cover or sources changed; the payload is its id.
+COLLECTION_CHANNEL = "collection_change"
 
 # The error a stopped job is closed with, as a person reads it.
 STOPPED = "This was stopped before it finished. Start it again to make it."
@@ -47,6 +49,14 @@ def now() -> datetime:
 async def notify(s: AsyncSession, job_id: uuid.UUID) -> None:
     """Announce a change to a job row; delivered when `s` commits."""
     await s.execute(text("SELECT pg_notify(:c, :id)"), {"c": CHANNEL, "id": str(job_id)})
+
+
+async def announce(s: AsyncSession, collection_id: uuid.UUID) -> None:
+    """Announce a change to a collection (its title, its cover, what it
+    holds) to the pages following it; delivered when `s` commits."""
+    await s.execute(
+        text("SELECT pg_notify(:c, :id)"), {"c": COLLECTION_CHANNEL, "id": str(collection_id)}
+    )
 
 
 async def create(

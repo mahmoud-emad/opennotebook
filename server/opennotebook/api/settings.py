@@ -1,5 +1,7 @@
 """The studio's settings, and the slide styles."""
 
+import uuid
+
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
@@ -7,9 +9,11 @@ from opennotebook.ai.client import ai
 from opennotebook.ai.prices import Price, hint
 from opennotebook.api.deps import Db, Me
 from opennotebook.db.session import release
-from opennotebook.domain import settings
+from opennotebook.domain import collections, settings, styles
+from opennotebook.domain import sessions as sess
+from opennotebook.domain import sources as sources_domain
 from opennotebook.domain.settings import TAB_INFO, Current
-from opennotebook.domain.styles import STYLES
+from opennotebook.domain.styles import STYLES, SlideStyle
 
 router = APIRouter(prefix="/api", tags=["settings"])
 
@@ -140,7 +144,168 @@ async def set_setting(key: str, body: SetValue, s: Db, me: Me) -> Setting:
     return Setting.of(saved, await ai().catalogue.prices())
 
 
+# ── what the Create panel offers ─────────────────────────────────────────────
+
+# The style pictures are part of the web app, under its mount.
+THUMBNAILS = "assets/styles"
+
+
+class StyleChoice(Style):
+    thumbnail: str = Field(
+        description="The style's picture, relative to the web app's mount: `assets/styles/…`"
+    )
+
+
+class LengthChoice(BaseModel):
+    id: str
+    label: str
+
+
+class FormatChoice(BaseModel):
+    """An audio overview's format, as the Create panel offers it."""
+
+    id: str
+    label: str
+    blurb: str
+    lengths: list[LengthChoice] = Field(
+        description="The lengths it offers to choose from; empty when it has one, as Brief does"
+    )
+    voices: str = Field(description="Who it is read by, in a sentence: `Voices: Ava and Andrew.`")
+
+
+class ResearchHint(BaseModel):
+    label: str = Field(description="`Quick research` or `Standard research`")
+    takes: str = Field(description="How long it reads the web: `about a minute`")
+
+
+class UploadRules(BaseModel):
+    """What the sources panel takes. The server refuses anything else."""
+
+    extensions: list[str] = Field(description="Without the dot, lower case")
+    accept: str = Field(description="The file picker's `accept`, from the same list")
+    kinds: str = Field(description="What can be uploaded, in words")
+    max_mb: int
+    max_files: int = Field(description="Files one upload takes")
+    max_links: int = Field(description="Links one add takes")
+    hint: str = Field(description="What can be uploaded, as the add box says it")
+    title: str = Field(description="The same, as the Upload button's tooltip")
+
+
+class StudioOptions(BaseModel):
+    """Everything the Create panel offers for one collection, and how it says
+    it: the choices, the starting picks from the person's settings, and the
+    lines it shows from them."""
+
+    styles: list[StyleChoice]
+    audio_formats: list[FormatChoice]
+    default_style: str
+    default_audio_format: str
+    default_audio_length: str
+    deck_summary: str = Field(
+        description="What a deck of this collection is made with: "
+        "`5 slides · about 5 min · Host and Expert`"
+    )
+    language_note: str | None = Field(
+        description="The output language when it is not English: `Writing in French.`"
+    )
+    build_language_note: str | None = Field(
+        description="The same for a deck or an audio overview, saying when the voices keep "
+        "their English accent"
+    )
+    show_cost: bool = Field(description="Say what a tool costs before it is made")
+    research: ResearchHint
+    upload: UploadRules
+
+
+def _style_choice(st: SlideStyle) -> StyleChoice:
+    return StyleChoice(
+        id=st.id, label=st.label, blurb=st.blurb, thumbnail=f"{THUMBNAILS}/{st.id}.jpg"
+    )
+
+
+def studio_options(v: dict[str, str], sources: int) -> StudioOptions:
+    """The Create panel's offer for a collection of `sources` sources, from
+    the settings values `v` in force."""
+    host, second = v[settings.SPEAKER1_NAME_KEY].strip(), v[settings.SPEAKER2_NAME_KEY].strip()
+    # A deck's voices follow the plan's rule: two on Automatic with two or
+    # more sources.
+    count = v[settings.SPEAKER_COUNT_KEY].strip()
+    two = {"1": False, "2": True}.get(count, sources >= 2)
+    deck = (
+        f"{v[settings.SLIDE_COUNT_KEY].strip()} slides · "
+        f"about {v[settings.SESSION_MINUTES_KEY].strip()} min · "
+        f"{f'{host} and {second}' if two else host}"
+    )
+    formats = [
+        FormatChoice(
+            id=f,
+            label=sess.FORMAT_LABELS[f],
+            blurb=sess.FORMAT_BLURBS[f],
+            lengths=[
+                LengthChoice(id=n, label=sess.LENGTH_LABELS[n]) for n in sess.format_lengths(f)
+            ]
+            if len(sess.format_lengths(f)) > 1
+            else [],
+            voices=f"Brief: {host} alone, about 2 minutes."
+            if f == "brief"
+            else f"Voices: {host} and {second}.",
+        )
+        for f in sess.FORMATS
+    ]
+    language = v[settings.LANGUAGE_KEY].strip()
+    other = language if language and language != "English" else None
+    # Microsoft's Multilingual voices speak any output language natively; the
+    # others keep an English accent.
+    native = all(
+        "Multilingual" in v[k] for k in (settings.SPEAKER1_VOICE_KEY, settings.SPEAKER2_VOICE_KEY)
+    )
+    quick = v[settings.RESEARCH_DEPTH_KEY].strip() == "quick"
+    exts: list[str] = list(sources_domain.UPLOAD_EXTENSIONS)
+    kinds = sources_domain.UPLOAD_KINDS
+    mb = sources_domain.MAX_UPLOAD_BYTES // (1024 * 1024)
+    return StudioOptions(
+        styles=[_style_choice(st) for st in STYLES],
+        audio_formats=formats,
+        default_style=(styles.style(v[settings.STYLE_KEY].strip()) or styles.DEFAULT_STYLE).id,
+        default_audio_format=sess.parse_format(v[settings.AUDIO_FORMAT_KEY]),
+        default_audio_length=sess.parse_length(v[settings.AUDIO_LENGTH_KEY]),
+        deck_summary=deck,
+        language_note=f"Writing in {other}." if other else None,
+        build_language_note=(
+            f"Writing in {other}." if native else f"Writing in {other} · voices are English."
+        )
+        if other
+        else None,
+        show_cost=v[settings.SHOW_COST_KEY].strip() != "off",
+        research=ResearchHint(
+            label="Quick research" if quick else "Standard research",
+            takes="about a minute" if quick else "a few minutes",
+        ),
+        upload=UploadRules(
+            extensions=exts,
+            accept=",".join(f".{e}" for e in exts),
+            kinds=kinds,
+            max_mb=mb,
+            max_files=sources_domain.MAX_FILES,
+            max_links=sources_domain.MAX_URLS,
+            hint=f"PDF, Office, Markdown, text or CSV, up to {mb} MB. Or drop them here.",
+            title=f"{kinds}, up to {mb} MB each. Or drop files on this panel.",
+        ),
+    )
+
+
+@router.get("/collections/{cid}/options")
+async def get_studio_options(cid: uuid.UUID, s: Db, me: Me) -> StudioOptions:
+    """What the Create panel offers for a collection, from the person's
+    settings: the styles and formats with their pictures and lengths, the
+    starting picks, the lines it shows (a deck's slides and voices, the
+    output language), how long research takes, and what an upload takes."""
+    summary = await collections.summary(s, me.id, cid)
+    return studio_options(await settings.values(s, me.id), summary.sources)
+
+
 @router.get("/styles")
-async def list_styles(me: Me) -> list[Style]:
-    """The slide styles a deck can be built in, the default first."""
-    return [Style(id=s.id, label=s.label, blurb=s.blurb) for s in STYLES]
+async def list_styles(me: Me) -> list[StyleChoice]:
+    """The slide styles a deck can be built in, the default first, each with
+    its picture."""
+    return [_style_choice(st) for st in STYLES]

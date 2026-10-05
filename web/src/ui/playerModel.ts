@@ -8,7 +8,13 @@ import { str } from "./helpers";
 
 // ── the session as the player reads it ───────────────────────────────────────
 
-export type Speaker = { speaker_id: string; voice_id: string; display_name: string };
+export type Speaker = {
+  speaker_id: string;
+  voice_id: string;
+  display_name: string;
+  /** What to call them, as the server says it. */
+  name: string;
+};
 export type Line = {
   line_id: string;
   speaker_id: string;
@@ -27,7 +33,7 @@ export type SessionDoc = {
   state: "preparing" | "ready" | "failed";
   failure: string | null;
   /** An audio overview: chapters and voices, no slides. */
-  audio: { format: string } | null;
+  audio: { format: string; label: string } | null;
   speakers: Speaker[];
   slides: Part[];
 };
@@ -50,7 +56,14 @@ function aspectOf(v: unknown): Aspect | null {
 export function sessionOf(d: Rest.SessionDetail): SessionDoc {
   const speakers = (d.speaker_list ?? []).map((raw) => {
     const s = obj(raw);
-    return { speaker_id: str(s.speaker_id), voice_id: str(s.voice_id), display_name: str(s.display_name) };
+    const id = str(s.speaker_id);
+    return {
+      speaker_id: id,
+      voice_id: str(s.voice_id),
+      display_name: str(s.display_name),
+      // An answer from before the server named them keeps the name given.
+      name: (d.speaker_names as Record<string, string> | undefined)?.[id] ?? str(s.display_name),
+    };
   });
   const slides = (d.slides ?? []).map((raw, i): Part => {
     const s = obj(raw);
@@ -72,7 +85,7 @@ export function sessionOf(d: Rest.SessionDetail): SessionDoc {
       }),
     };
   });
-  const audio = d.kind === "audio" || d.audio ? { format: str(obj(d.audio).format) } : null;
+  const audio = d.kind === "audio" || d.audio ? { format: str(obj(d.audio).format), label: d.audio_label } : null;
   return {
     sid: d.id,
     collection: d.collection_id,
@@ -99,37 +112,10 @@ export function flatten(s: SessionDoc): Flat[] {
 
 // ── names ────────────────────────────────────────────────────────────────────
 
-// A role word is not a name, so a speaker who only has one is called by their
-// voice's first name: af_bella is Bella, en-US-AvaMultilingualNeural is Ava.
-const GENERIC = new Set([
-  "host",
-  "expert",
-  "narrator",
-  "speaker",
-  "speaker 1",
-  "speaker 2",
-  "voice",
-  "presenter",
-  "guest",
-  "studio",
-]);
-
-const MICROSOFT_NAME = /^[a-z]{2,3}-[A-Z]{2}(?:-[a-z]+)?-([A-Z][a-z]+)[A-Za-z]*Neural$/;
-
-export function voiceName(voice: string): string {
-  const m = MICROSOFT_NAME.exec(String(voice || ""));
-  if (m) return m[1]!;
-  const n = String(voice || "")
-    .split("_")
-    .slice(1)
-    .join("_");
-  return n ? n[0]!.toUpperCase() + n.slice(1) : "";
-}
-
-export function displayName(sp: Pick<Speaker, "display_name" | "voice_id"> | null | undefined): string {
-  const name = ((sp && sp.display_name) || "").trim();
-  if (!GENERIC.has(name.toLowerCase())) return name;
-  return voiceName((sp && sp.voice_id) || "") || name;
+/** What to call a speaker, as the server says it (`speaker_names`): their own
+ * name, or their voice's when they have only a role word. */
+export function displayName(sp: Pick<Speaker, "name"> | null | undefined): string {
+  return (sp?.name ?? "").trim();
 }
 
 export function speakerName(s: SessionDoc | null, id: string): string {

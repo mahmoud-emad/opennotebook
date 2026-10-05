@@ -18,7 +18,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from opennotebook import cover
+from opennotebook import cover, jobs
 from opennotebook.ai import ledger
 from opennotebook.ai.client import ai
 from opennotebook.ai.errors import AiError
@@ -263,6 +263,7 @@ async def redraw(owner: uuid.UUID, cid: uuid.UUID, *, force: bool) -> None:
         if designed is not None:
             c.cover = designed.to_json()
             c.cover_version = cover.version(designed)
+            await jobs.announce(s, cid)
         c.cover_from = key
     if failure is not None and force:
         raise _problem(failure)

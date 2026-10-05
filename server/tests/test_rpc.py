@@ -424,7 +424,8 @@ async def test_a_build_is_estimated_started_and_followed(
             f"/api/collections/{cid}/outputs/estimate", json={"kind": "slides", "slide_count": 5}
         )
     ).json()
-    assert set(est) == set(rest) and est["lines"] == rest["lines"]
+    # The old shape, without what the REST API added since.
+    assert set(est) == set(rest) - {"model", "facts"} and est["lines"] == rest["lines"]
 
     built = await ok(client, "session", "session_build", {"req": req})
     assert built["accepted"] and built["sid"] != cid
@@ -775,7 +776,8 @@ async def test_settings_and_styles_read_in_the_old_shape(client: AsyncClient) ->
     assert e["code"] == -32602 and e["data"] == {"status": 422}
 
     styles = (await ok(client, "settings", "styles_list"))["styles"]
-    assert styles == (await client.get("/api/styles")).json()
+    rest = (await client.get("/api/styles")).json()
+    assert styles == [{k: v for k, v in x.items() if k != "thumbnail"} for x in rest]
 
 
 # ── one person's things are not another's ────────────────────────────────────

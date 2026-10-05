@@ -1,6 +1,7 @@
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cardActions, OutputBadges } from "./home";
+import type { CollectionSummary } from "./api";
+import { CollectionCard, cardActions, OutputBadges } from "./home";
 import { ItemRow } from "./outputs";
 import { ShareDialog, copyModeFact, readOnlyLine, reuseHint, reusedLine } from "./share";
 import { SrcRow, type Src } from "./sources";
@@ -68,7 +69,7 @@ describe("a read-only copy", () => {
     expect(container.querySelector(".src-x")).not.toBeNull();
 
     const row = (more: object) => (
-      <ItemRow icon="diagram-3" what="mind map" title="Map" facts="3 topics" whenMs={0} onOpen={() => {}} {...more} />
+      <ItemRow icon="diagram-3" what="mind map" title="Map" shown="Map" facts="3 topics" whenMs={0} onOpen={() => {}} {...more} />
     );
     rerender(row({}));
     expect(container.querySelectorAll("button")).toHaveLength(1);
@@ -122,9 +123,18 @@ describe("the share dialog", () => {
         posted = JSON.parse(String(init!.body)) as Record<string, unknown>;
         return reply(200, shareOut(posted.allow_edits === true));
       }
-      if (url.endsWith("/share")) return reply(200, share);
-      if (url.endsWith("/mindmaps") || url.endsWith("/notes")) return reply(200, []);
-      return reply(200, { collection: summary, outputs: [] });
+      if (url.endsWith("/share"))
+        return reply(200, {
+          share,
+          sources: summary.sources,
+          items: [],
+          include_sources: true,
+          picked: [],
+          note: share === null ? "" : (share.note as string),
+          allow_edits: share === null ? false : share.allow_edits === true,
+          note_max: 280,
+        });
+      return reply(404, { detail: "Only the share's state is read." });
     });
   });
 
@@ -155,5 +165,81 @@ describe("the share dialog", () => {
     fireEvent.click(screen.getByRole("button", { name: "Update share" }));
     await act(async () => {});
     expect(posted?.allow_edits).toBe(false);
+  });
+});
+
+describe("a reused collection's card", () => {
+  const card = (over: Partial<CollectionSummary>): CollectionSummary => ({
+    cid: "c2",
+    title: "",
+    display_title: "Untitled collection",
+    title_auto: true,
+    created_ms: 0,
+    updated_ms: 0,
+    pinned: false,
+    sources: 1,
+    decks: 0,
+    audios: 0,
+    maps: 0,
+    notes: 0,
+    preparing: 0,
+    failed: 0,
+    cover_version: "f-1",
+    reused_from: "s1",
+    shared: false,
+    reuses: 0,
+    read_only: true,
+    reused_from_title: "Reefs",
+    busy: false,
+    auto_named: false,
+    name_note: null,
+    ...over,
+  });
+
+  it("names the original as the server does, while its share is there", () => {
+    // jsdom draws no layout: the cover's sizing has nothing to observe.
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        observe() {}
+        disconnect() {}
+      },
+    );
+    const { container, rerender } = render(<CollectionCard c={card({})} list={false} onOpen={() => {}} onChanged={() => {}} />);
+    expect(container.textContent).toContain("Reused from Reefs");
+    expect(container.textContent).toContain("Untitled collection");
+    rerender(<CollectionCard c={card({ reused_from_title: null })} list={false} onOpen={() => {}} onChanged={() => {}} />);
+    expect(container.textContent).toContain("Reused from a shared collection");
+  });
+});
+
+describe("the share dialog's one read", () => {
+  it("opens on what the server says, in one call", async () => {
+    const calls: string[] = [];
+    vi.stubGlobal("fetch", (url: string, init?: RequestInit) => {
+      calls.push(`${init?.method ?? "GET"} ${url}`);
+      return reply(200, {
+        share: null,
+        sources: 2,
+        items: [
+          { key: "session:d1", kind: "slides", title: "Editorial slides", created_at: "2026-10-01T00:00:00Z" },
+          { key: "mindmap:m1", kind: "mindmap", title: "Mind map", created_at: "2026-09-30T00:00:00Z" },
+        ],
+        include_sources: true,
+        picked: ["mindmap:m1"],
+        note: "",
+        allow_edits: false,
+        note_max: 120,
+      });
+    });
+    render(<ShareDialog cid="c1" title="" onClose={() => {}} />);
+    await act(async () => {});
+    expect(calls).toEqual(["GET /api/collections/c1/share"]);
+    const boxes = screen.getAllByRole("checkbox") as HTMLInputElement[];
+    expect(boxes.map((b) => b.checked)).toEqual([false, true]);
+    expect(screen.getByText("Editorial slides")).toBeTruthy();
+    expect(screen.getByText("Include sources (2)")).toBeTruthy();
+    expect(screen.getByText("0/120")).toBeTruthy();
+    expect((screen.getByRole("textbox") as HTMLTextAreaElement).maxLength).toBe(120);
   });
 });

@@ -24,6 +24,7 @@ const SESSION = {
   collection_id: "c1",
   kind: "slides",
   title: "Coral reefs",
+  display_title: "Coral reefs",
   description: "",
   state: "ready",
   failure: null,
@@ -40,6 +41,9 @@ const SESSION = {
     { speaker_id: "a", voice_id: "af_bella", display_name: "Host" },
     { speaker_id: "b", voice_id: "am_adam", display_name: "Expert" },
   ],
+  // What the server says to call them: a role word gives way to the voice's
+  // name.
+  speaker_names: { a: "Bella", b: "Adam" },
   slides: [
     {
       ordinal: 0,
@@ -130,7 +134,7 @@ describe("the play page", () => {
   });
 
   it("wears an audio overview's words and offers its download", async () => {
-    stub({ ...SESSION, kind: "audio", audio: { format: "debate", length: "default", focus: "" } });
+    stub({ ...SESSION, kind: "audio", audio_label: "Debate", audio: { format: "debate", length: "default", focus: "" } });
     const { container } = render(<PlayerPage sid="s1" share={null} />);
     await screen.findByText("Reefs are alive.");
     expect(container.querySelector(".player-page")!.classList.contains("audio")).toBe(true);

@@ -224,3 +224,16 @@ def test_an_amount_over_the_limit_never_reads_as_the_limit() -> None:
     assert cent_up(0.81) == 0.81
     assert cent_up(0.8100000001) == 0.81
     assert cent_up(0.811) == 0.82
+
+
+def test_counts_and_models_are_said_the_way_a_person_reads_them() -> None:
+    assert [e.count_short(n) for n in (850, 1_234, 12_400, 1_200_000)] == [
+        "850",
+        "1.2k",
+        "12k",
+        "1.2M",
+    ]
+    assert e.model_name("anthropic/claude-haiku-4.5") == "Claude Haiku 4.5"
+    assert e.model_name("google/gemini-2.5-flash-lite") == "Gemini 2.5 Flash Lite"
+    assert e.model_name("local") == "Local"
+    assert (e.sources_said(1), e.sources_said(3)) == ("1 source", "3 sources")

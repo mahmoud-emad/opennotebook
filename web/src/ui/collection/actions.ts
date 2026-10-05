@@ -1,12 +1,13 @@
 // A collection page's work: loading, adding, making, renaming and deleting.
 // Made once per page over its stores (`state.ts`); nothing here waits on a
 // build. A deck or an audio overview prepares in the background for minutes,
-// its row follows the build's own event stream, and the page polls the
-// collection while anything is moving.
+// and the page follows the collection's event stream, where the server says
+// what changed: its summary, its outputs and their progress, its sources.
 
 import {
   collectionRetitle,
   errText,
+  followCollection,
   getCollection,
   isAbort,
   sleep,
@@ -14,8 +15,18 @@ import {
   sourceAddText,
   sourceAddUrls,
   sourceRemove,
+  type CollectionSummary,
+  type SessionSummary,
 } from "../api";
-import { buildOutput, estimateOutput, researchTopic, type BuildReq, type Picks } from "../api-studio";
+import {
+  buildOutput,
+  estimateOutput,
+  followJob,
+  researchTopic,
+  studioOptions,
+  type BuildReq,
+  type Picks,
+} from "../api-studio";
 import { keepSame, sameOr } from "../helpers";
 import { askSources, send, type ChatMade, type ChatState } from "../chat";
 import { loadMaps, makeMap } from "../mindmap";
@@ -23,9 +34,12 @@ import { loadNotes, makeNotes } from "../notes";
 import { deleteOutput, retitle, type Target } from "../outputs";
 import type { Open } from "../routes";
 import { isBuild, outputLabel, report, type Output } from "../shell";
-import { FETCHING, serverSources, srcFrom, type Src } from "../sources";
-import { failedSrc, sameOpen, staged, type PageState } from "./state";
-import { MAX_LINKS, uploadProblem } from "./upload";
+import { FETCHING, serverSources, srcFrom, srcOfServer, type Src } from "../sources";
+import { applyDefaults, failedSrc, sameOpen, staged, type PageState } from "./state";
+import { uploadProblem } from "./upload";
+
+/** How often a page whose event stream is down reads its collection again. */
+export const FALLBACK_MS = 30_000;
 
 /** The page's work: loading, adding, making, renaming and deleting. Made once
  * per page, over its stores. */
@@ -45,6 +59,8 @@ export function pageActions(cid: string, S: PageState, chat: ChatState) {
   const icons = new Map<string, string>();
   // Which read of the sources is the latest, as `loadGen` is the collection's.
   let srcGen = 0;
+  // Which read of the Create panel's options is the latest.
+  let optsGen = 0;
   // Cancels what the page asked for when it goes: reads, waits and the
   // estimate. A change already sent (an add, a rename) is left to finish.
   let life = new AbortController();
@@ -53,6 +69,20 @@ export function pageActions(cid: string, S: PageState, chat: ChatState) {
   // it by, so it is given a key of its own for as long as it is shown.
   const localKey = () => `local-${++rowN}`;
   const pushSrc = (s: Src) => S.srcs.set((v) => [...v, s.key === undefined ? { ...s, key: localKey() } : s]);
+
+  // The collection as the server says it is now, from a read or its stream.
+  const applyCollection = (c: CollectionSummary) => {
+    if (!S.typing.get()) S.title.set(c.title);
+    props().setCrumb(c.title);
+    S.summary.set((was) => sameOr(was, c));
+  };
+  // The rows that did not change stay the objects they were, so an update
+  // redraws only what moved.
+  const applyOutputs = (outputs: SessionSummary[]) => {
+    S.outputs.set((was) => keepSame(was, outputs, (o) => o.sid));
+    S.loadErr.set("");
+    S.loaded.set(true);
+  };
 
   const load = async () => {
     const my = ++loadGen;
@@ -66,16 +96,8 @@ export function pageActions(cid: string, S: PageState, chat: ChatState) {
     }
     if (loadGen !== my) return;
     if (got?.found) {
-      const c = got.collection;
-      if (c) {
-        if (!S.typing.get()) S.title.set(c.title);
-        props().setCrumb(c.title);
-        S.summary.set((was) => sameOr(was, c));
-      }
-      // The rows that did not change stay the objects they were, so a poll
-      // redraws only what moved.
-      S.outputs.set((was) => keepSame(was, got.outputs, (o) => o.sid));
-      S.loadErr.set("");
+      if (got.collection) applyCollection(got.collection);
+      applyOutputs(got.outputs);
     } else if (got) S.missing.set(true);
     else S.loadErr.set(err);
     S.loaded.set(true);
@@ -83,23 +105,85 @@ export function pageActions(cid: string, S: PageState, chat: ChatState) {
 
   // The server's list, with the rows it does not have kept after it: a page
   // still being read, or one that failed and says why.
+  const applySources = (list: Src[]) => {
+    const local = S.srcs.get().filter((s) => !s.ok || s.detail === FETCHING);
+    const next = list.map((s) => {
+      const i = icons.get(s.url);
+      return i ? { ...s, icon: i } : s;
+    });
+    S.srcs.set([...next, ...local]);
+    S.srcsErr.set("");
+    S.srcsLoaded.set(true);
+  };
+
   const loadSources = async () => {
     const my = ++srcGen;
     try {
       const list = await serverSources(cid, signal());
       if (srcGen !== my) return;
-      const local = S.srcs.get().filter((s) => !s.ok || s.detail === FETCHING);
-      const next = list.map((s) => {
-        const i = icons.get(s.url);
-        return i ? { ...s, icon: i } : s;
-      });
-      S.srcs.set([...next, ...local]);
-      S.srcsErr.set("");
+      applySources(list);
     } catch (e) {
       if (isAbort(e) || srcGen !== my) return;
       S.srcsErr.set(errText(e));
+      S.srcsLoaded.set(true);
     }
-    S.srcsLoaded.set(true);
+  };
+
+  // Follow the collection on the server's event stream: its summary, its
+  // decks and audio overviews with their progress, and its sources, as they
+  // change. Only while the stream is down is the collection read again, and
+  // then slowly. Returns what stops it.
+  const follow = () => {
+    let up = true;
+    const stop = new AbortController();
+    const close = followCollection(cid, {
+      // What the stream says is newer than any read already on its way.
+      collection: (c) => {
+        ++loadGen;
+        applyCollection(c);
+      },
+      outputs: (o) => {
+        ++loadGen;
+        applyOutputs(o);
+      },
+      progress: (p) => S.progress.set((m) => ({ ...m, [p.session_id]: p })),
+      sources: (list) => {
+        ++srcGen;
+        applySources(list.map(srcOfServer));
+      },
+      gone: () => S.missing.set(true),
+      up: (ok) => {
+        up = ok;
+      },
+    });
+    void (async () => {
+      while (!stop.signal.aborted) {
+        await sleep(FALLBACK_MS, stop.signal);
+        if (stop.signal.aborted || up || S.missing.get()) continue;
+        await load();
+        await loadSources();
+      }
+    })();
+    return () => {
+      stop.abort();
+      close();
+    };
+  };
+
+  // What the Create panel offers, read again when the settings or the
+  // sources change: the server words it from both.
+  const loadOptions = async () => {
+    const my = ++optsGen;
+    try {
+      const o = await studioOptions(cid, signal());
+      if (optsGen !== my) return;
+      S.opts.set(o);
+      S.optsErr.set("");
+      applyDefaults(S);
+    } catch (e) {
+      if (isAbort(e) || optsGen !== my) return;
+      S.optsErr.set(errText(e));
+    }
   };
 
   const reloadAll = () => {
@@ -115,9 +199,11 @@ export function pageActions(cid: string, S: PageState, chat: ChatState) {
     if (raw === "" || S.adding.get()) return;
     S.adding.set(true);
     const all = raw.split(/\s+/).filter((t) => t.startsWith("http://") || t.startsWith("https://"));
-    const urls = all.slice(0, MAX_LINKS);
-    // Past the most one Add takes, the rest wait in the box.
-    S.draft.set(all.slice(MAX_LINKS).join("\n"));
+    // Past the most one Add takes, as the server says it, the rest wait in
+    // the box. Before it has said, all go, and it says if that is too many.
+    const most = S.opts.get()?.upload.max_links ?? all.length;
+    const urls = all.slice(0, most);
+    S.draft.set(all.slice(most).join("\n"));
     if (urls.length > 0) {
       const rows: Src[] = urls.map((u) => ({ icon: "", name: u, detail: FETCHING, ok: true, url: u, file: "", key: localKey() }));
       const mine = new Set(rows.map((r) => r.key));
@@ -156,23 +242,6 @@ export function pageActions(cid: string, S: PageState, chat: ChatState) {
     await load();
   };
 
-  // The report of a research started on the server lands as a new source;
-  // until then the topic's row stays. Null once it has landed, else why not.
-  const awaitReport = async (before: Set<string>): Promise<string | null> => {
-    const until = Date.now() + 15 * 60_000;
-    const sig = signal();
-    while (!sig.aborted && Date.now() < until) {
-      await sleep(5000, sig);
-      if (sig.aborted) break;
-      try {
-        if ((await serverSources(cid, sig)).some((s) => !before.has(s.file))) return null;
-      } catch {
-        // A poll that failed is tried again on the next.
-      }
-    }
-    return sig.aborted ? null : "the research did not finish";
-  };
-
   // Research a topic: the add box's text as a brief, read across the web for
   // about a minute and added as one written report.
   const research = async () => {
@@ -180,17 +249,22 @@ export function pageActions(cid: string, S: PageState, chat: ChatState) {
     if (topic === "") return;
     S.draft.set("");
     const n = ++rowN;
-    S.researching.set((v) => [...v, [n, topic]]);
+    S.researching.set((v) => [...v, [n, topic, ""]]);
     let why: string | null;
     try {
-      const before = new Set((await serverSources(cid)).map((s) => s.file));
-      await researchTopic(cid, topic);
-      why = await awaitReport(before);
+      // The server's job says how far it is and, when it fails, why: the row
+      // follows it rather than waiting for a source to appear.
+      const job = await researchTopic(cid, topic);
+      why = await followJob(
+        job.id,
+        (said) => S.researching.set((v) => v.map((r) => (r[0] === n ? [n, topic, said] : r))),
+        signal(),
+      );
     } catch (e) {
       why = errText(e);
     }
     S.researching.set((v) => v.filter((r) => r[0] !== n));
-    if (why !== null) pushSrc(failedSrc(`Research: ${topic}`, why === "" ? "the research did not finish" : why));
+    if (why !== null) pushSrc(failedSrc(`Research: ${topic}`, why));
     await loadSources();
     await load();
   };
@@ -231,7 +305,7 @@ export function pageActions(cid: string, S: PageState, chat: ChatState) {
   const uploadFiles = async (files: File[]) => {
     const queue: [number, File][] = [];
     for (const f of files) {
-      const why = uploadProblem(f.name, f.size);
+      const why = uploadProblem(f.name, f.size, S.opts.get()?.upload ?? null);
       if (why !== null) {
         pushSrc(failedSrc(f.name, why));
         continue;
@@ -513,6 +587,8 @@ export function pageActions(cid: string, S: PageState, chat: ChatState) {
   return {
     load,
     loadSources,
+    loadOptions,
+    follow,
     reloadAll,
     signal,
     addSource,

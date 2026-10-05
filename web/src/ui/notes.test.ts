@@ -22,6 +22,7 @@ describe("study notes", () => {
     const s = (id: string, focus: string, sources: string[]): StudyNotesSummary => ({
       id,
       title: "t",
+      display_title: "t",
       focus,
       created_ms: 0,
       sources,

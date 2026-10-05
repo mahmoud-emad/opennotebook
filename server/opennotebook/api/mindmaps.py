@@ -6,12 +6,13 @@ from datetime import datetime
 from typing import Any
 
 from fastapi import APIRouter
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, computed_field
 from sqlalchemy import delete, select
 
-from opennotebook.ai import ledger
+from opennotebook.ai import client, ledger
 from opennotebook.ai.errors import AiError
 from opennotebook.api.deps import Db, Me
+from opennotebook.api.sessions import SessionEstimate
 from opennotebook.db.models import MindMap
 from opennotebook.db.session import release
 from opennotebook.domain import collections, reading
@@ -39,6 +40,13 @@ class MindMapSummary(BaseModel):
     sources: list[str]
     shape: list[int] = Field(description="Subtopics per main topic, in order: the outline")
     created_at: datetime
+
+    @computed_field(
+        description="Its name as it is shown: the title, or `Untitled mind map` while it has none"
+    )
+    @property
+    def display_title(self) -> str:
+        return " ".join(self.title.split()) or "Untitled mind map"
 
 
 class MindMapOut(MindMapSummary):
@@ -180,16 +188,24 @@ async def make_mindmap(cid: uuid.UUID, body: MakeReq, s: Db, me: Me) -> MindMapO
     return MindMapOut.model_validate(m, from_attributes=True)
 
 
-@router.get("/estimate")
-async def estimate_mindmap(cid: uuid.UUID, s: Db, me: Me) -> Estimate:
-    """What making a mind map of every source would cost, before making it."""
-    await collections.summary(s, me.id, cid)
-    docs = await reading.read_docs(s, me.id, cid, None)
-    model = await config.value(s, me.id, config.MINDMAP_MODEL_KEY)
-    limit = await reading.limit_of(s, me.id)
+async def one_call(s: Db, owner: uuid.UUID, cid: uuid.UUID) -> Estimate:
+    """What the one call that maps every source would cost."""
+    await collections.summary(s, owner, cid)
+    docs = await reading.read_docs(s, owner, cid, None)
+    model = await config.value(s, owner, config.MINDMAP_MODEL_KEY)
+    limit = await reading.limit_of(s, owner)
     # The price list can take seconds to read; no transaction waits for it.
     await release(s)
     return await reading.estimate(docs, model, tokens_for, limit)
+
+
+@router.get("/estimate")
+async def estimate_mindmap(cid: uuid.UUID, s: Db, me: Me) -> SessionEstimate:
+    """What making a mind map of every source would cost, before making it,
+    itemised the way a build's estimate is."""
+    q = await one_call(s, me.id, cid)
+    price = await client.ai().catalogue.price(q.model)
+    return SessionEstimate.one_call(q, price, "Mind map", "Draw the mind map")
 
 
 @router.get("/{mid}")

@@ -360,10 +360,19 @@ async def test_the_estimate_prices_one_call_and_a_second_at_most(
     assert r.status_code == 200, r.text
     e = r.json()
     tokens_in, tokens_out = tokens_for(len(REEFS))
-    assert e["sources"] == 1 and e["chars"] == len(REEFS) and e["priced"]
-    assert (e["input_tokens"], e["output_tokens"]) == (tokens_in, tokens_out)
-    assert e["cost_usd"] == pytest.approx(tokens_in * PRICE_IN + tokens_out * PRICE_OUT)
-    assert e["cost_high_usd"] == pytest.approx(2 * e["cost_usd"])
+    # Itemised the way a build's estimate is: one step, one or two calls.
+    assert e["sources"] == 1 and e["source_chars"] == len(REEFS)
+    [line] = e["lines"]
+    assert (line["group"], line["step"], line["unpriced"]) == (
+        "Mind map",
+        "Draw the mind map",
+        False,
+    )
+    assert (line["input_tokens"], line["output_tokens_typical"]) == (tokens_in, tokens_out)
+    one = tokens_in * PRICE_IN + tokens_out * PRICE_OUT
+    assert e["total_typical_usd"] == pytest.approx(one)
+    assert e["total_high_usd"] == pytest.approx(2 * one)
+    assert e["facts"] == [f"1 source · {len(REEFS):,} characters", "by Gemini 2.5 Flash Lite"]
     # Estimating costs nothing.
     assert await spent() == []
 
@@ -410,3 +419,18 @@ async def test_the_spending_limit_is_checked_before_any_model_call(
     monkeypatch.setenv("OPENNOTEBOOK_MAX_BUILD_USD", "5")
     e = (await client.get(f"/api/collections/{cid}/mindmaps/estimate")).json()
     assert e["limit_usd"] == 5 and not e["over_limit"]
+
+
+async def test_a_model_with_no_price_is_estimated_and_marked_unpriced(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    install(monkeypatch)
+    cid = await _collection(client)
+    await add_note(client, cid, REEFS)
+    monkeypatch.setenv("OPENNOTEBOOK_MINDMAP_MODEL", "acme/unlisted-1")
+    e = (await client.get(f"/api/collections/{cid}/mindmaps/estimate")).json()
+    [line] = e["lines"]
+    assert line["unpriced"] and line["price_in_per_million"] is None
+    assert e["total_high_usd"] == 0 and not e["over_limit"]
+    assert e["facts"][1] == "by Unlisted 1"
+    assert any("no price" in a for a in e["assumptions"])

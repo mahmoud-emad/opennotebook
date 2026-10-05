@@ -3,16 +3,15 @@
 // it lands, not what was true when it set out. Each part of the page reads
 // only the stores it draws, so typing in one box does not redraw the rest.
 
-import type { CollectionSummary, SessionSummary } from "../api";
+import type { CollectionSummary, OutputProgress, SessionSummary } from "../api";
 import type { Estimate } from "../dialogs";
 import { newMapState } from "../mindmap";
 import { newNotesState } from "../notes";
 import type { Open } from "../routes";
 import type { Output } from "../shell";
 import type { Src } from "../sources";
+import type { StudioOptions } from "../api-studio";
 import { store } from "../store";
-import { STYLES } from "../styles";
-import { offeredLengths } from "../audioFormats";
 
 export type CollectionPageProps = {
   cid: string;
@@ -36,6 +35,9 @@ export function pageState(props: CollectionPageProps) {
     // The collection and its decks and audio overviews.
     summary: store<CollectionSummary | null>(null),
     outputs: store<SessionSummary[]>([]),
+    // How far each output being made is, by its id, from the collection's
+    // event stream.
+    progress: store<Record<string, OutputProgress>>({}),
     loaded: store(false),
     missing: store(false),
     loadErr: store(""),
@@ -57,18 +59,24 @@ export function pageState(props: CollectionPageProps) {
     // Sources being removed, by their stored name.
     removing: store<string[]>([]),
     // Topics being researched, each shown as a row until its report lands.
-    // By a number of their own, so the same topic asked twice is two rows.
-    researching: store<[number, string][]>([]),
+    // By a number of their own, so the same topic asked twice is two rows;
+    // with what the server's job says it is doing, empty until it says.
+    researching: store<[number, string, string][]>([]),
     // Files being uploaded and read, by a number of their own and their name,
     // each a row until it is a source or says why it is not.
     uploading: store<[number, string][]>([]),
     mm: newMapState(),
     nt: newNotesState(),
+    // What the Create panel offers and how it says it, from the server: the
+    // styles, formats and lengths, the starting picks, the hints.
+    opts: store<StudioOptions | null>(null),
+    optsErr: store(""),
     // Making.
     tab: store<Tab>("studio"),
     // The tile whose options are open; null shows the tiles alone.
     chosen: store<Output | null>(props.start),
-    style: store(STYLES[0]!.id),
+    // Empty until the server's options say which style to start on.
+    style: store(""),
     // An audio overview's three options: NotebookLM's format, length and
     // Customize box. Deep Dive at its default length is what NotebookLM makes
     // when nothing is chosen.
@@ -98,9 +106,22 @@ export function pageState(props: CollectionPageProps) {
 
 export type PageState = ReturnType<typeof pageState>;
 
-/** A length the format does not offer falls back to its default. */
+/** A length the format does not offer, as the server lists them, falls back
+ * to its default. */
 export function fitLength(S: PageState): void {
-  if (!offeredLengths(S.audioFormat.get()).includes(S.audioLength.get())) S.audioLength.set("default");
+  const f = S.opts.get()?.audio_formats.find((a) => a.id === S.audioFormat.get());
+  if (f && !f.lengths.some((l) => l.id === S.audioLength.get())) S.audioLength.set("default");
+}
+
+/** The Create panel starts on the server's style, format and length, and
+ * follows them when they change, until the person picks their own here. */
+export function applyDefaults(S: PageState): void {
+  const o = S.opts.get();
+  if (o === null || S.picked.get()) return;
+  S.style.set(o.default_style);
+  S.audioFormat.set(o.default_audio_format);
+  S.audioLength.set(o.default_audio_length);
+  fitLength(S);
 }
 
 /** A source that did not arrive, kept as a row that says why until dismissed. */

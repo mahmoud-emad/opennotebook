@@ -14,10 +14,10 @@ import {
   notesEstimate,
   notesGet,
   notesList,
-  type QuickEstimate,
   type StudyNotes,
   type StudyNotesSummary,
 } from "./api-studio";
+import type { Estimate } from "./dialogs";
 import { Icon } from "./Icon";
 import { citeGroups, type Cite } from "./cite";
 import { mdToHtml, withChips } from "./markdown";
@@ -39,7 +39,7 @@ export type NotesState = {
   loaded: Store<boolean>;
   /** Why the list could not be read; said in the outputs list. */
   loadErr: Store<string>;
-  est: Store<QuickEstimate | null>;
+  est: Store<Estimate | null>;
   estLoading: Store<boolean>;
   /** Why the last estimate could not be had, as a sentence. */
   estErr: Store<string>;
@@ -56,7 +56,7 @@ export function newNotesState(): NotesState {
     err: store(""),
     loaded: store(false),
     loadErr: store(""),
-    est: store<QuickEstimate | null>(null),
+    est: store<Estimate | null>(null),
     estLoading: store(false),
     estErr: store(""),
     seq: { load: 0, est: 0 },

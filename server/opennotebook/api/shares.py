@@ -11,7 +11,8 @@ from typing import Annotated, Literal
 
 from fastapi import APIRouter, Query
 from fastapi.responses import HTMLResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, computed_field
+from sqlalchemy import select
 
 from opennotebook.api.collections import CollectionSummary
 from opennotebook.api.deps import SANDBOXED, Db, Me
@@ -26,6 +27,20 @@ from opennotebook.domain import collections, covers, refresh, shares
 router = APIRouter(prefix="/api", tags=["shares"])
 
 OUTPUT_KEY = "`session:<id>` (a deck or an audio overview), `mindmap:<id>` or `notes:<id>`"
+
+# What an output is called while it has no name, by its kind.
+UNTITLED = {
+    "slides": "Untitled narrated slides",
+    "audio": "Untitled audio overview",
+    "mindmap": "Untitled mind map",
+    "notes": "Untitled study notes",
+}
+
+
+def shown(title: str, kind: str) -> str:
+    """An output's name as it is shown: its title, or what it is while it
+    has none."""
+    return " ".join(title.split()) or UNTITLED[kind]
 
 
 class ShareOut(BaseModel):
@@ -79,6 +94,13 @@ class ShareCard(BaseModel):
     created_at: datetime
     updated_at: datetime
 
+    @computed_field(
+        description="The collection's name as it is shown: its title, or `Untitled collection`"
+    )
+    @property
+    def display_title(self) -> str:
+        return collections.display_title(self.title)
+
     @classmethod
     def of(cls, c: shares.Card, me: uuid.UUID) -> ShareCard:
         return cls(
@@ -113,6 +135,11 @@ class SharedOutput(BaseModel):
     duration_ms: int = Field(description="Narration length; 0 before it is voiced, or for a map")
     created_at: datetime
 
+    @computed_field(description="Its name as it is shown: the title, or `Untitled mind map`…")
+    @property
+    def display_title(self) -> str:
+        return shown(self.title, self.kind)
+
 
 class SharedItem(BaseModel):
     """One output a share includes, as Discover lists it on its own: to play
@@ -137,6 +164,18 @@ class SharedItem(BaseModel):
     shared_by: str = Field(description="The sharer's display name; empty when they have none")
     mine: bool = Field(description="The person asking shared it")
     reuses: int = Field(description="How many times its share was reused: the reused order")
+
+    @computed_field(description="Its name as it is shown: the title, or `Untitled mind map`…")
+    @property
+    def display_title(self) -> str:
+        return shown(self.title, self.kind)
+
+    @computed_field(
+        description="Its collection's name as it is shown: the title, or `Untitled collection`"
+    )
+    @property
+    def collection_display_title(self) -> str:
+        return collections.display_title(self.collection_title)
 
     @classmethod
     def of(cls, i: shares.Item, me: uuid.UUID) -> SharedItem:
@@ -334,11 +373,96 @@ async def reuse_share(share_id: uuid.UUID, s: Db, me: Me) -> CollectionSummary:
 # ── the owner's side ──────────────────────────────────────────────────────────
 
 
+# What an output without a name is called in the share dialog, by its kind.
+KIND_LABELS = {
+    "slides": "Narrated slides",
+    "audio": "Audio overview",
+    "mindmap": "Mind map",
+    "notes": "Study notes",
+}
+
+
+class Shareable(BaseModel):
+    """One output a share can include: ready, by the key a share names it by."""
+
+    key: str = Field(description=f"What a share names it by: {OUTPUT_KEY}")
+    kind: shares.OutputKind
+    title: str = Field(description="Its name, or its kind while it has none")
+    created_at: datetime
+
+
+class ShareState(BaseModel):
+    """Everything the share dialog shows for one of your collections, and
+    what it opens on: the share's own choices, or, for a collection not
+    shared yet, everything there is."""
+
+    share: ShareOut | None = Field(description="Its share; null when it is not shared")
+    sources: int = Field(description="How many sources it has to include")
+    items: list[Shareable] = Field(
+        description="Its outputs that can be shared, newest first. Only ready ones: one "
+        "still being made has nothing to show yet, and a failed one never will"
+    )
+    include_sources: bool = Field(description="Whether the dialog opens with the sources on")
+    picked: list[str] = Field(description="The keys of the items the dialog opens ticked")
+    note: str
+    allow_edits: bool = Field(description="Off unless the share says so: a copy is read-only")
+    note_max: int = Field(description="The longest note a share keeps, in characters")
+
+
 @router.get("/collections/{cid}/share")
-async def get_collection_share(cid: uuid.UUID, s: Db, me: Me) -> ShareOut | None:
-    """The share of one of your collections; null when it is not shared."""
+async def get_collection_share(cid: uuid.UUID, s: Db, me: Me) -> ShareState:
+    """One of your collections as the share dialog shows it: its share, if it
+    has one, what it holds that a share can include, and what the dialog
+    opens on."""
+    summary = await collections.summary(s, me.id, cid)
     share = await shares.of_collection(s, me.id, cid)
-    return None if share is None else ShareOut.of(share)
+    items: list[Shareable] = []
+    for o in await s.scalars(
+        select(Session).where(
+            Session.collection_id == cid, Session.owner_id == me.id, Session.state == "ready"
+        )
+    ):
+        kind: shares.OutputKind = "audio" if o.kind == "audio" else "slides"
+        items.append(
+            Shareable(key=f"session:{o.id}", kind=kind, title=o.title, created_at=o.created_at)
+        )
+    for m in await s.scalars(
+        select(MindMap).where(MindMap.collection_id == cid, MindMap.owner_id == me.id)
+    ):
+        items.append(
+            Shareable(key=f"mindmap:{m.id}", kind="mindmap", title=m.title, created_at=m.created_at)
+        )
+    for n in await s.scalars(
+        select(StudyNotes).where(StudyNotes.collection_id == cid, StudyNotes.owner_id == me.id)
+    ):
+        items.append(
+            Shareable(key=f"notes:{n.id}", kind="notes", title=n.title, created_at=n.created_at)
+        )
+    for i in items:
+        i.title = " ".join(i.title.split()) or KIND_LABELS[i.kind]
+    items.sort(key=lambda i: i.created_at, reverse=True)
+    keys = [i.key for i in items]
+    if share is None:
+        return ShareState(
+            share=None,
+            sources=summary.sources,
+            items=items,
+            include_sources=summary.sources > 0,
+            picked=keys,
+            note="",
+            allow_edits=False,
+            note_max=shares.NOTE_MAX,
+        )
+    return ShareState(
+        share=ShareOut.of(share),
+        sources=summary.sources,
+        items=items,
+        include_sources=share.include_sources and summary.sources > 0,
+        picked=[k for k in share.outputs if k in keys],
+        note=share.note,
+        allow_edits=share.allow_edits,
+        note_max=shares.NOTE_MAX,
+    )
 
 
 @router.post("/collections/{cid}/shares")

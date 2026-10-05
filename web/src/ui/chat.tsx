@@ -14,7 +14,6 @@ import {
   type Msg,
   type Picks,
 } from "./api-studio";
-import { readable } from "./errors";
 import { str } from "./helpers";
 import { Icon } from "./Icon";
 import { citeFrom, citeGroups, type Cite } from "./cite";
@@ -256,8 +255,8 @@ export async function send(
         const failed = t === "step_done" && v.ok !== true;
         updateStep(st, str(v.id), (m) => ({
           ...m,
-          // The server words its failures; an old wording is put in words.
-          note: failed ? readable(text_) : text_,
+          // The server words its failures.
+          note: text_,
           status: t === "step_done" ? (failed ? "bad" : "ok") : m.status,
         }));
         break;
@@ -291,7 +290,7 @@ export async function send(
     else await chatSay(st.cid, text, picks, onEvent, st.life.get());
   } catch (e) {
     // Cut off because the page went: nobody is there to read why.
-    if (!isAbort(e)) push(st, said_("Studio", `I could not answer. ${readable(errText(e))}`, false));
+    if (!isAbort(e)) push(st, said_("Studio", `I could not answer. ${errText(e)}`, false));
   }
   st.thinking.set(false);
   st.talking.set(false);

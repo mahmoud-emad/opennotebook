@@ -52,11 +52,34 @@ PAGE_DEADLINE_S = 60
 
 # Extensions whose bytes are already the document: no parser in the path.
 TEXT_EXTENSIONS = {"md", "markdown", "txt", "text", "csv"}
+# What a person is offered to upload, by extension and in words: the
+# documents the converter reads and the plain text kinds. The file picker
+# offers these; anything else is refused with `UPLOAD_KINDS`.
+UPLOAD_EXTENSIONS = ("pdf", "docx", "pptx", "xlsx", "md", "markdown", "txt", "csv")
+UPLOAD_KINDS = "PDF, Word, PowerPoint, Excel, Markdown, text or CSV"
 
 USER_AGENT = (
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/129.0 Safari/537.36 OpenNotebook"
 )
+
+
+def described(name: str, url: str, chars: int) -> tuple[int, str, str]:
+    """How a source is shown under its name: about how many words it holds,
+    the line saying where it came from and how long it is, and the icon to
+    lead it with (its site's, read from the site itself; none for a note, a
+    file or a report)."""
+    words = chars // 6
+    if url:
+        parts = urlsplit(url)
+        host = parts.netloc.split("@")[-1]
+        while host.startswith("www."):
+            host = host[4:]
+        icon = f"{parts.scheme}://{parts.netloc}/favicon.ico" if parts.scheme else ""
+        return words, f"{host} · {words} words", icon
+    ext = PurePosixPath(name).suffix.lstrip(".").lower()
+    kind = ext.upper() if ext and ext != "md" else "note"
+    return words, f"{kind} · {words} words", ""
 
 
 class Refused(Exception):
@@ -198,8 +221,7 @@ def convert_file(name: str, data: bytes) -> str:
     kind = InputKind.from_extension(ext)
     if kind is None:
         raise Refused(
-            f"{name} is not a kind of file the studio reads. "
-            "Upload a PDF, Word, PowerPoint, Excel, Markdown, text or CSV file."
+            f"{name} is not a kind of file the studio reads. Upload a {UPLOAD_KINDS} file."
         )
     try:
         md = to_markdown(data, kind)

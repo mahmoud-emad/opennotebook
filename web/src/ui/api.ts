@@ -9,7 +9,7 @@
 // breaks the build here rather than a page.
 
 import type * as Rest from "@/client/types.gen";
-import { readable } from "./errors";
+import { UNKNOWN, UNREACHABLE, unworded } from "./errors";
 import { fromWireKind, ms } from "./helpers";
 import { sseFrames } from "./sse";
 
@@ -24,9 +24,6 @@ export function serviceRoot(): string {
 export function apiBase(): string {
   return `${serviceRoot()}/api`;
 }
-
-/** The largest file a source upload takes, in MB: the server's limit. */
-export const UPLOAD_MAX_MB = 25;
 
 const UNREADABLE = "The studio's answer could not be read. Reload the page and try again.";
 
@@ -69,7 +66,7 @@ export async function call<T>(
     });
   } catch (e) {
     if (isAbort(e)) throw e;
-    throw new Error(readable("network error"), { cause: e });
+    throw new Error(UNREACHABLE, { cause: e });
   }
   if (!resp.ok) throw new ApiError(await refusal(resp), resp.status);
   if (resp.status === 204) return undefined as T;
@@ -88,13 +85,12 @@ export async function refusal(resp: Response): Promise<string> {
   } catch {
     // No body to read: the status says it.
   }
-  if (resp.status === 413) return `The file is larger than ${UPLOAD_MAX_MB} MB.`;
-  return readable(`HTTP ${resp.status}`);
+  return unworded(resp.status);
 }
 
 /** The message of anything thrown by a call, for a banner or a row. */
 export function errText(e: unknown): string {
-  return e instanceof Error ? e.message : readable(String(e));
+  return e instanceof Error ? e.message : UNKNOWN;
 }
 
 /** POST, then hand each server-sent event's JSON to `onEvent` as it arrives.
@@ -116,7 +112,7 @@ export async function postStream(
     });
   } catch (e) {
     if (isAbort(e)) throw e;
-    throw new Error(readable("network error"), { cause: e });
+    throw new Error(UNREACHABLE, { cause: e });
   }
   if (!resp.ok) throw new ApiError(await refusal(resp), resp.status);
   const reader = resp.body?.getReader();
@@ -174,6 +170,8 @@ export function sleep(ms: number, signal?: AbortSignal): Promise<void> {
 export type CollectionSummary = {
   cid: string;
   title: string;
+  /** Its name as it is shown: the title, or "Untitled collection". */
+  display_title: string;
   title_auto: boolean;
   created_ms: number;
   updated_ms: number;
@@ -195,12 +193,22 @@ export type CollectionSummary = {
   /** A copy whose share did not allow edits: read, asked, pinned and
    * deleted, never changed or shared. The server refuses the rest. */
   read_only: boolean;
+  /** The name of the collection it was reused from, while that one is still
+   * shared; null otherwise. */
+  reused_from_title: string | null;
+  /** Something in it is still being made: an output, its name or cover. */
+  busy: boolean;
+  /** The studio names it from its sources. */
+  auto_named: boolean;
+  /** What the studio is doing with its name, in words; null when none. */
+  name_note: string | null;
 };
 
 function collectionOf(c: Rest.CollectionSummary): CollectionSummary {
   return {
     cid: c.id,
     title: c.title,
+    display_title: c.display_title,
     title_auto: c.title_auto,
     created_ms: ms(c.created_at),
     updated_ms: ms(c.updated_at),
@@ -217,6 +225,10 @@ function collectionOf(c: Rest.CollectionSummary): CollectionSummary {
     shared: c.shared,
     reuses: c.reuses,
     read_only: c.read_only,
+    reused_from_title: c.reused_from_title ?? null,
+    busy: c.busy,
+    auto_named: c.auto_named,
+    name_note: c.name_note ?? null,
   };
 }
 
@@ -224,11 +236,15 @@ function collectionOf(c: Rest.CollectionSummary): CollectionSummary {
 export type SessionSummary = {
   sid: string;
   title: string;
+  /** Its name as it is shown: "Untitled narrated slides" while it has none. */
+  display_title: string;
   state: string;
   slide_count: number;
   speakers: number;
   kind: string;
   audio_format: string;
+  /** An audio overview's format as a person reads it; empty for a deck. */
+  audio_label: string;
   duration_ms: number;
   description: string;
   created_ms: number;
@@ -237,6 +253,8 @@ export type SessionSummary = {
   spent_usd: number;
   spent_known: boolean;
   failure: string;
+  /** The failure's technical detail, for whoever is debugging; empty when none. */
+  failure_detail: string;
   /** Why a preparing output has not started, in a sentence; empty when it has. */
   waiting: string;
 };
@@ -245,11 +263,13 @@ export function sessionOf(o: Rest.SessionSummary): SessionSummary {
   return {
     sid: o.id,
     title: o.title,
+    display_title: o.display_title,
     state: o.state,
     slide_count: o.parts,
     speakers: o.speakers,
     kind: fromWireKind(o.kind) === "session" ? "session" : "audio",
     audio_format: o.audio_format,
+    audio_label: o.audio_label,
     duration_ms: o.duration_ms,
     description: o.description,
     created_ms: ms(o.created_at),
@@ -258,6 +278,7 @@ export function sessionOf(o: Rest.SessionSummary): SessionSummary {
     spent_usd: Number(o.spent_usd ?? 0),
     spent_known: o.spent_known,
     failure: o.failure ?? "",
+    failure_detail: o.failure_detail ?? "",
     waiting: o.waiting ?? "",
   };
 }
@@ -281,6 +302,56 @@ export async function getCollection(
     if (isGone(e)) return { found: false, outputs: [] };
     throw e;
   }
+}
+
+/** How far an output being made is, as a collection's stream says it. */
+export type OutputProgress = { session_id: string; step: string; steps_done: number; steps_total: number };
+
+/** What a collection's event stream says (`GET /api/collections/{cid}/events`),
+ * each part when the stream opens and again when it changes. */
+export type CollectionEvents = {
+  collection?: (c: CollectionSummary) => void;
+  outputs?: (o: SessionSummary[]) => void;
+  progress?: (p: OutputProgress) => void;
+  sources?: (s: ServerSource[]) => void;
+  /** The collection was deleted. */
+  gone?: () => void;
+  /** Whether the stream is up: false when it dropped (the browser connects
+   * again on its own), true once it is back. */
+  up?: (ok: boolean) => void;
+};
+
+/** Follow a collection as the server says it changes, until the returned
+ * function is called. One connection for the whole page. */
+export function followCollection(cid: string, on: CollectionEvents): () => void {
+  let es: EventSource;
+  try {
+    es = new EventSource(`${apiBase()}/collections/${enc(cid)}/events`);
+  } catch {
+    on.up?.(false);
+    return () => {};
+  }
+  const listen = <T,>(name: string, use: (v: T) => void) =>
+    es.addEventListener(name, (e: MessageEvent) => {
+      let v: T;
+      try {
+        v = JSON.parse(String(e.data)) as T;
+      } catch {
+        return;
+      }
+      use(v);
+    });
+  listen<Rest.CollectionSummary>("collection", (v) => on.collection?.(collectionOf(v)));
+  listen<Rest.SessionSummary[]>("outputs", (v) => on.outputs?.(v.map(sessionOf)));
+  listen<OutputProgress>("progress", (v) => on.progress?.(v));
+  listen<Rest.SourceOut[]>("sources", (v) => on.sources?.(v.map(serverSourceOf)));
+  listen<unknown>("gone", () => {
+    es.close();
+    on.gone?.();
+  });
+  es.onopen = () => on.up?.(true);
+  es.onerror = () => on.up?.(false);
+  return () => es.close();
 }
 
 /** Start an empty collection and return its id. */
@@ -315,15 +386,23 @@ export function coverUrl(cid: string, version: string, theme: "dark" | "light"):
 
 // ── sources ──────────────────────────────────────────────────────────────────
 
-export type ServerSource = { name: string; title: string; url: string; chars: number };
+/** A source as the server holds it, with the line under its name and its icon
+ * as the server words them. */
+export type ServerSource = { name: string; title: string; url: string; chars: number; detail: string; icon: string };
+
+const serverSourceOf = (s: Rest.SourceOut): ServerSource => ({
+  name: s.name,
+  title: s.title,
+  url: s.url,
+  chars: s.chars,
+  detail: s.detail,
+  icon: s.icon,
+});
 
 export async function sourceList(cid: string, signal?: AbortSignal): Promise<ServerSource[]> {
-  return (await call<Rest.SourceOut[]>("GET", `/collections/${enc(cid)}/sources`, undefined, { signal })).map((s) => ({
-    name: s.name,
-    title: s.title,
-    url: s.url,
-    chars: s.chars,
-  }));
+  return (await call<Rest.SourceOut[]>("GET", `/collections/${enc(cid)}/sources`, undefined, { signal })).map(
+    serverSourceOf,
+  );
 }
 
 /** One thing asked to be added, as the old `Fetched` shape the rows read. */

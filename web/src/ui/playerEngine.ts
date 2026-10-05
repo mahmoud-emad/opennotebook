@@ -4,7 +4,7 @@
 // this holds (`view`) and hands it the clicks and keys.
 
 import { errText, refusal } from "./api";
-import { readable } from "./errors";
+import { UNREACHABLE } from "./errors";
 import {
   doneMs,
   extendMs,
@@ -458,7 +458,7 @@ export class PlayerEngine {
     } catch {
       shown = {
         kind: "html",
-        html: `<p style="color:#f85149;font:40px/1.4 system-ui,sans-serif;margin:60px">${escapeHtml(readable("network error"))}</p>`,
+        html: `<p style="color:#f85149;font:40px/1.4 system-ui,sans-serif;margin:60px">${escapeHtml(UNREACHABLE)}</p>`,
       };
       // Asked again the next time this slide comes up.
       this.shownOrdinal = -1;
@@ -1039,7 +1039,7 @@ export class PlayerEngine {
         });
       } catch (e) {
         if (e instanceof DOMException && e.name === "AbortError") throw e;
-        throw new Error(readable("network error"), { cause: e });
+        throw new Error(UNREACHABLE, { cause: e });
       }
       if (!res.ok) throw new Error(await refusal(res));
       const reader = res.body?.getReader();
@@ -1112,7 +1112,7 @@ export class PlayerEngine {
       // Cut in on is not a failure: the bubble keeps what was said before.
       if (!barged) {
         if (!this.answerMsg) this.dropEmptyTurn();
-        this.appendMsg({ who: "Studio", cls: "err", text: say.noAnswer(readable(errText(e))) });
+        this.appendMsg({ who: "Studio", cls: "err", text: say.noAnswer(errText(e)) });
         this.v.micState = "";
       }
     } finally {

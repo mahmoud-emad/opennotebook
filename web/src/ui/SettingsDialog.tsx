@@ -22,12 +22,11 @@ import {
   tabGlyph,
   themeIcon,
   themeLabel,
-  thumbUrl,
   type ThemePref,
 } from "./settings";
 import { focusId } from "./shell";
 import { useStore } from "./store";
-import { STYLES } from "./styles";
+import { assetUrl, styleList, type StyleChoice } from "./api-studio";
 
 /** The id of the Settings dialog's one tab panel. */
 export const SET_PANEL = "set-panel";
@@ -317,6 +316,32 @@ function onCommit(fn: (v: string) => void) {
   };
 }
 
+// The slide styles with their pictures, read once from the server.
+let styleCache: StyleChoice[] = [];
+
+/** The slide styles to draw the style setting with, read only for that row
+ * (`on`). Until the server has answered, the setting's own choices, with no
+ * pictures. */
+function useStyles(item: SettingItem, on: boolean): StyleChoice[] {
+  const [list, setList] = useState<StyleChoice[]>(styleCache);
+  useEffect(() => {
+    if (!on || styleCache.length > 0) return;
+    const stop = new AbortController();
+    styleList(stop.signal).then(
+      (l) => {
+        styleCache = l;
+        setList(l);
+      },
+      // The setting's own choices stand in; the dialog still saves.
+      () => {},
+    );
+    return () => stop.abort();
+  }, [on]);
+  return list.length > 0
+    ? list
+    : item.options.map((o) => ({ id: o.value, label: o.label, blurb: "", thumbnail: "" }));
+}
+
 export function SettingRow({
   item,
   status,
@@ -335,6 +360,7 @@ export function SettingRow({
   const tested = item.options.some((o) => o.value === eff);
   const custom = item.model && (customOpen || !tested);
   const styleRow = item.key === keys.STYLE;
+  const styles = useStyles(item, styleRow);
   const [sel, setSel] = useDraft(custom ? CUSTOM : eff);
   const [text, setText] = useDraft(item.model ? (tested ? "" : eff) : eff);
 
@@ -348,7 +374,7 @@ export function SettingRow({
     // The slide styles as their sample slides, as the Create panel shows them.
     control = (
       <div className="style-grid set-styles" role="radiogroup" aria-label={item.label}>
-        {STYLES.map((st) => (
+        {styles.map((st) => (
           <button
             key={st.id}
             className={eff === st.id ? "style on" : "style"}
@@ -357,7 +383,10 @@ export function SettingRow({
             title={st.blurb}
             onClick={() => onSave(key, st.id)}
           >
-            <span className="sw" style={{ backgroundImage: `url(${thumbUrl(st.id)})` }} />
+            <span
+              className="sw"
+              style={st.thumbnail !== "" ? { backgroundImage: `url(${assetUrl(st.thumbnail)})` } : undefined}
+            />
             <span className="style-n">{st.label}</span>
           </button>
         ))}

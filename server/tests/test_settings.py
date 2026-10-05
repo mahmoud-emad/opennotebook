@@ -2,6 +2,8 @@
 server's `settings_impl.rs` / `settings_api.rs` tests) and its three routes."""
 
 from collections.abc import Iterator
+from pathlib import Path
+from typing import Any
 
 import pytest
 from httpx import AsyncClient
@@ -396,6 +398,11 @@ async def test_the_environment_overrides_what_is_stored(
     assert next(x for x in body["settings"] if x["key"] == st.LANGUAGE_KEY)["value"] == "German"
 
 
+def _shipped(path: str) -> bool:
+    """Whether the web app has a file at `path` under its mount."""
+    return (Path(__file__).resolve().parents[2] / "web" / "public" / path).is_file()
+
+
 async def test_the_styles_are_listed_default_first(client: AsyncClient) -> None:
     r = await client.get("/api/styles")
     assert r.status_code == 200
@@ -404,4 +411,105 @@ async def test_the_styles_are_listed_default_first(client: AsyncClient) -> None:
         "id": "editorial",
         "label": "Editorial",
         "blurb": "Magazine type, thin rules",
+        "thumbnail": "assets/styles/editorial.jpg",
     }
+    # Every picture named is one the web app ships.
+    assert all(_shipped(x["thumbnail"]) for x in r.json())
+
+
+# ── what the Create panel offers ─────────────────────────────────────────────
+
+
+async def _options(client: AsyncClient, cid: str) -> dict[str, Any]:
+    r = await client.get(f"/api/collections/{cid}/options")
+    assert r.status_code == 200, r.text
+    return r.json()
+
+
+async def _set(client: AsyncClient, key: str, value: str) -> None:
+    r = await client.patch(f"/api/settings/{key}", json={"value": value})
+    assert r.status_code == 200, r.text
+
+
+async def test_the_create_panel_offers_what_the_settings_say(client: AsyncClient) -> None:
+    cid = (await client.post("/api/collections", json={"title": "Reefs"})).json()["id"]
+    o = await _options(client, cid)
+    assert [x["id"] for x in o["styles"]] == [s.id for s in STYLES]
+    assert o["styles"][1]["thumbnail"] == "assets/styles/professional.jpg"
+    assert (o["default_style"], o["default_audio_format"], o["default_audio_length"]) == (
+        "editorial",
+        "deep_dive",
+        "default",
+    )
+    formats = {f["id"]: f for f in o["audio_formats"]}
+    assert list(formats) == ["deep_dive", "brief", "critique", "debate"]
+    assert [n["id"] for n in formats["deep_dive"]["lengths"]] == ["shorter", "default", "longer"]
+    assert [n["label"] for n in formats["debate"]["lengths"]] == ["Shorter", "Default"]
+    # Brief is always about two minutes: nothing to choose.
+    assert formats["brief"]["lengths"] == []
+    assert formats["brief"]["voices"].startswith("Brief: ")
+    assert formats["brief"]["voices"].endswith(" alone, about 2 minutes.")
+    # No source yet, and Automatic: a deck is read by the host alone.
+    assert " and " not in o["deck_summary"].split(" · ")[2]
+    assert o["deck_summary"].startswith("5 slides · about 5 min · ")
+    assert o["language_note"] is None and o["build_language_note"] is None
+    assert o["show_cost"]
+    assert o["research"] == {"label": "Standard research", "takes": "a few minutes"}
+    up = o["upload"]
+    assert up["accept"] == ".pdf,.docx,.pptx,.xlsx,.md,.markdown,.txt,.csv"
+    assert (up["max_mb"], up["max_files"], up["max_links"]) == (25, 10, 8)
+    assert up["hint"] == "PDF, Office, Markdown, text or CSV, up to 25 MB. Or drop them here."
+
+
+async def test_the_create_panel_follows_a_change_of_settings(client: AsyncClient) -> None:
+    cid = (await client.post("/api/collections", json={"title": "Reefs"})).json()["id"]
+    for key, value in (
+        (st.STYLE_KEY, "clay"),
+        (st.AUDIO_FORMAT_KEY, "debate"),
+        (st.AUDIO_LENGTH_KEY, "shorter"),
+        (st.SLIDE_COUNT_KEY, "8"),
+        (st.SPEAKER_COUNT_KEY, "2"),
+        (st.SPEAKER1_NAME_KEY, "Ava"),
+        (st.SPEAKER2_NAME_KEY, "Andrew"),
+        (st.LANGUAGE_KEY, "French"),
+        (st.RESEARCH_DEPTH_KEY, "quick"),
+        (st.SHOW_COST_KEY, "off"),
+    ):
+        await _set(client, key, value)
+    o = await _options(client, cid)
+    assert (o["default_style"], o["default_audio_format"], o["default_audio_length"]) == (
+        "clay",
+        "debate",
+        "shorter",
+    )
+    assert o["deck_summary"] == "8 slides · about 5 min · Ava and Andrew"
+    assert next(f for f in o["audio_formats"] if f["id"] == "debate")["voices"] == (
+        "Voices: Ava and Andrew."
+    )
+    assert o["language_note"] == "Writing in French."
+    assert o["build_language_note"] in (
+        "Writing in French.",
+        "Writing in French · voices are English.",
+    )
+    assert not o["show_cost"]
+    assert o["research"] == {"label": "Quick research", "takes": "about a minute"}
+
+
+async def test_options_are_only_for_ones_own_collection(client: AsyncClient) -> None:
+    cid = (await client.post("/api/collections", json={"title": "Reefs"})).json()["id"]
+    them = await other_person(client, "them@test")
+    assert (await client.get(f"/api/collections/{cid}/options", headers=them)).status_code == 404
+
+
+def test_voices_that_keep_their_accent_are_said_beside_the_language() -> None:
+    from opennotebook.api.settings import studio_options
+
+    v = {d.key: d.default for d in st.CATALOGUE}
+    v[st.LANGUAGE_KEY] = "German"
+    v[st.SPEAKER1_VOICE_KEY] = "en-US-AvaMultilingualNeural"
+    v[st.SPEAKER2_VOICE_KEY] = "en-US-GuyNeural"
+    assert studio_options(v, 1).build_language_note == "Writing in German · voices are English."
+    v[st.SPEAKER2_VOICE_KEY] = "en-US-AndrewMultilingualNeural"
+    assert studio_options(v, 1).build_language_note == "Writing in German."
+    # Automatic: two voices from two sources on.
+    assert studio_options(v, 2).deck_summary.endswith(" and Expert")
