@@ -25,18 +25,25 @@ A setting is looked up in this order, the first non-empty value winning:
 
 Secrets are not settings: the AI key comes from the environment only
 (`config.Settings.ai_key`), never from these tables.
+
+Stored rows are read often and changed rarely, so each process keeps a
+person's rows and the instance's for `CACHE_SECONDS`. A change saved here
+drops what was kept at once, and again once it commits; another process
+(the worker, another api) sees it within `CACHE_SECONDS`. The environment is
+read every time.
 """
 
 import dataclasses
 import functools
 import os
 import re
+import time
 import uuid
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Literal
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, event, func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -756,15 +763,56 @@ def effective(
     return d.default if d else ""
 
 
-async def rows(s: AsyncSession, owner: uuid.UUID) -> tuple[dict[str, str], dict[str, str]]:
-    """A person's stored settings and the instance's, as mappings."""
+# How long a process keeps the stored settings it read, and for how many
+# people at most before it starts again.
+CACHE_SECONDS = 5.0
+CACHE_PEOPLE = 10_000
+
+_users: dict[uuid.UUID, tuple[float, dict[str, str]]] = {}
+_instance: list[tuple[float, dict[str, str]]] = []
+
+
+def forget(owner: uuid.UUID | None = None) -> None:
+    """Drop the stored settings kept for `owner`, or, with nobody named, the
+    instance's and everyone's."""
+    if owner is None:
+        _users.clear()
+        _instance.clear()
+    else:
+        _users.pop(owner, None)
+
+
+def _fresh(at: float) -> bool:
+    return time.monotonic() - at < CACHE_SECONDS
+
+
+async def _user_rows(s: AsyncSession, owner: uuid.UUID) -> dict[str, str]:
+    kept = _users.get(owner)
+    if kept is not None and _fresh(kept[0]):
+        return kept[1]
     mine = await s.execute(
         select(UserSetting.key, UserSetting.value).where(UserSetting.owner_id == owner)
     )
+    if len(_users) >= CACHE_PEOPLE:
+        _users.clear()
+    rows = {k: v for k, v in mine}
+    _users[owner] = (time.monotonic(), rows)
+    return rows
+
+
+async def _instance_rows(s: AsyncSession) -> dict[str, str]:
+    if _instance and _fresh(_instance[0][0]):
+        return _instance[0][1]
     shared = await s.execute(select(InstanceSetting.key, InstanceSetting.value))
-    user = {k: v for k, v in mine}
-    instance = {k: v for k, v in shared}
-    return user, instance
+    rows = {k: v for k, v in shared}
+    _instance[:] = [(time.monotonic(), rows)]
+    return rows
+
+
+async def rows(s: AsyncSession, owner: uuid.UUID) -> tuple[dict[str, str], dict[str, str]]:
+    """A person's stored settings and the instance's, as mappings of their
+    own the caller may change: kept for `CACHE_SECONDS`, else read."""
+    return dict(await _user_rows(s, owner)), dict(await _instance_rows(s))
 
 
 async def values(s: AsyncSession, owner: uuid.UUID) -> dict[str, str]:
@@ -779,16 +827,33 @@ async def value(s: AsyncSession, owner: uuid.UUID, key: str) -> str:
     if v := from_env(key):
         return fit(key, v)
     d = find(key)
-    if d is None or d.scope == "user":
-        mine = await s.scalar(
-            select(UserSetting.value).where(UserSetting.owner_id == owner, UserSetting.key == key)
+    user = await _user_rows(s, owner) if d is None or d.scope == "user" else {}
+    return effective(key, user, await _instance_rows(s), {})
+
+
+async def value_of_each(s: AsyncSession, owners: set[uuid.UUID], key: str) -> dict[uuid.UUID, str]:
+    """One setting's value in force for each of `owners`, by the rule `value`
+    reads it by: from what is kept, and the rest in one query however many
+    they are."""
+    if not owners:
+        return {}
+    instance = await _instance_rows(s)
+    user: dict[uuid.UUID, str] = {}
+    unknown: list[uuid.UUID] = []
+    for o in owners:
+        kept = _users.get(o)
+        if kept is not None and _fresh(kept[0]):
+            user[o] = kept[1].get(key, "")
+        else:
+            unknown.append(o)
+    if unknown:
+        mine = await s.execute(
+            select(UserSetting.owner_id, UserSetting.value).where(
+                UserSetting.owner_id.in_(unknown), UserSetting.key == key
+            )
         )
-        if mine and mine.strip():
-            return fit(key, mine.strip())
-    shared = await s.scalar(select(InstanceSetting.value).where(InstanceSetting.key == key))
-    if shared and shared.strip():
-        return fit(key, shared.strip())
-    return d.default if d else ""
+        user.update({o: v for o, v in mine})
+    return {o: effective(key, {key: user.get(o, "")}, instance) for o in owners}
 
 
 @dataclass(frozen=True)
@@ -866,6 +931,16 @@ async def save(s: AsyncSession, who: User, key: str, value: str) -> Current:
     v = value.strip()
     if why := await check(d, v):
         raise Problem(422, why)
+    # What is kept goes now, so this transaction reads its own change, and
+    # again once it ends, so nothing read before the commit outlives it.
+    changed = who.id if d.scope == "user" else None
+    forget(changed)
+
+    def ended(_: object) -> None:
+        forget(changed)
+
+    event.listen(s.sync_session, "after_commit", ended, once=True)
+    event.listen(s.sync_session, "after_rollback", ended, once=True)
     user, instance = await rows(s, who.id)
     fallback = current(d, {}, instance).default
     if d.scope == "user":

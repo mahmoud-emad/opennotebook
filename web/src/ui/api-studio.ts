@@ -148,7 +148,19 @@ export type MindMapSummary = {
   node_count: number;
   sources: string[];
   created_ms: number;
+  /** "making" while the server's job draws it; it is then "ready", or gone
+   * with its job saying why. */
+  state: MadeState;
+  /** The job that makes it. */
+  job_id: string | null;
 };
+
+/** Where a map or notes are: being made by the server's worker, or ready. */
+export type MadeState = "making" | "ready";
+
+/** What asking for a map or notes answers at once: the job that makes it,
+ * to follow, and its row as the server lists it, "making". */
+export type Started<T> = { job: Rest.JobOut; made: T };
 
 export type MindMap = MindMapSummary & { dropped: number; excerpted: boolean; root: MindNode };
 
@@ -161,6 +173,8 @@ function mapSummaryOf(m: Rest.MindMapSummary): MindMapSummary {
     node_count: m.node_count,
     sources: m.sources,
     created_ms: ms(m.created_at),
+    state: m.state ?? "ready",
+    job_id: m.job_id ?? null,
   };
 }
 
@@ -179,8 +193,10 @@ export async function mindmapGet(cid: string, id: string, signal?: AbortSignal):
   return mapOf(await call<Rest.MindMapOut>("GET", `${maps(cid)}/${enc(id)}`, undefined, { signal }));
 }
 
-export async function mindmapCreate(cid: string, focus: string): Promise<MindMap> {
-  return mapOf(await call<Rest.MindMapOut>("POST", maps(cid), { focus } satisfies Rest.MakeReq));
+/** Ask for a map: the server answers at once and its worker draws it. */
+export async function mindmapCreate(cid: string, focus: string): Promise<Started<MindMapSummary>> {
+  const r = await call<Rest.MakingMap>("POST", maps(cid), { focus } satisfies Rest.MakeReq);
+  return { job: r.job, made: mapSummaryOf(r.mindmap) };
 }
 
 /** What a map would cost, itemised as a build's estimate is. */
@@ -209,6 +225,9 @@ export type StudyNotesSummary = {
   ideas: number;
   questions: number;
   terms: number;
+  /** As a map's: "making" while the server's job writes them. */
+  state: MadeState;
+  job_id: string | null;
 };
 
 export type StudyNotes = {
@@ -238,6 +257,8 @@ function notesSummaryOf(n: Rest.NotesSummary): StudyNotesSummary {
     ideas: n.ideas,
     questions: n.questions,
     terms: n.terms,
+    state: n.state ?? "ready",
+    job_id: n.job_id ?? null,
   };
 }
 
@@ -270,8 +291,10 @@ export async function notesGet(cid: string, id: string, signal?: AbortSignal): P
   return notesOf(await call<Rest.NotesOut>("GET", `${notes(cid)}/${enc(id)}`, undefined, { signal }));
 }
 
-export async function notesCreate(cid: string, focus: string): Promise<StudyNotes> {
-  return notesOf(await call<Rest.NotesOut>("POST", notes(cid), { focus } satisfies Rest.MakeReq));
+/** Ask for notes: the server answers at once and its worker writes them. */
+export async function notesCreate(cid: string, focus: string): Promise<Started<StudyNotesSummary>> {
+  const r = await call<Rest.MakingNotes>("POST", notes(cid), { focus } satisfies Rest.MakeReq);
+  return { job: r.job, made: notesSummaryOf(r.notes) };
 }
 
 /** What notes would cost, itemised as a build's estimate is. */

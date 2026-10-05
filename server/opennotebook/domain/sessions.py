@@ -9,10 +9,12 @@ the title, `reconcile` and `settle`) and the audio overview's spec from
 
 import re
 import uuid
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
 from sqlalchemy import select, text
+from sqlalchemy.dialects.postgresql import distinct_on
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from opennotebook import errors
@@ -586,9 +588,43 @@ async def job_status(s: AsyncSession, sid: uuid.UUID) -> tuple[Job | None, str]:
     our row's status, corrected by the queue's own record of the job. A job
     with no row at all is `inactive`: nothing is doing the work, and nothing
     ever will."""
-    job = await s.scalar(
-        select(Job).where(Job.session_id == sid).order_by(Job.created_at.desc()).limit(1)
-    )
+    return (await job_statuses(s, [sid]))[sid]
+
+
+async def job_statuses(
+    s: AsyncSession, sids: Sequence[uuid.UUID]
+) -> dict[uuid.UUID, tuple[Job | None, str]]:
+    """`job_status` of every output in `sids`, in two queries however many
+    there are: each one's newest job, then the queue's record of those."""
+    if not sids:
+        return {}
+    newest = {
+        j.session_id: j
+        for j in await s.scalars(
+            select(Job)
+            .where(Job.session_id.in_(sids))
+            .order_by(Job.session_id, Job.created_at.desc())
+            .ext(distinct_on(Job.session_id))
+        )
+    }
+    asked = [
+        j.procrastinate_job_id
+        for j in newest.values()
+        if j.procrastinate_job_id is not None and j.status not in ("failed", "cancelled", "done")
+    ]
+    queued: dict[int, str] = {}
+    if asked:
+        rows = await s.execute(
+            text("SELECT id, status::text FROM procrastinate_jobs WHERE id = ANY(:ids)"),
+            {"ids": asked},
+        )
+        queued = {int(i): q for i, q in rows}
+    return {sid: _status(newest.get(sid), queued) for sid in sids}
+
+
+def _status(job: Job | None, queued: dict[int, str]) -> tuple[Job | None, str]:
+    """Whether a job's work is still happening, from its row and the queue's
+    statuses by queue id."""
     if job is None:
         return None, "inactive"
     if job.status in ("failed", "cancelled"):
@@ -598,15 +634,12 @@ async def job_status(s: AsyncSession, sid: uuid.UUID) -> tuple[Job | None, str]:
         return job, "failed"
     if job.procrastinate_job_id is None:
         return job, job.status
-    queued = await s.scalar(
-        text("SELECT status::text FROM procrastinate_jobs WHERE id = :id"),
-        {"id": job.procrastinate_job_id},
-    )
-    if queued is None:
+    q = queued.get(job.procrastinate_job_id)
+    if q is None:
         return job, "inactive"
-    if queued in ("failed", "cancelled", "aborted"):
-        return job, queued
-    if queued == "succeeded":
+    if q in ("failed", "cancelled", "aborted"):
+        return job, q
+    if q == "succeeded":
         return job, "failed"
     return job, job.status
 
@@ -634,19 +667,20 @@ async def worker_alive(s: AsyncSession) -> bool:
     )
 
 
-async def waiting(s: AsyncSession, o: Session) -> str | None:
+async def waiting(s: AsyncSession, o: Session, status: str | None = None) -> str | None:
     """Why a `preparing` output has not started, when nothing is there to
     start it: its build is queued and no worker is running. Without this it
-    would say "Starting" forever."""
+    would say "Starting" forever. `status` is its job's, when already read."""
     if o.state != "preparing":
         return None
-    _, status = await job_status(s, o.id)
+    if status is None:
+        _, status = await job_status(s, o.id)
     if status == "queued" and not await worker_alive(s):
         return WAITING
     return None
 
 
-async def reconcile(s: AsyncSession, o: Session) -> Session:
+async def reconcile(s: AsyncSession, o: Session, status: str | None = None) -> Session:
     """A `preparing` row whose job is no longer alive, marked `failed`.
 
     A prep that errors writes its own failure. One that is killed — the
@@ -655,11 +689,12 @@ async def reconcile(s: AsyncSession, o: Session) -> Session:
     and a progress screen that never moves. The job row is the authority on
     whether the work is still happening, so it is asked. Anything short of a
     clear "it stopped" (the job still queued or running) leaves the row
-    alone.
+    alone. `status` is its job's (`job_statuses`), when already read.
     """
     if o.state != "preparing":
         return o
-    _, status = await job_status(s, o.id)
+    if status is None:
+        _, status = await job_status(s, o.id)
     if status not in DEAD:
         return o
     # Re-read under its lock before writing: the prep may have recorded its

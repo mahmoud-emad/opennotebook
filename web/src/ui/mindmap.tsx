@@ -44,6 +44,7 @@ import {
 } from "./mindmapLayout";
 import { download, fileStem, saveBlob } from "./common";
 import { keepSame } from "./helpers";
+import { madeBy, newMaking, sorted, type MakingState } from "./making";
 import { store, type Store } from "./store";
 
 // ── making one ───────────────────────────────────────────────────────────────
@@ -66,6 +67,8 @@ export type MapState = {
   /** Which list read and which estimate are the latest: an older answer
    * landing after a newer one is dropped. */
   seq: { load: number; est: number };
+  /** The maps being made, followed on the server. */
+  mk: MakingState;
 };
 
 export function newMapState(): MapState {
@@ -80,20 +83,35 @@ export function newMapState(): MapState {
     estLoading: store(false),
     estErr: store(""),
     seq: { load: 0, est: 0 },
+    mk: newMaking(),
   };
 }
 
-/** The collection's maps, newest first. */
+/** The collection's maps, newest first. One being made is not listed: the
+ * list says "Making a mind map…" while the server makes it, and reads the
+ * maps again once it is done. */
 export async function loadMaps(cid: string, st: MapState, signal?: AbortSignal): Promise<void> {
   const my = ++st.seq.load;
   try {
     const list = await mindmapList(cid, signal);
     if (my !== st.seq.load) return;
-    st.maps.set((was) => keepSame(was, list, (x) => x.id));
+    const { ready, making } = sorted(
+      list,
+      st.mk,
+      (why) => {
+        if (why !== null) st.err.set(why);
+        void loadMaps(cid, st, signal);
+      },
+      signal,
+    );
+    st.maps.set((was) => keepSame(was, ready, (x) => x.id));
+    st.making.set(making);
     st.loadErr.set("");
   } catch (e) {
     if (isAbort(e) || my !== st.seq.load) return;
     st.loadErr.set(errText(e));
+    // What the server is making is not known now; only this page's own asks.
+    st.making.set(st.mk.asked > 0);
   }
   st.loaded.set(true);
 }
@@ -116,31 +134,33 @@ export async function estimateMap(cid: string, st: MapState, signal?: AbortSigna
 }
 
 /** Make a map of the collection with the focus typed in its options, and
- * return its id to open. Null when it failed; the reason is in `st.err`. */
+ * return its id to open once the server has drawn it. Null when it failed;
+ * the reason is in `st.err`. */
 export async function makeMap(cid: string, st: MapState): Promise<string | null> {
   if (st.making.get()) return null;
+  st.mk.asked++;
   st.making.set(true);
   st.err.set("");
   const f = st.focus.get().trim();
+  let out: { id: string } | { why: string };
   try {
-    const map = await mindmapCreate(cid, f);
-    // Read back as the newest list: a read already on its way may not have it.
-    const my = ++st.seq.load;
-    const list = await mindmapList(cid);
-    st.making.set(false);
-    if (my === st.seq.load) {
-      st.maps.set((was) => keepSame(was, list, (x) => x.id));
-      st.loaded.set(true);
-    }
-    st.focus.set("");
-    return map.id;
+    out = await madeBy(st.mk, async () => {
+      const started = await mindmapCreate(cid, f);
+      st.focus.set("");
+      return started;
+    });
   } catch (e) {
-    st.making.set(false);
-    st.err.set(errText(e));
-    // A list read it took the place of is not coming: the list is as it was.
-    st.loaded.set(true);
+    out = { why: errText(e) };
+  }
+  st.mk.asked--;
+  // Read back as the newest list: it says whether anything is still being made.
+  await loadMaps(cid, st);
+  st.loaded.set(true);
+  if ("why" in out) {
+    st.err.set(out.why);
     return null;
   }
+  return out.id;
 }
 
 /** The newest map made from exactly `sources`, if one is: the map that is

@@ -23,13 +23,16 @@ async def read_docs(
     """The collection's sources named, or every source when none are, oldest
     first. A name that is not one of its sources is refused rather than
     skipped, because an agent passing a stale name should hear about it."""
-    rows = list(
-        await s.scalars(
-            select(Source)
-            .where(Source.collection_id == cid, Source.owner_id == owner)
-            .order_by(Source.created_at, Source.name)
-        )
+    q = (
+        select(Source.name, Source.title, Source.text, Source.url)
+        .where(Source.collection_id == cid, Source.owner_id == owner)
+        .order_by(Source.created_at, Source.name)
     )
+    # Only the sources named are read: one source of a big collection is one
+    # source's text, not all of them.
+    if names:
+        q = q.where(Source.name.in_(names))
+    rows = list(await s.execute(q))
     if names:
         by_name = {r.name: r for r in rows}
         if missing := next((n for n in names if n not in by_name), None):

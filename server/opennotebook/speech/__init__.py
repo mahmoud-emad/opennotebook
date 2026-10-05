@@ -21,6 +21,7 @@ The settings are what whoever runs the studio sets, read from the
 environment as the Rust server read them.
 """
 
+import functools
 import json
 import os
 from typing import Any
@@ -207,11 +208,31 @@ def from_env(http: httpx.AsyncClient | None = None) -> Speech:
     )
 
 
+@functools.cache
+def shared_http() -> httpx.AsyncClient:
+    """The one HTTP client every line read aloud or transcribed by the
+    OpenAI-compatible server goes through, made on first use: its
+    connections are kept between lines rather than opened for each. Closed
+    at shutdown (`close_shared`)."""
+    return httpx.AsyncClient(timeout=httpx.Timeout(120, connect=10))
+
+
+async def close_shared() -> None:
+    """Close the shared speech clients that were made: this server's and
+    Azure's."""
+    from opennotebook.speech import microsoft
+
+    for made in (shared_http, microsoft.azure_http):
+        if made.cache_info().currsize:
+            await made().aclose()
+            made.cache_clear()
+
+
 def speech() -> Speech:
     """The studio's speech client: Microsoft's voices or the OpenAI-compatible
     server, as `OPENNOTEBOOK_TTS_PROVIDER` says (`speech/provider.py`), and
-    the OpenAI-compatible server for speech to text. A function, so tests can
-    replace it."""
+    the OpenAI-compatible server for speech to text, each through its shared
+    HTTP client. A function, so tests can replace it."""
     from opennotebook.speech.provider import chosen
 
-    return chosen(from_env())
+    return chosen(from_env(shared_http()), shared=True)

@@ -87,19 +87,59 @@
           "account"
         ],
         "summary": "List Keys",
-        "description": "Your API keys that still work, newest first.",
+        "description": "Your API keys that still work, newest first, a page at a time:\n`X-Next-Offset` says where the next page starts when there is one.",
         "operationId": "list_keys",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 500,
+              "minimum": 1,
+              "description": "The most keys in one answer; 100 unless set",
+              "default": 100,
+              "title": "Limit"
+            },
+            "description": "The most keys in one answer; 100 unless set"
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100000,
+              "minimum": 0,
+              "description": "Where this page starts: the `X-Next-Offset` header of the page before",
+              "default": 0,
+              "title": "Offset"
+            },
+            "description": "Where this page starts: the `X-Next-Offset` header of the page before"
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
+                  "type": "array",
                   "items": {
                     "$ref": "#/components/schemas/KeyOut"
                   },
-                  "type": "array",
                   "title": "Response List Keys"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -114,14 +154,14 @@
         "description": "Make an API key for an agent or a script to act as you.",
         "operationId": "make_key",
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/NewKey"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "201": {
@@ -190,19 +230,59 @@
           "collections"
         ],
         "summary": "List Collections",
-        "description": "Every collection, most recently updated first, with counts of what it holds.",
+        "description": "Your collections, most recently updated first, with counts of what\neach holds, a page at a time: `X-Next-Offset` says where the next page\nstarts when there is one.",
         "operationId": "list_collections",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 500,
+              "minimum": 1,
+              "description": "The most collections in one answer; 200 unless set",
+              "default": 200,
+              "title": "Limit"
+            },
+            "description": "The most collections in one answer; 200 unless set"
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100000,
+              "minimum": 0,
+              "description": "Where this page starts: the `X-Next-Offset` header of the page before",
+              "default": 0,
+              "title": "Offset"
+            },
+            "description": "Where this page starts: the `X-Next-Offset` header of the page before"
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
+                  "type": "array",
                   "items": {
                     "$ref": "#/components/schemas/CollectionSummary"
                   },
-                  "type": "array",
                   "title": "Response List Collections"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -217,14 +297,14 @@
         "description": "Start a collection: an empty set of sources to add to and build outputs from.",
         "operationId": "create_collection",
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/CollectionCreate"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "201": {
@@ -537,7 +617,7 @@
           "sources"
         ],
         "summary": "List Sources",
-        "description": "The sources in a collection, in the order they were added.",
+        "description": "The sources in a collection, in the order they were added, a page at\na time: `X-Next-Offset` says where the next page starts when there is\none.",
         "operationId": "list_sources",
         "parameters": [
           {
@@ -549,6 +629,34 @@
               "format": "uuid",
               "title": "Cid"
             }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 1000,
+              "minimum": 1,
+              "description": "The most sources in one answer; 500 unless set",
+              "default": 500,
+              "title": "Limit"
+            },
+            "description": "The most sources in one answer; 500 unless set"
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100000,
+              "minimum": 0,
+              "description": "Where this page starts: the `X-Next-Offset` header of the page before",
+              "default": 0,
+              "title": "Offset"
+            },
+            "description": "Where this page starts: the `X-Next-Offset` header of the page before"
           }
         ],
         "responses": {
@@ -1073,19 +1181,59 @@
           "outputs"
         ],
         "summary": "List Sessions",
-        "description": "Every deck and audio overview, newest first.",
+        "description": "Your decks and audio overviews, newest first, a page at a time:\n`X-Next-Offset` says where the next page starts when there is one.",
         "operationId": "list_sessions",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 500,
+              "minimum": 1,
+              "description": "The most outputs in one answer; 200 unless set",
+              "default": 200,
+              "title": "Limit"
+            },
+            "description": "The most outputs in one answer; 200 unless set"
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100000,
+              "minimum": 0,
+              "description": "Where this page starts: the `X-Next-Offset` header of the page before",
+              "default": 0,
+              "title": "Offset"
+            },
+            "description": "Where this page starts: the `X-Next-Offset` header of the page before"
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
+                  "type": "array",
                   "items": {
                     "$ref": "#/components/schemas/SessionSummary"
                   },
-                  "type": "array",
                   "title": "Response List Sessions"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -1926,7 +2074,7 @@
           "mindmaps"
         ],
         "summary": "Make Mindmap",
-        "description": "Map the topics a collection's sources cover. Takes a few seconds.",
+        "description": "Map the topics a collection's sources cover, in the background: the\nmap is listed at once as `making`, and drawn in a few seconds. Follow its\njob at /api/jobs/{id}; when it fails, the map is removed and the job\nsays why. Refused at once when the collection cannot be changed, a\nsource asked for is not there, or the map could cost more than the\nspending limit.",
         "operationId": "make_mindmap",
         "parameters": [
           {
@@ -1951,12 +2099,12 @@
           }
         },
         "responses": {
-          "201": {
+          "202": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/MindMapOut"
+                  "$ref": "#/components/schemas/MakingMap"
                 }
               }
             }
@@ -2136,6 +2284,7 @@
           "mindmaps"
         ],
         "summary": "Delete Mindmap",
+        "description": "Delete a map; one still being made is stopped first.",
         "operationId": "delete_mindmap",
         "parameters": [
           {
@@ -2228,7 +2377,7 @@
           "notes"
         ],
         "summary": "Make Notes",
-        "description": "Write study notes of a collection's sources. Takes 10 to 40 seconds.",
+        "description": "Write study notes of a collection's sources, in the background: they\nare listed at once as `making`, and written in 10 to 40 seconds. Follow\ntheir job at /api/jobs/{id}; when it fails, the notes are removed and\nthe job says why. Refused at once when the collection cannot be changed,\na source asked for is not there, or the notes could cost more than the\nspending limit.",
         "operationId": "make_notes",
         "parameters": [
           {
@@ -2253,12 +2402,12 @@
           }
         },
         "responses": {
-          "201": {
+          "202": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/NotesOut"
+                  "$ref": "#/components/schemas/MakingNotes"
                 }
               }
             }
@@ -2438,6 +2587,7 @@
           "notes"
         ],
         "summary": "Delete Notes",
+        "description": "Delete notes; ones still being written are stopped first.",
         "operationId": "delete_notes",
         "parameters": [
           {
@@ -2510,7 +2660,7 @@
           "chat"
         ],
         "summary": "Read Chat",
-        "description": "A collection's conversation, oldest first.",
+        "description": "A collection's conversation, oldest first: its newest `limit`\nmessages, or the `limit` before `before`. When there are older ones,\n`X-Next-Before` is the `before` that reads them.",
         "operationId": "read_chat",
         "parameters": [
           {
@@ -2522,6 +2672,39 @@
               "format": "uuid",
               "title": "Cid"
             }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 500,
+              "minimum": 1,
+              "description": "The most messages in one answer; 200 unless set",
+              "default": 200,
+              "title": "Limit"
+            },
+            "description": "The most messages in one answer; 200 unless set"
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only the messages before this one: the `X-Next-Before` header of the page after. The newest when absent",
+              "title": "Before"
+            },
+            "description": "Only the messages before this one: the `X-Next-Before` header of the page after. The newest when absent"
           }
         ],
         "responses": {
@@ -2836,7 +3019,7 @@
           "shares"
         ],
         "summary": "List Shares",
-        "description": "Discover: what everyone on the studio shared.",
+        "description": "Discover: what everyone on the studio shared, a page at a time. When\nthere are more after this page, the answer's `X-Next-Offset` header is\nthe `offset` to ask for next.",
         "operationId": "list_shares",
         "parameters": [
           {
@@ -2867,6 +3050,34 @@
               "title": "Sort"
             },
             "description": "`newest` (the default) or `reused`: most reused first"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "description": "The most shares in one answer",
+              "default": 100,
+              "title": "Limit"
+            },
+            "description": "The most shares in one answer"
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100000,
+              "minimum": 0,
+              "description": "Where this page starts: the `X-Next-Offset` header of the page before",
+              "default": 0,
+              "title": "Offset"
+            },
+            "description": "Where this page starts: the `X-Next-Offset` header of the page before"
           }
         ],
         "responses": {
@@ -4579,6 +4790,40 @@
         "type": "object",
         "title": "MakeReq"
       },
+      "MakingMap": {
+        "properties": {
+          "job": {
+            "$ref": "#/components/schemas/JobOut"
+          },
+          "mindmap": {
+            "$ref": "#/components/schemas/MindMapSummary"
+          }
+        },
+        "type": "object",
+        "required": [
+          "job",
+          "mindmap"
+        ],
+        "title": "MakingMap",
+        "description": "A map being made: its job, which says how far it got and, when it\nfails, why; and its row, `making` until the job draws it."
+      },
+      "MakingNotes": {
+        "properties": {
+          "job": {
+            "$ref": "#/components/schemas/JobOut"
+          },
+          "notes": {
+            "$ref": "#/components/schemas/NotesSummary"
+          }
+        },
+        "type": "object",
+        "required": [
+          "job",
+          "notes"
+        ],
+        "title": "MakingNotes",
+        "description": "Notes being written: their job, which says how far it got and, when\nit fails, why; and their row, `making` until the job writes them."
+      },
       "MeOut": {
         "properties": {
           "id": {
@@ -4700,6 +4945,29 @@
             "format": "date-time",
             "title": "Created At"
           },
+          "state": {
+            "type": "string",
+            "enum": [
+              "making",
+              "ready"
+            ],
+            "title": "State",
+            "description": "`making` while its job draws it: empty until then. One whose making fails is removed, and its job says why",
+            "default": "ready"
+          },
+          "job_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Id",
+            "description": "The job that makes it: follow it at /api/jobs/{id}"
+          },
           "excerpted": {
             "type": "boolean",
             "title": "Excerpted",
@@ -4791,6 +5059,29 @@
             "type": "string",
             "format": "date-time",
             "title": "Created At"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "making",
+              "ready"
+            ],
+            "title": "State",
+            "description": "`making` while its job draws it: empty until then. One whose making fails is removed, and its job says why",
+            "default": "ready"
+          },
+          "job_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Id",
+            "description": "The job that makes it: follow it at /api/jobs/{id}"
           },
           "display_title": {
             "type": "string",
@@ -4959,6 +5250,29 @@
             "type": "array",
             "title": "Headings"
           },
+          "state": {
+            "type": "string",
+            "enum": [
+              "making",
+              "ready"
+            ],
+            "title": "State",
+            "description": "`making` while its job writes them: empty until then. Notes whose writing fails are removed, and their job says why",
+            "default": "ready"
+          },
+          "job_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Id",
+            "description": "The job that writes them: follow it at /api/jobs/{id}"
+          },
           "excerpted": {
             "type": "boolean",
             "title": "Excerpted"
@@ -5103,6 +5417,29 @@
             },
             "type": "array",
             "title": "Headings"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "making",
+              "ready"
+            ],
+            "title": "State",
+            "description": "`making` while its job writes them: empty until then. Notes whose writing fails are removed, and their job says why",
+            "default": "ready"
+          },
+          "job_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Id",
+            "description": "The job that writes them: follow it at /api/jobs/{id}"
           }
         },
         "type": "object",

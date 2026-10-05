@@ -23,7 +23,7 @@ from opennotebook.script.mindmap import (
     user_prompt,
 )
 from tests.conftest import other_person
-from tests.model import PRICE_IN, PRICE_OUT, add_note, fails, install, says, spent
+from tests.model import PRICE_IN, PRICE_OUT, add_note, fails, install, made, says, spent
 
 
 def names(n: MindNode) -> list[str]:
@@ -261,9 +261,9 @@ async def test_a_map_is_made_checked_against_the_sources_and_kept(
     cid = await _collection(client)
     name = await add_note(client, cid, REEFS, title="Reefs")
     model.answers(says(OUTLINE))
-    r = await client.post(f"/api/collections/{cid}/mindmaps", json={"focus": " threats "})
-    assert r.status_code == 201, r.text
-    m = r.json()
+    job, m = await made(client, f"/api/collections/{cid}/mindmaps", {"focus": " threats "})
+    assert job["status"] == "done" and job["kind"] == "mindmap", job
+    assert m is not None and m["state"] == "ready"
     assert m["title"] == "Coral reefs" and m["root"]["name"] == "Coral reefs"
     # The dragons are nowhere in the sources: gone, with their child.
     assert [c["name"] for c in m["root"]["children"]] == [
@@ -285,6 +285,7 @@ async def test_a_map_is_made_checked_against_the_sources_and_kept(
     assert got == m
     (row,) = await spent()
     assert row["kind"] == "mindmap" and str(row["collection_id"]) == cid
+    assert str(row["job_id"]) == job["id"]
 
 
 async def test_a_reply_with_no_outline_is_asked_for_once_more(
@@ -294,8 +295,8 @@ async def test_a_reply_with_no_outline_is_asked_for_once_more(
     cid = await _collection(client)
     await add_note(client, cid, REEFS)
     model.answers(says("I cannot make a map of this."), says(OUTLINE))
-    r = await client.post(f"/api/collections/{cid}/mindmaps", json={})
-    assert r.status_code == 201, r.text
+    job, m = await made(client, f"/api/collections/{cid}/mindmaps")
+    assert job["status"] == "done" and m is not None
     assert "too thin" in model.said_to(1, "user")
     assert len(await spent()) == 2
 
@@ -307,9 +308,8 @@ async def test_a_map_cut_off_at_the_token_ceiling_keeps_what_came(
     cid = await _collection(client)
     await add_note(client, cid, REEFS)
     model.answers(says(OUTLINE, finish="length"))
-    r = await client.post(f"/api/collections/{cid}/mindmaps", json={})
-    assert r.status_code == 201, r.text
-    assert r.json()["node_count"] == 13
+    _, m = await made(client, f"/api/collections/{cid}/mindmaps")
+    assert m is not None and m["node_count"] == 13
 
 
 async def test_a_map_in_another_language_is_not_checked(
@@ -320,8 +320,8 @@ async def test_a_map_in_another_language_is_not_checked(
     await add_note(client, cid, REEFS)
     await client.patch("/api/settings/OPENNOTEBOOK_LANGUAGE", json={"value": "French"})
     model.answers(says(OUTLINE))
-    m = (await client.post(f"/api/collections/{cid}/mindmaps", json={})).json()
-    assert m["unchecked"] and m["dropped"] == 0 and m["node_count"] == 15
+    _, m = await made(client, f"/api/collections/{cid}/mindmaps")
+    assert m is not None and m["unchecked"] and m["dropped"] == 0 and m["node_count"] == 15
 
 
 async def test_a_model_that_maps_nothing_is_a_sentence(
@@ -331,9 +331,10 @@ async def test_a_model_that_maps_nothing_is_a_sentence(
     cid = await _collection(client)
     await add_note(client, cid, REEFS)
     model.answers(says("No."), says("Still no."))
-    r = await client.post(f"/api/collections/{cid}/mindmaps", json={})
-    assert r.status_code == 502
-    assert r.json()["detail"].startswith("The AI model gave back no usable mind map.")
+    job, m = await made(client, f"/api/collections/{cid}/mindmaps")
+    # The map is removed, and its job says why.
+    assert job["status"] == "failed" and m is None
+    assert job["error"].startswith("The AI model gave back no usable mind map.")
     assert (await client.get(f"/api/collections/{cid}/mindmaps")).json() == []
 
 
@@ -345,9 +346,9 @@ async def test_a_busy_provider_is_a_sentence(
     await add_note(client, cid, REEFS)
     # Asked three times: the first call and its two retries.
     model.answers(*[fails(503, "Service Unavailable")] * 3)
-    r = await client.post(f"/api/collections/{cid}/mindmaps", json={})
-    assert r.status_code == 503
-    assert r.json()["detail"].startswith("The AI provider is not answering right now.")
+    job, _ = await made(client, f"/api/collections/{cid}/mindmaps")
+    assert job["status"] == "failed"
+    assert job["error"].startswith("The AI provider is not answering right now.")
 
 
 async def test_the_estimate_prices_one_call_and_a_second_at_most(

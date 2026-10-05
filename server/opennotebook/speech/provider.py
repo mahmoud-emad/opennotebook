@@ -131,13 +131,17 @@ class OpenAICompatible(speech.Speech):
         return await super().synthesize(text, resolve("openai", voice))
 
 
-def chosen(base: speech.Speech, env: Mapping[str, str] | None = None) -> speech.Speech:
+def chosen(
+    base: speech.Speech, env: Mapping[str, str] | None = None, *, shared: bool = False
+) -> speech.Speech:
     """The client that reads aloud under the provider in force. `base` is the
     OpenAI-compatible client the environment describes: it reads aloud under
-    `openai`, and it transcribes under every provider."""
+    `openai`, and it transcribes under every provider. `shared`: Azure's
+    lines go through the one client kept for them (`microsoft.azure_http`)."""
     p = provider(env)
     if is_microsoft(p):
         from opennotebook.speech import microsoft
 
-        return microsoft.MicrosoftSpeech.of(base, p, env)
+        azure = microsoft.azure_http() if shared and p == "azure" else None
+        return microsoft.MicrosoftSpeech.of(base, p, env, azure_http=azure)
     return OpenAICompatible.of(base)

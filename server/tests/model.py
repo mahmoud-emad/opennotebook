@@ -80,7 +80,7 @@ async def spent() -> list[dict[str, Any]]:
     """Every row of the spend ledger."""
     async with engine().begin() as c:
         rows = await c.execute(
-            text("SELECT kind, collection_id, model, cost_usd, priced_by FROM usage_events")
+            text("SELECT kind, collection_id, job_id, model, cost_usd, priced_by FROM usage_events")
         )
         return [dict(r) for r in rows.mappings()]
 
@@ -92,3 +92,35 @@ async def add_note(c: AsyncClient, cid: str, note: str, title: str = "") -> str:
     )
     assert r.status_code == 201, r.text
     return r.json()[0]["source"]["name"]
+
+
+async def run_work() -> None:
+    """Run every job waiting on the work queue, as the worker would: maps,
+    notes and research the test started."""
+    from opennotebook.jobs.app import WORK_QUEUE, app
+
+    async with app.open_async():
+        await app.run_worker_async(
+            queues=[WORK_QUEUE],
+            wait=False,
+            install_signal_handlers=False,
+            listen_notify=False,
+            concurrency=1,
+        )
+
+
+async def made(
+    c: AsyncClient, path: str, body: dict[str, Any] | None = None
+) -> tuple[dict[str, Any], dict[str, Any] | None]:
+    """Ask for a map or notes at `path`, let the worker make it, and return
+    its job as it ended and the output as it then reads, or None when its
+    making failed and it was removed."""
+    r = await c.post(path, json=body or {})
+    assert r.status_code == 202, r.text
+    started = r.json()
+    row = started.get("mindmap") or started.get("notes")
+    assert row["state"] == "making" and row["job_id"] == started["job"]["id"]
+    await run_work()
+    job = (await c.get(f"/api/jobs/{started['job']['id']}")).json()
+    got = await c.get(f"{path}/{row['id']}")
+    return job, (got.json() if got.status_code == 200 else None)

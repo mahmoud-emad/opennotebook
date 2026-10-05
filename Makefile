@@ -61,9 +61,9 @@ dev: migrate
 	(cd web && $(PNPM) dev) & \
 	wait
 
-## migrate: bring the database up to the newest schema
+## migrate: bring the database up to the newest schema, on every branch of it
 migrate:
-	cd server && $(UV) run alembic upgrade head
+	cd server && $(UV) run alembic upgrade heads
 
 ## api-client: regenerate the web app's client from the server's OpenAPI
 api-client:

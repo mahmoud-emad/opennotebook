@@ -19,7 +19,8 @@ from opennotebook.config import settings
 # what is in flight.
 PREP_QUEUE = "prep"
 PREP_LOCK = "prep"
-# Everything else that takes longer than a request: deep research.
+# Everything else that takes longer than a request: deep research, mind maps,
+# study notes, and the hourly tidy of finished work.
 WORK_QUEUE = "work"
 # Naming a collection and designing its cover, after its sources change. A job
 # per collection carries the collection's id as both its `lock` and its
@@ -44,5 +45,5 @@ def _pool(**kwargs: Any) -> AsyncConnectionPool:
 
 app = procrastinate.App(
     connector=procrastinate.PsycopgConnector(pool_factory=_pool),
-    import_paths=["opennotebook.jobs.tasks"],
+    import_paths=["opennotebook.jobs.tasks", "opennotebook.jobs.background"],
 )

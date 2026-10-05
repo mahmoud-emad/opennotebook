@@ -300,8 +300,8 @@ async def get_studio_options(cid: uuid.UUID, s: Db, me: Me) -> StudioOptions:
     settings: the styles and formats with their pictures and lengths, the
     starting picks, the lines it shows (a deck's slides and voices, the
     output language), how long research takes, and what an upload takes."""
-    summary = await collections.summary(s, me.id, cid)
-    return studio_options(await settings.values(s, me.id), summary.sources)
+    await collections.owned(s, me.id, cid)
+    return studio_options(await settings.values(s, me.id), await collections.source_count(s, cid))
 
 
 @router.get("/styles")

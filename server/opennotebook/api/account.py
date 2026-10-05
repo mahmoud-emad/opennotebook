@@ -4,11 +4,13 @@ import asyncio
 import logging
 import uuid
 from datetime import UTC, datetime
+from typing import Annotated
 
 from fastapi import APIRouter, Response
 from pydantic import BaseModel, Field
 from sqlalchemy import select, text, update
 
+from opennotebook.api import paging
 from opennotebook.api.deps import Db, Me
 from opennotebook.auth import key_hash, new_key
 from opennotebook.db.models import ApiKey
@@ -137,15 +139,32 @@ async def me(me: Me) -> MeOut:
     return MeOut.model_validate(me, from_attributes=True)
 
 
+# How many keys a page of the list holds unless asked for fewer, and at most.
+KEYS_DEFAULT = 100
+KEYS_MAX = 500
+
+
 @router.get("/keys")
-async def list_keys(s: Db, me: Me) -> list[KeyOut]:
-    """Your API keys that still work, newest first."""
+async def list_keys(
+    s: Db,
+    me: Me,
+    response: Response,
+    limit: Annotated[int, paging.limit(KEYS_DEFAULT, KEYS_MAX, "keys")] = KEYS_DEFAULT,
+    offset: paging.Offset = 0,
+) -> list[KeyOut]:
+    """Your API keys that still work, newest first, a page at a time:
+    `X-Next-Offset` says where the next page starts when there is one."""
     rows = await s.scalars(
         select(ApiKey)
         .where(ApiKey.owner_id == me.id, ApiKey.revoked_at.is_(None))
-        .order_by(ApiKey.created_at.desc())
+        .order_by(ApiKey.created_at.desc(), ApiKey.id.desc())
+        .limit(limit + 1)
+        .offset(offset)
     )
-    return [KeyOut.model_validate(k, from_attributes=True) for k in rows]
+    return [
+        KeyOut.model_validate(k, from_attributes=True)
+        for k in paging.cut(list(rows), limit, offset, response)
+    ]
 
 
 @router.post("/keys", status_code=201)

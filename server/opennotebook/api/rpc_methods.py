@@ -29,7 +29,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
-from fastapi import BackgroundTasks, UploadFile
+from fastapi import BackgroundTasks, Response, UploadFile
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -220,7 +220,10 @@ async def collection_create(c: Ctx, p: CollectionCreateIn) -> dict[str, Any]:
 
 @method("session", "collection_list", NoParams)
 async def collection_list(c: Ctx, _: NoParams) -> dict[str, Any]:
-    listed = await collections_api.list_collections(c.s, c.me)
+    # The old method took no page: the most one page holds.
+    listed = await collections_api.list_collections(
+        c.s, c.me, Response(), limit=collections_api.LIST_MAX
+    )
     return {"collections": [collection_summary_of(x) for x in listed]}
 
 
@@ -530,7 +533,12 @@ async def session_get(c: Ctx, p: SidParam) -> dict[str, Any]:
 @method("session", "session_list", NoParams)
 async def session_list(c: Ctx, _: NoParams) -> dict[str, Any]:
     return {
-        "sessions": [session_summary_of(o) for o in await sessions_api.list_sessions(c.s, c.me)]
+        "sessions": [
+            session_summary_of(o)
+            for o in await sessions_api.list_sessions(
+                c.s, c.me, Response(), limit=sessions_api.LIST_MAX
+            )
+        ]
     }
 
 
@@ -808,7 +816,9 @@ async def source_add_file(c: Ctx, p: SourceAddFileIn) -> dict[str, Any]:
 
 @method("sources", "source_list", SidParam)
 async def source_list(c: Ctx, p: SidParam) -> dict[str, Any]:
-    listed = await sources_api.list_sources(_id(p.sid, "That collection"), c.s, c.me)
+    listed = await sources_api.list_sources(
+        _id(p.sid, "That collection"), c.s, c.me, Response(), limit=sources_api.LIST_MAX
+    )
     return {
         "sources": [
             {"name": x.name, "title": x.title, "url": x.url, "chars": x.chars} for x in listed
@@ -985,7 +995,8 @@ def _make(r: MakeReq) -> mindmaps_api.MakeReq:
 @method("mindmap", "mindmap_create", MakeIn)
 async def mindmap_create(c: Ctx, p: MakeIn) -> dict[str, Any]:
     cid = _id(p.req.sid, "That collection")
-    return mindmap_of(await mindmaps_api.make_mindmap(cid, _make(p.req), c.s, c.me))
+    # The old method answered with the map itself: it is made while it waits.
+    return mindmap_of(await mindmaps_api.make_mindmap_now(cid, _make(p.req), c.s, c.me))
 
 
 @method("mindmap", "mindmap_estimate", SidParam)
@@ -1000,13 +1011,16 @@ async def mindmap_estimate(c: Ctx, p: SidParam) -> dict[str, Any]:
 @method("mindmap", "mindmap_list", SidParam)
 async def mindmap_list(c: Ctx, p: SidParam) -> dict[str, Any]:
     listed = await mindmaps_api.list_mindmaps(_id(p.sid, "That collection"), c.s, c.me)
-    return {"maps": [mindmap_summary_of(m) for m in listed]}
+    # Only finished maps: the old API had no maps being made.
+    return {"maps": [mindmap_summary_of(m) for m in listed if m.state == "ready"]}
 
 
 @method("mindmap", "mindmap_list_all", NoParams)
 async def mindmap_list_all(c: Ctx, _: NoParams) -> dict[str, Any]:
     rows = await c.s.scalars(
-        select(MindMap).where(MindMap.owner_id == c.me.id).order_by(MindMap.created_at.desc())
+        select(MindMap)
+        .where(MindMap.owner_id == c.me.id, MindMap.state == "ready")
+        .order_by(MindMap.created_at.desc())
     )
     return {
         "maps": [
@@ -1090,7 +1104,7 @@ def notes_of(n: notes_api.NotesOut) -> dict[str, Any]:
 @method("notes", "notes_create", MakeIn)
 async def notes_create(c: Ctx, p: MakeIn) -> dict[str, Any]:
     cid = _id(p.req.sid, "That collection")
-    return notes_of(await notes_api.make_notes(cid, _make(p.req), c.s, c.me))
+    return notes_of(await notes_api.make_notes_now(cid, _make(p.req), c.s, c.me))
 
 
 @method("notes", "notes_estimate", SidParam)
@@ -1105,14 +1119,14 @@ async def notes_estimate(c: Ctx, p: SidParam) -> dict[str, Any]:
 @method("notes", "notes_list", SidParam)
 async def notes_list(c: Ctx, p: SidParam) -> dict[str, Any]:
     listed = await notes_api.list_notes(_id(p.sid, "That collection"), c.s, c.me)
-    return {"notes": [notes_summary_of(n) for n in listed]}
+    return {"notes": [notes_summary_of(n) for n in listed if n.state == "ready"]}
 
 
 @method("notes", "notes_list_all", NoParams)
 async def notes_list_all(c: Ctx, _: NoParams) -> dict[str, Any]:
     rows = await c.s.scalars(
         select(StudyNotes)
-        .where(StudyNotes.owner_id == c.me.id)
+        .where(StudyNotes.owner_id == c.me.id, StudyNotes.state == "ready")
         .order_by(StudyNotes.created_at.desc())
     )
     return {"notes": [notes_summary_of(notes_api.NotesSummary.of(n)) for n in rows]}

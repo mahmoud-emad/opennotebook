@@ -86,7 +86,7 @@ services:
   migrate:
     <<: *server
     restart: "no"
-    command: ["alembic", "upgrade", "head"]
+    command: ["alembic", "upgrade", "heads"]
     depends_on:
       postgres:
         condition: service_healthy

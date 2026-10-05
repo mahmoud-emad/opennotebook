@@ -7,8 +7,24 @@ import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from typing import Any
 
-from sqlalchemy import Select, Text, cast, column, delete, exists, func, select, table, update
+from sqlalchemy import (
+    ColumnElement,
+    Select,
+    Text,
+    and_,
+    cast,
+    column,
+    delete,
+    exists,
+    func,
+    literal_column,
+    or_,
+    select,
+    table,
+    update,
+)
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
@@ -35,7 +51,13 @@ UNTITLED = "Untitled collection"
 # The queue's own table, for whether a collection's naming and cover are
 # still to be made: its refresh job is waiting or running. Read, never
 # written, so a light table construct rather than a model.
-_queue = table("procrastinate_jobs", column("lock"), column("status"))
+_queue = table("procrastinate_jobs", column("lock"), column("queueing_lock"), column("status"))
+
+
+def _queue_status(status: str) -> ColumnElement[Any]:
+    """A queue status as the queue's own enum, so a test on it matches the
+    partial indexes Procrastinate keeps on waiting and running jobs."""
+    return literal_column(f"'{status}'::procrastinate_job_status")
 
 
 def display_title(title: str) -> str:
@@ -83,7 +105,12 @@ class Summary:
 
 def refuse_another(summaries: list[Summary]) -> str | None:
     """Why another collection may not be started, when it may not."""
-    empty = sum(1 for c in summaries if c.empty)
+    return refuse_with(sum(1 for c in summaries if c.empty))
+
+
+def refuse_with(empty: int) -> str | None:
+    """Why another collection may not be started with `empty` empty ones
+    already, when it may not."""
     if empty < MAX_EMPTY_COLLECTIONS:
         return None
     return (
@@ -141,11 +168,18 @@ def _counted() -> Select[
         .join(Share, Share.collection_id == original.id)
         .where(Share.id == Collection.reused_from)
         .scalar_subquery(),
-        # Its refresh is waiting or running (`refresh_lock` names the lock).
-        exists().where(
-            _queue.c.lock == func.concat("refresh:", cast(Collection.id, Text)),
-            cast(_queue.c.status, Text).in_(("todo", "doing")),
-        ),
+        # Its refresh is waiting or running (`refresh_lock` names the lock,
+        # which a refresh takes as its queueing lock too). Asked as two
+        # tests so each meets one of the queue's partial indexes.
+        exists().where(_refreshing()),
+    )
+
+
+def _refreshing() -> ColumnElement[bool]:
+    key = func.concat("refresh:", cast(Collection.id, Text))
+    return or_(
+        and_(_queue.c.queueing_lock == key, _queue.c.status == _queue_status("todo")),
+        and_(_queue.c.lock == key, _queue.c.status == _queue_status("doing")),
     )
 
 
@@ -189,8 +223,15 @@ async def _naming_on(s: AsyncSession, owner: uuid.UUID) -> bool:
     return st.is_on(await st.value(s, owner, st.AUTO_NAME_KEY))
 
 
-async def list_all(s: AsyncSession, owner: uuid.UUID) -> list[Summary]:
-    rows = await s.execute(_summaries(owner))
+async def list_all(
+    s: AsyncSession, owner: uuid.UUID, limit: int | None = None, offset: int = 0
+) -> list[Summary]:
+    """The owner's collections, most recently updated first: all of them, or
+    `limit` from `offset` on."""
+    q = _summaries(owner)
+    if limit is not None:
+        q = q.limit(limit).offset(offset)
+    rows = await s.execute(q)
     covers_on, naming_on = await _covers_on(s, owner), await _naming_on(s, owner)
     return [_summary(row, covers_on, naming_on) for row in rows]
 
@@ -209,8 +250,41 @@ async def of_anyone(s: AsyncSession, cids: list[uuid.UUID]) -> dict[uuid.UUID, S
     if not cids:
         return {}
     rows = list(await s.execute(_counted().where(Collection.id.in_(cids))))
-    covers_on = {o: await _covers_on(s, o) for o in {row[0].owner_id for row in rows}}
+    on = await st.value_of_each(s, {row[0].owner_id for row in rows}, st.COVERS_KEY)
+    covers_on = {o: st.is_on(v) for o, v in on.items()}
     return {row[0].id: _summary(row, covers_on[row[0].owner_id]) for row in rows}
+
+
+async def owned(s: AsyncSession, owner: uuid.UUID, cid: uuid.UUID) -> Collection:
+    """One of the owner's collections, its row only: for a route that needs
+    to know it is there and theirs, and nothing it holds. Not found
+    otherwise, as for someone else's."""
+    c = await s.scalar(select(Collection).where(Collection.id == cid, Collection.owner_id == owner))
+    if c is None:
+        raise not_found("That collection")
+    return c
+
+
+async def source_count(s: AsyncSession, cid: uuid.UUID) -> int:
+    """How many sources a collection has."""
+    return await s.scalar(select(func.count()).where(Source.collection_id == cid)) or 0
+
+
+async def empty_count(s: AsyncSession, owner: uuid.UUID) -> int:
+    """How many of the owner's collections hold nothing at all: no source,
+    output, map or notes. Counted in the database, whatever their number."""
+    held = [
+        exists().where(model.collection_id == Collection.id)
+        for model in (Source, Session, MindMap, StudyNotes)
+    ]
+    return (
+        await s.scalar(
+            select(func.count())
+            .select_from(Collection)
+            .where(Collection.owner_id == owner, *(~h for h in held))
+        )
+        or 0
+    )
 
 
 async def lock(s: AsyncSession, owner: uuid.UUID, cid: uuid.UUID) -> Collection:
@@ -257,9 +331,7 @@ async def editable(s: AsyncSession, owner: uuid.UUID, cid: uuid.UUID) -> Collect
     found, a read-only copy is refused. Every route that adds to a collection,
     changes or removes what it holds, or shares it, asks this first; reading,
     asking, pinning and deleting the whole collection do not."""
-    c = await s.scalar(select(Collection).where(Collection.id == cid, Collection.owner_id == owner))
-    if c is None:
-        raise not_found("That collection")
+    c = await owned(s, owner, cid)
     await refuse_read_only(s, c)
     return c
 
@@ -269,7 +341,7 @@ async def create(s: AsyncSession, owner: uuid.UUID, title: str) -> Collection:
     # The owner's row is the lock that makes the count and the insert one step,
     # so two quick clicks cannot both get past the limit.
     await s.execute(select(User.id).where(User.id == owner).with_for_update())
-    if why := refuse_another(await list_all(s, owner)):
+    if why := refuse_with(await empty_count(s, owner)):
         raise Problem(409, why)
     title = " ".join(title.split())
     c = Collection(owner_id=owner, title=title, title_auto=not title)

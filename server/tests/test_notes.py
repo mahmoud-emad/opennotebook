@@ -19,7 +19,7 @@ from opennotebook.script.notes import (
     user_prompt,
 )
 from tests.conftest import other_person
-from tests.model import PRICE_IN, PRICE_OUT, add_note, fails, install, says, spent
+from tests.model import PRICE_IN, PRICE_OUT, add_note, fails, install, made, says, spent
 
 
 def p(texts: list[str]) -> list[tuple[int, str]]:
@@ -253,9 +253,9 @@ async def test_notes_are_written_checked_cited_and_kept(
     moshi = await add_note(client, cid, MOSHI, title="Moshi paper")
     mimi = await add_note(client, cid, MIMI, title="Mimi codec")
     model.answers(says(NOTES))
-    r = await client.post(f"/api/collections/{cid}/notes", json={})
-    assert r.status_code == 201, r.text
-    n = r.json()
+    job, n = await made(client, f"/api/collections/{cid}/notes")
+    assert job["status"] == "done" and job["kind"] == "notes", job
+    assert n is not None and n["state"] == "ready"
     assert n["title"] == "Moshi notes"
     assert n["overview"] == (
         "Moshi is a full-duplex spoken dialogue model [1]. Mimi is a neural audio codec."
@@ -293,12 +293,12 @@ async def test_thin_notes_are_asked_for_once_more_and_the_fuller_kept(
     cid = await _collection(client)
     await add_note(client, cid, MOSHI)
     model.answers(says("## Overview\nMoshi is a dialogue model [1].\n"), says(NOTES))
-    r = await client.post(f"/api/collections/{cid}/notes", json={"focus": "latency"})
-    assert r.status_code == 201, r.text
+    _, n = await made(client, f"/api/collections/{cid}/notes", {"focus": "latency"})
+    assert n is not None
     assert "missing their sections" in model.said_to(1, "user")
     assert "Focus: latency" in model.said_to(0, "user")
-    assert len(r.json()["idea_list"]) == 2
-    assert r.json()["focus"] == "latency"
+    assert len(n["idea_list"]) == 2
+    assert n["focus"] == "latency"
 
 
 async def test_notes_cut_off_at_the_token_ceiling_keep_what_came(
@@ -308,9 +308,8 @@ async def test_notes_cut_off_at_the_token_ceiling_keep_what_came(
     cid = await _collection(client)
     await add_note(client, cid, MOSHI)
     model.answers(says(NOTES.split("## Quiz")[0], finish="length"))
-    r = await client.post(f"/api/collections/{cid}/notes", json={})
-    assert r.status_code == 201, r.text
-    assert r.json()["quiz"] == []
+    _, n = await made(client, f"/api/collections/{cid}/notes")
+    assert n is not None and n["quiz"] == []
 
 
 async def test_an_account_out_of_credit_writes_no_notes(
@@ -320,9 +319,9 @@ async def test_an_account_out_of_credit_writes_no_notes(
     cid = await _collection(client)
     await add_note(client, cid, MOSHI)
     model.answers(fails(402, "Insufficient credits"))
-    r = await client.post(f"/api/collections/{cid}/notes", json={})
-    assert r.status_code == 402
-    assert r.json()["detail"].startswith("The AI account is out of credit")
+    job, n = await made(client, f"/api/collections/{cid}/notes")
+    assert job["status"] == "failed" and n is None
+    assert job["error"].startswith("The AI account is out of credit")
     assert (await client.get(f"/api/collections/{cid}/notes")).json() == []
 
 
@@ -333,9 +332,8 @@ async def test_a_model_that_writes_nothing_is_a_sentence(
     cid = await _collection(client)
     await add_note(client, cid, MOSHI)
     model.answers(says("   "))
-    r = await client.post(f"/api/collections/{cid}/notes", json={})
-    assert r.status_code == 502
-    assert r.json()["detail"].startswith("The AI model gave back no usable study notes.")
+    job, _ = await made(client, f"/api/collections/{cid}/notes")
+    assert job["error"].startswith("The AI model gave back no usable study notes.")
 
 
 async def test_the_notes_estimate_prices_the_text_and_the_writing(

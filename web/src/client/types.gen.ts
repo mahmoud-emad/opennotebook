@@ -699,6 +699,28 @@ export type MakeReq = {
 };
 
 /**
+ * MakingMap
+ *
+ * A map being made: its job, which says how far it got and, when it
+ * fails, why; and its row, `making` until the job draws it.
+ */
+export type MakingMap = {
+    job: JobOut;
+    mindmap: MindMapSummary;
+};
+
+/**
+ * MakingNotes
+ *
+ * Notes being written: their job, which says how far it got and, when
+ * it fails, why; and their row, `making` until the job writes them.
+ */
+export type MakingNotes = {
+    job: JobOut;
+    notes: NotesSummary;
+};
+
+/**
  * MeOut
  */
 export type MeOut = {
@@ -791,6 +813,18 @@ export type MindMapOut = {
      */
     created_at: string;
     /**
+     * State
+     *
+     * `making` while its job draws it: empty until then. One whose making fails is removed, and its job says why
+     */
+    state?: 'making' | 'ready';
+    /**
+     * Job Id
+     *
+     * The job that makes it: follow it at /api/jobs/{id}
+     */
+    job_id?: string | null;
+    /**
      * Excerpted
      *
      * The sources were cut to excerpts to fit
@@ -859,6 +893,18 @@ export type MindMapSummary = {
      * Created At
      */
     created_at: string;
+    /**
+     * State
+     *
+     * `making` while its job draws it: empty until then. One whose making fails is removed, and its job says why
+     */
+    state?: 'making' | 'ready';
+    /**
+     * Job Id
+     *
+     * The job that makes it: follow it at /api/jobs/{id}
+     */
+    job_id?: string | null;
     /**
      * Display Title
      *
@@ -986,6 +1032,18 @@ export type NotesOut = {
      */
     headings: Array<string>;
     /**
+     * State
+     *
+     * `making` while its job writes them: empty until then. Notes whose writing fails are removed, and their job says why
+     */
+    state?: 'making' | 'ready';
+    /**
+     * Job Id
+     *
+     * The job that writes them: follow it at /api/jobs/{id}
+     */
+    job_id?: string | null;
+    /**
      * Excerpted
      */
     excerpted: boolean;
@@ -1085,6 +1143,18 @@ export type NotesSummary = {
      * Headings
      */
     headings: Array<string>;
+    /**
+     * State
+     *
+     * `making` while its job writes them: empty until then. Notes whose writing fails are removed, and their job says why
+     */
+    state?: 'making' | 'ready';
+    /**
+     * Job Id
+     *
+     * The job that writes them: follow it at /api/jobs/{id}
+     */
+    job_id?: string | null;
 };
 
 /**
@@ -2540,6 +2610,17 @@ export type AddResultWritable = {
 };
 
 /**
+ * MakingMap
+ *
+ * A map being made: its job, which says how far it got and, when it
+ * fails, why; and its row, `making` until the job draws it.
+ */
+export type MakingMapWritable = {
+    job: JobOut;
+    mindmap: MindMapSummaryWritable;
+};
+
+/**
  * MindMapOut
  */
 export type MindMapOutWritable = {
@@ -2577,6 +2658,18 @@ export type MindMapOutWritable = {
      * Created At
      */
     created_at: string;
+    /**
+     * State
+     *
+     * `making` while its job draws it: empty until then. One whose making fails is removed, and its job says why
+     */
+    state?: 'making' | 'ready';
+    /**
+     * Job Id
+     *
+     * The job that makes it: follow it at /api/jobs/{id}
+     */
+    job_id?: string | null;
     /**
      * Excerpted
      *
@@ -2640,6 +2733,18 @@ export type MindMapSummaryWritable = {
      * Created At
      */
     created_at: string;
+    /**
+     * State
+     *
+     * `making` while its job draws it: empty until then. One whose making fails is removed, and its job says why
+     */
+    state?: 'making' | 'ready';
+    /**
+     * Job Id
+     *
+     * The job that makes it: follow it at /api/jobs/{id}
+     */
+    job_id?: string | null;
 };
 
 /**
@@ -3037,9 +3142,31 @@ export type MeResponse = MeResponses[keyof MeResponses];
 export type ListKeysData = {
     body?: never;
     path?: never;
-    query?: never;
+    query?: {
+        /**
+         * Limit
+         *
+         * The most keys in one answer; 100 unless set
+         */
+        limit?: number;
+        /**
+         * Offset
+         *
+         * Where this page starts: the `X-Next-Offset` header of the page before
+         */
+        offset?: number;
+    };
     url: '/api/keys';
 };
+
+export type ListKeysErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type ListKeysError = ListKeysErrors[keyof ListKeysErrors];
 
 export type ListKeysResponses = {
     /**
@@ -3110,9 +3237,31 @@ export type RevokeKeyResponse = RevokeKeyResponses[keyof RevokeKeyResponses];
 export type ListCollectionsData = {
     body?: never;
     path?: never;
-    query?: never;
+    query?: {
+        /**
+         * Limit
+         *
+         * The most collections in one answer; 200 unless set
+         */
+        limit?: number;
+        /**
+         * Offset
+         *
+         * Where this page starts: the `X-Next-Offset` header of the page before
+         */
+        offset?: number;
+    };
     url: '/api/collections';
 };
+
+export type ListCollectionsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type ListCollectionsError = ListCollectionsErrors[keyof ListCollectionsErrors];
 
 export type ListCollectionsResponses = {
     /**
@@ -3349,7 +3498,20 @@ export type ListSourcesData = {
          */
         cid: string;
     };
-    query?: never;
+    query?: {
+        /**
+         * Limit
+         *
+         * The most sources in one answer; 500 unless set
+         */
+        limit?: number;
+        /**
+         * Offset
+         *
+         * Where this page starts: the `X-Next-Offset` header of the page before
+         */
+        offset?: number;
+    };
     url: '/api/collections/{cid}/sources';
 };
 
@@ -3662,9 +3824,31 @@ export type EstimateResponse = EstimateResponses[keyof EstimateResponses];
 export type ListSessionsData = {
     body?: never;
     path?: never;
-    query?: never;
+    query?: {
+        /**
+         * Limit
+         *
+         * The most outputs in one answer; 200 unless set
+         */
+        limit?: number;
+        /**
+         * Offset
+         *
+         * Where this page starts: the `X-Next-Offset` header of the page before
+         */
+        offset?: number;
+    };
     url: '/api/sessions';
 };
+
+export type ListSessionsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type ListSessionsError = ListSessionsErrors[keyof ListSessionsErrors];
 
 export type ListSessionsResponses = {
     /**
@@ -4240,7 +4424,7 @@ export type MakeMindmapResponses = {
     /**
      * Successful Response
      */
-    201: MindMapOut;
+    202: MakingMap;
 };
 
 export type MakeMindmapResponse = MakeMindmapResponses[keyof MakeMindmapResponses];
@@ -4434,7 +4618,7 @@ export type MakeNotesResponses = {
     /**
      * Successful Response
      */
-    201: NotesOut;
+    202: MakingNotes;
 };
 
 export type MakeNotesResponse = MakeNotesResponses[keyof MakeNotesResponses];
@@ -4627,7 +4811,20 @@ export type ReadChatData = {
          */
         cid: string;
     };
-    query?: never;
+    query?: {
+        /**
+         * Limit
+         *
+         * The most messages in one answer; 200 unless set
+         */
+        limit?: number;
+        /**
+         * Before
+         *
+         * Only the messages before this one: the `X-Next-Before` header of the page after. The newest when absent
+         */
+        before?: string | null;
+    };
     url: '/api/collections/{cid}/chat';
 };
 
@@ -4817,6 +5014,18 @@ export type ListSharesData = {
          * `newest` (the default) or `reused`: most reused first
          */
         sort?: 'newest' | 'reused';
+        /**
+         * Limit
+         *
+         * The most shares in one answer
+         */
+        limit?: number;
+        /**
+         * Offset
+         *
+         * Where this page starts: the `X-Next-Offset` header of the page before
+         */
+        offset?: number;
     };
     url: '/api/shares';
 };

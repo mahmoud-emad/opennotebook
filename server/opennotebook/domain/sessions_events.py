@@ -32,7 +32,7 @@ from opennotebook.db.models import Playback, Session
 from opennotebook.db.session import sessionmaker
 from opennotebook.domain import sessions
 from opennotebook.domain.sessions import Part
-from opennotebook.jobs.events import REREAD_SECONDS, SESSION_CHANNEL, hub
+from opennotebook.jobs.events import REREAD_SECONDS, SESSION, SESSION_CHANNEL, hub
 
 Event = tuple[str, dict[str, Any]]
 
@@ -163,6 +163,15 @@ async def _read(owner: uuid.UUID, sid: uuid.UUID) -> tuple[Session | None, Any, 
         return o, (progress, note), head
 
 
+async def _head(owner: uuid.UUID, sid: uuid.UUID) -> Head:
+    """The playhead alone: all a move of it changes."""
+    async with sessionmaker()() as s:
+        p = await s.scalar(
+            select(Playback).where(Playback.session_id == sid, Playback.owner_id == owner)
+        )
+        return Head() if p is None else Head(p.state, p.slide_ordinal, p.line_id, p.offset_ms)
+
+
 async def stream(owner: uuid.UUID, sid: uuid.UUID) -> AsyncGenerator[Event | None]:
     """The output's events as they happen. None is a keep-alive: nothing
     changed in `REREAD_SECONDS`. Ends when the output is deleted."""
@@ -176,12 +185,32 @@ async def stream(owner: uuid.UUID, sid: uuid.UUID) -> AsyncGenerator[Event | Non
     # joining mid-session needs, while an empty previous line cannot produce
     # a `line.end`.
     last_head = Head()
+    # The output as last read whole, and what playback needs of its parts,
+    # worked out once per read and only when the playhead moves.
+    o: Session | None = None
+    look: Lookup | None = None
     async with hub.subscribe(sid) as woken:
         while True:
-            woken.clear()
+            why = woken.clear()
+            if why == {SESSION} and o is not None:
+                # Only the playhead moved: the output, often hundreds of
+                # lines, is not read again for it.
+                head = await _head(owner, sid)
+                if head != last_head:
+                    look = look or Lookup.of(o)
+                    for e in playback_events(last_head, head, look):
+                        yield e
+                    last_head = head
+                try:
+                    async with asyncio.timeout(REREAD_SECONDS):
+                        await woken.wait()
+                except TimeoutError:
+                    yield None
+                continue
             o, (progress, note), head = await _read(owner, sid)
             if o is None:
                 return
+            look = None
             out: list[Event] = []
             if o.state != last_state:
                 out.append(("session.state", {"state": o.state}))
@@ -199,7 +228,8 @@ async def stream(owner: uuid.UUID, sid: uuid.UUID) -> AsyncGenerator[Event | Non
                 out.append(("prep.waiting", {"waiting": note}))
                 last_note = note
             if head != last_head:
-                out.extend(playback_events(last_head, head, Lookup.of(o)))
+                look = Lookup.of(o)
+                out.extend(playback_events(last_head, head, look))
                 last_head = head
             for e in out:
                 yield e

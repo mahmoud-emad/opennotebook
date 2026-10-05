@@ -22,6 +22,7 @@ import { Icon } from "./Icon";
 import { citeGroups, type Cite } from "./cite";
 import { mdToHtml, withChips } from "./markdown";
 import { download, fileStem } from "./common";
+import { madeBy, newMaking, sorted, type MakingState } from "./making";
 import { covering } from "./mindmap";
 import { keepSame } from "./helpers";
 import { store, type Store } from "./store";
@@ -46,6 +47,8 @@ export type NotesState = {
   /** Which list read and which estimate are the latest: an older answer
    * landing after a newer one is dropped. */
   seq: { load: number; est: number };
+  /** The notes being written, followed on the server. */
+  mk: MakingState;
 };
 
 export function newNotesState(): NotesState {
@@ -60,20 +63,35 @@ export function newNotesState(): NotesState {
     estLoading: store(false),
     estErr: store(""),
     seq: { load: 0, est: 0 },
+    mk: newMaking(),
   };
 }
 
-/** The collection's notes, newest first. */
+/** The collection's notes, newest first. Notes being written are not
+ * listed: the list says "Writing study notes…" while the server writes
+ * them, and reads the notes again once they are done. */
 export async function loadNotes(cid: string, st: NotesState, signal?: AbortSignal): Promise<void> {
   const my = ++st.seq.load;
   try {
     const list = await notesList(cid, signal);
     if (my !== st.seq.load) return;
-    st.notes.set((was) => keepSame(was, list, (x) => x.id));
+    const { ready, making } = sorted(
+      list,
+      st.mk,
+      (why) => {
+        if (why !== null) st.err.set(why);
+        void loadNotes(cid, st, signal);
+      },
+      signal,
+    );
+    st.notes.set((was) => keepSame(was, ready, (x) => x.id));
+    st.making.set(making);
     st.loadErr.set("");
   } catch (e) {
     if (isAbort(e) || my !== st.seq.load) return;
     st.loadErr.set(errText(e));
+    // What the server is making is not known now; only this page's own asks.
+    st.making.set(st.mk.asked > 0);
   }
   st.loaded.set(true);
 }
@@ -95,32 +113,34 @@ export async function estimateNotes(cid: string, st: NotesState, signal?: AbortS
   st.estLoading.set(false);
 }
 
-/** Write notes of the collection with the focus typed in, and return their id
- * to open. Null when it failed; the reason is in `st.err`. */
+/** Write notes of the collection with the focus typed in, and return their
+ * id to open once the server has written them. Null when it failed; the
+ * reason is in `st.err`. */
 export async function makeNotes(cid: string, st: NotesState): Promise<string | null> {
   if (st.making.get()) return null;
+  st.mk.asked++;
   st.making.set(true);
   st.err.set("");
   const f = st.focus.get().trim();
+  let out: { id: string } | { why: string };
   try {
-    const n = await notesCreate(cid, f);
-    // Read back as the newest list: a read already on its way may not have it.
-    const my = ++st.seq.load;
-    const list = await notesList(cid);
-    st.making.set(false);
-    if (my === st.seq.load) {
-      st.notes.set((was) => keepSame(was, list, (x) => x.id));
-      st.loaded.set(true);
-    }
-    st.focus.set("");
-    return n.id;
+    out = await madeBy(st.mk, async () => {
+      const started = await notesCreate(cid, f);
+      st.focus.set("");
+      return started;
+    });
   } catch (e) {
-    st.making.set(false);
-    st.err.set(errText(e));
-    // A list read it took the place of is not coming: the list is as it was.
-    st.loaded.set(true);
+    out = { why: errText(e) };
+  }
+  st.mk.asked--;
+  // Read back as the newest list: it says whether anything is still being made.
+  await loadNotes(cid, st);
+  st.loaded.set(true);
+  if ("why" in out) {
+    st.err.set(out.why);
     return null;
   }
+  return out.id;
 }
 
 /** The newest notes made from exactly `sources` with no focus: the ones that

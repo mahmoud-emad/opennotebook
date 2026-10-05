@@ -18,7 +18,7 @@ from opennotebook.config import settings
 from opennotebook.db.models import Collection, Share
 from opennotebook.db.session import engine, sessionmaker
 from opennotebook.domain import collections, shares
-from opennotebook.domain.shares import NOTE_MAX, Card, Holdings, Key, Live, Out, Plan
+from opennotebook.domain.shares import NOTE_MAX, Holdings, Key, Live, Out, Plan
 from opennotebook.errors import Problem
 from tests.conftest import other_person
 from tests.model import install, says
@@ -91,45 +91,105 @@ def test_keys_read_back_as_they_were_written() -> None:
 # ── the feed ──────────────────────────────────────────────────────────────────
 
 
-def card(
-    n: int, title: str, note: str, terms: list[str], reuses: int, updated: int, **counts: int
-) -> Card:
-    return Card(
-        id=uuid.UUID(int=n),
-        collection_id=uuid.UUID(int=n),
-        owner_id=uuid.UUID(int=0),
-        shared_by="",
-        title=title,
-        note=note,
-        cover_version="",
-        terms=terms,
-        reuses=reuses,
-        allow_edits=False,
-        created_at=T0,
-        updated_at=T0 + timedelta(seconds=updated),
-        **counts,
-    )
+async def _feed(client: AsyncClient, **params: Any) -> list[str]:
+    r = await client.get("/api/shares", params=params)
+    assert r.status_code == 200, r.text
+    return [c["title"] for c in r.json()]
 
 
-def ids(cards: list[Card]) -> list[int]:
-    return [c.id.int for c in cards]
+async def test_the_feed_sorts_newest_or_most_reused_and_searches_every_field(
+    client: AsyncClient,
+) -> None:
+    """Searched, sorted and paged in the database, as the feed always matched:
+    the title, the note, and the cover as its owner sees it."""
+    them = await other_person(client, "rust@example.org")
+    made: dict[str, str] = {}
+    for title, note, h, body in (
+        ("Linux Kernel", "", None, "Kernels schedule processes across the cores of a machine."),
+        ("Speech", "about MOSHI", None, "Speech models listen and answer at the same time."),
+        ("Rust", "", them, "Rust checks ownership and borrowing when it compiles."),
+        ("Pools", "", None, "Tide pools hold anemones, crabs and small fish at low tide."),
+    ):
+        cid = await _collection(client, title, h)
+        await _note(client, cid, body, h)
+        r = await client.post(
+            f"/api/collections/{cid}/shares",
+            json={"include_sources": True, "note": note},
+            headers=h,
+        )
+        assert r.status_code == 200, r.text
+        made[title] = cid
+    async with engine().begin() as c:
+        for title, reuses, at in (
+            ("Linux Kernel", 5, 100),
+            ("Speech", 1, 300),
+            ("Rust", 5, 200),
+            ("Pools", 0, 50),
+        ):
+            await c.execute(
+                text("UPDATE shares SET reuses = :r, updated_at = :at WHERE collection_id = :c"),
+                {"r": reuses, "at": T0 + timedelta(seconds=at), "c": made[title]},
+            )
+        cover = {
+            "topic": "Ownership",
+            "terms": ["Borrowing"],
+            "motif": "",
+            "palette": "",
+            "layout": "",
+        }
+        await c.execute(
+            text("UPDATE collections SET cover = CAST(:v AS jsonb) WHERE id = :c"),
+            {"v": json.dumps(cover), "c": made["Rust"]},
+        )
+        await c.execute(
+            text("UPDATE sources SET title = 'Lifetimes and borrowing' WHERE collection_id = :c"),
+            {"c": made["Rust"]},
+        )
+        # Untitled, with a source whose title has odd spacing: its cover is
+        # drawn from "Untitled collection" and that title.
+        await c.execute(
+            text("UPDATE collections SET title = '', title_auto = false WHERE id = :c"),
+            {"c": made["Pools"]},
+        )
+        await c.execute(
+            text("UPDATE sources SET title = 'Tidal   pools at dawn' WHERE collection_id = :c"),
+            {"c": made["Pools"]},
+        )
 
+    assert await _feed(client) == ["Speech", "Rust", "Linux Kernel", ""], "newest by default"
+    assert await _feed(client, sort="reused") == ["Rust", "Linux Kernel", "Speech", ""]
+    assert await _feed(client, query="linux") == ["Linux Kernel"], "title"
+    assert await _feed(client, query="moshi") == ["Speech"], "note, any case"
+    assert await _feed(client, query="ownership") == ["Rust"], "the designed cover's topic"
+    assert await _feed(client, query=" BORROW ") == ["Rust"], "the designed cover's terms"
+    assert await _feed(client, query="untitled") == [""], "an untitled one's cover topic"
+    assert await _feed(client, query="tidal pools") == [""], "a cover not designed: its sources"
+    assert await _feed(client, query="nothing") == []
+    assert await _feed(client, query="%") == [], "searched for as it is, not as a pattern"
+    assert await _feed(client, query="lifetimes") == [], "a designed cover hides its sources"
 
-def test_the_feed_sorts_newest_or_most_reused_and_searches_every_field() -> None:
-    def entries() -> list[tuple[Card, str]]:
-        return [
-            (card(1, "Linux Kernel", "", [], 5, 100), "Kernels"),
-            (card(2, "Speech", "about MOSHI", [], 1, 300), ""),
-            (card(3, "Rust", "", ["Borrowing"], 5, 200), "Ownership"),
-        ]
+    # With the owner's covers off, the designed cover is not what is shown,
+    # so it is not what is searched either.
+    async with engine().begin() as c:
+        await c.execute(
+            text(
+                "INSERT INTO user_settings (owner_id, key, value) SELECT owner_id,"
+                " 'OPENNOTEBOOK_COVERS', 'off' FROM collections WHERE id = :c"
+            ),
+            {"c": made["Rust"]},
+        )
+    assert await _feed(client, query="ownership") == []
+    assert await _feed(client, query="lifetimes") == ["Rust"], "now its sources' titles"
 
-    assert ids(shares.feed(entries(), "", "newest")) == [2, 3, 1], "newest by default"
-    assert ids(shares.feed(entries(), "", "reused")) == [3, 1, 2], "most reused, then newest"
-    assert ids(shares.feed(entries(), "linux", "newest")) == [1], "title"
-    assert ids(shares.feed(entries(), "moshi", "newest")) == [2], "note, any case"
-    assert ids(shares.feed(entries(), "ownership", "newest")) == [3], "cover topic"
-    assert ids(shares.feed(entries(), " BORROW ", "newest")) == [3], "cover terms"
-    assert shares.feed(entries(), "nothing", "newest") == []
+    # A page at a time, each saying where the next starts.
+    r = await client.get("/api/shares", params={"limit": 2})
+    assert [c["title"] for c in r.json()] == ["Speech", "Rust"]
+    assert r.headers["x-next-offset"] == "2"
+    r = await client.get("/api/shares", params={"limit": 2, "offset": 2})
+    assert [c["title"] for c in r.json()] == ["Linux Kernel", ""]
+    assert "x-next-offset" not in r.headers
+    for bad in ({"limit": 0}, {"limit": shares.FEED_MAX + 1}, {"offset": -1}):
+        assert (await client.get("/api/shares", params=bad)).status_code == 422
 
 
 def live() -> Live:

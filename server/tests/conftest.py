@@ -2,7 +2,7 @@
 migrated from empty at the start of the run and emptied after every test."""
 
 import os
-from collections.abc import AsyncIterator, Mapping
+from collections.abc import AsyncIterator, Iterator, Mapping
 from typing import Any
 
 import pytest
@@ -36,7 +36,8 @@ def migrated() -> None:
     cfg = Config(os.path.join(HERE, "..", "alembic.ini"))
     cfg.set_main_option("sqlalchemy.url", settings().sqlalchemy_url)
     command.downgrade(cfg, "base")
-    command.upgrade(cfg, "head")
+    # `heads`: work on separate branches can each add a revision of its own.
+    command.upgrade(cfg, "heads")
 
 
 @pytest.fixture(autouse=True)
@@ -68,6 +69,7 @@ def no_internet_voices(monkeypatch: pytest.MonkeyPatch) -> None:
     for them without a fake of its own fails at once instead of calling out."""
     import httpx
 
+    from opennotebook import speech
     from opennotebook.speech import microsoft
 
     async def offline(text: str, voice: str) -> AsyncIterator[Mapping[str, Any]]:
@@ -81,6 +83,22 @@ def no_internet_voices(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         microsoft, "new_http", lambda: httpx.AsyncClient(transport=httpx.MockTransport(down))
     )
+    # The kept clients are made afresh in each test, from its own stand-ins.
+    microsoft.azure_http.cache_clear()
+    speech.shared_http.cache_clear()
+
+
+@pytest.fixture(autouse=True)
+def settings_read_fresh(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    """Tests write settings straight into their tables, so unless a test says
+    otherwise every read goes to the database, as the worker's would after
+    `CACHE_SECONDS`; the tests of the cache turn it on."""
+    from opennotebook.domain import settings as st
+
+    monkeypatch.setattr(st, "CACHE_SECONDS", 0.0)
+    st.forget()
+    yield
+    st.forget()
 
 
 @pytest.fixture(autouse=True)

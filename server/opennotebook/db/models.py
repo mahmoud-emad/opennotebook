@@ -235,6 +235,7 @@ class Source(Base):
     __table_args__ = (
         UniqueConstraint("collection_id", "name"),
         CheckConstraint("kind IN ('url', 'text', 'file', 'research')", name="kind"),
+        Index("ix_sources_collection_created", "collection_id", "created_at"),
     )
 
     id: Mapped[uuid.UUID] = _id()
@@ -261,6 +262,14 @@ class Session(Base):
         CheckConstraint("kind IN ('slides', 'audio')", name="kind"),
         CheckConstraint("state IN ('preparing', 'ready', 'failed')", name="state"),
         Index("ix_sessions_collection_created", "collection_id", "created_at"),
+        Index("ix_sessions_owner_created", "owner_id", "created_at"),
+        # Only the outputs still being made: what a collection's busy count
+        # and its progress read.
+        Index(
+            "ix_sessions_preparing",
+            "collection_id",
+            postgresql_where=text("state = 'preparing'"),
+        ),
     )
 
     id: Mapped[uuid.UUID] = _id()
@@ -311,7 +320,10 @@ class Playback(Base):
 
 class MindMap(Base):
     __tablename__ = "mindmaps"
-    __table_args__ = (Index("ix_mindmaps_collection_created", "collection_id", "created_at"),)
+    __table_args__ = (
+        Index("ix_mindmaps_collection_created", "collection_id", "created_at"),
+        CheckConstraint("state IN ('making', 'ready')", name="state"),
+    )
 
     id: Mapped[uuid.UUID] = _id()
     owner_id: Mapped[uuid.UUID] = _owner()
@@ -331,12 +343,21 @@ class MindMap(Base):
     # How many subtopics each main topic has: the outline, for a cover.
     shape: Mapped[list[int]] = mapped_column(ARRAY(Integer), server_default="{}")
     root: Mapped[dict[str, Any]] = mapped_column(JSONB)
+    # `making` while its job writes it, then `ready`. One whose making fails
+    # is removed; its job says why.
+    state: Mapped[str] = mapped_column(Text, server_default="ready")
+    # The job that makes it. A plain column, not a foreign key: old jobs are
+    # pruned, and the map stays.
+    job_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
     created_at: Mapped[datetime] = _now()
 
 
 class StudyNotes(Base):
     __tablename__ = "study_notes"
-    __table_args__ = (Index("ix_study_notes_collection_created", "collection_id", "created_at"),)
+    __table_args__ = (
+        Index("ix_study_notes_collection_created", "collection_id", "created_at"),
+        CheckConstraint("state IN ('making', 'ready')", name="state"),
+    )
 
     id: Mapped[uuid.UUID] = _id()
     owner_id: Mapped[uuid.UUID] = _owner()
@@ -355,6 +376,9 @@ class StudyNotes(Base):
     # Overview, ideas, quiz, essays, glossary, citations and the Markdown
     # export, read and written whole.
     body: Mapped[dict[str, Any]] = mapped_column(JSONB)
+    # As a map's: `making` while its job writes it, then `ready`.
+    state: Mapped[str] = mapped_column(Text, server_default="ready")
+    job_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
     created_at: Mapped[datetime] = _now()
 
 
@@ -400,6 +424,8 @@ class Share(Base):
     __table_args__ = (
         UniqueConstraint("collection_id"),
         Index("ix_shares_updated", "updated_at"),
+        # Discover's "most reused" order.
+        Index("ix_shares_reuses", "reuses", "updated_at", "id"),
     )
 
     id: Mapped[uuid.UUID] = _id()
@@ -493,6 +519,16 @@ class Job(Base):
         CheckConstraint(
             "status IN ('queued', 'running', 'done', 'failed', 'cancelled')", name="status"
         ),
+        # An output's newest job.
+        Index("ix_jobs_session_created", "session_id", "created_at"),
+        # The row of a queue job, when the worker recovers or fails it.
+        Index(
+            "ix_jobs_procrastinate_job_id",
+            "procrastinate_job_id",
+            postgresql_where=text("procrastinate_job_id IS NOT NULL"),
+        ),
+        # Finished rows, for the prune that removes old ones.
+        Index("ix_jobs_finished", "finished_at", postgresql_where=text("finished_at IS NOT NULL")),
     )
 
     id: Mapped[uuid.UUID] = _id()
@@ -501,7 +537,7 @@ class Job(Base):
         UUID(as_uuid=True), ForeignKey("collections.id", ondelete="CASCADE"), index=True
     )
     session_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("sessions.id", ondelete="CASCADE"), index=True
+        UUID(as_uuid=True), ForeignKey("sessions.id", ondelete="CASCADE")
     )
     kind: Mapped[str] = mapped_column(Text)
     status: Mapped[str] = mapped_column(Text, server_default="queued")

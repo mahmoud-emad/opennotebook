@@ -41,20 +41,28 @@ from sqlalchemy import (
     ColumnElement,
     Insert,
     Integer,
+    Select,
     Text,
-    any_,
+    and_,
+    case,
     cast,
+    column,
     event,
     func,
     insert,
     literal,
     or_,
     select,
+    text,
+    true,
     union_all,
     update,
+    values,
 )
+from sqlalchemy.dialects.postgresql import UUID as PgUUID
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.orm import DeclarativeBase, defer
+from sqlalchemy.sql.elements import TextClause
 
 from opennotebook import cover, storage
 from opennotebook.db.models import (
@@ -68,7 +76,6 @@ from opennotebook.db.models import (
     Source,
     StudyNotes,
     User,
-    UserSetting,
 )
 from opennotebook.domain import collections, covers
 from opennotebook.domain import settings as st
@@ -225,7 +232,7 @@ async def live(s: AsyncSession, cids: list[uuid.UUID]) -> dict[uuid.UUID, Live]:
         )
     maps = await s.execute(
         select(MindMap.collection_id, MindMap.id, MindMap.title, MindMap.created_at).where(
-            MindMap.collection_id.in_(cids)
+            MindMap.collection_id.in_(cids), MindMap.state == "ready"
         )
     )
     for cid, id_, title, at in maps:
@@ -233,7 +240,7 @@ async def live(s: AsyncSession, cids: list[uuid.UUID]) -> dict[uuid.UUID, Live]:
     notes = await s.execute(
         select(
             StudyNotes.collection_id, StudyNotes.id, StudyNotes.title, StudyNotes.created_at
-        ).where(StudyNotes.collection_id.in_(cids))
+        ).where(StudyNotes.collection_id.in_(cids), StudyNotes.state == "ready")
     )
     for cid, id_, title, at in notes:
         out[cid].notes[id_] = Out("notes", id_, title, at)
@@ -321,28 +328,106 @@ def card(
 
 Sort = Literal["newest", "reused"]
 
+# The most cards one page of the feed holds, and how many it holds unless
+# asked for fewer.
+FEED_MAX = 200
+FEED_DEFAULT = 100
 
-def matches(q: str, texts: Sequence[str]) -> bool:
-    """Whether a search, already trimmed and lowered, is a substring of any of
-    `texts`, in any case. An empty search matches everything."""
-    return not q or any(q in t.lower() for t in texts)
+# Whether a share matches a search, in the database: the search, trimmed and
+# lowered (`:needle`), is a substring of the collection's title, the share's
+# note, or the cover's topic or terms, the cover as its owner sees it. While
+# the owner's covers are on and one is designed, that is the designed topic
+# and terms; otherwise the title (or `Untitled collection`) and the titles of
+# its first sources by name, which is what a cover not designed yet is drawn
+# from. `strpos` rather than `LIKE`, so `%` and `_` are searched for as they
+# are. `:covers_env` is the operator's override of the covers setting, empty
+# when none; `:covers_default` what applies to a person with no row of their
+# own.
+_COVERS_ON = """(CASE WHEN :covers_env <> '' THEN :covers_env <> 'off'
+  ELSE coalesce(nullif(btrim((SELECT u.value FROM user_settings u
+    WHERE u.owner_id = shares.owner_id AND u.key = :covers_key AND :covers_user)), ''),
+    :covers_default) <> 'off' END)"""
+_DESIGNED = f"({_COVERS_ON} AND jsonb_typeof(collections.cover -> 'topic') = 'string')"
+SEARCH = text(
+    f"""(strpos(lower(collections.title), :needle) > 0
+  OR strpos(lower(shares.note), :needle) > 0
+  OR strpos(lower(CASE WHEN {_DESIGNED} THEN collections.cover ->> 'topic'
+    ELSE coalesce(nullif(regexp_replace(btrim(collections.title), '\\s+', ' ', 'g'), ''),
+      'Untitled collection') END), :needle) > 0
+  OR (CASE WHEN {_DESIGNED} THEN EXISTS (
+      SELECT 1 FROM jsonb_array_elements(CASE
+        WHEN jsonb_typeof(collections.cover -> 'terms') = 'array'
+        THEN collections.cover -> 'terms' ELSE '[]'::jsonb END) AS term
+      WHERE jsonb_typeof(term) = 'string' AND strpos(lower(term #>> '{{}}'), :needle) > 0)
+    ELSE EXISTS (
+      SELECT 1 FROM (SELECT f.title FROM sources f WHERE f.collection_id = collections.id
+        ORDER BY f.name COLLATE "C" LIMIT {cover.TERMS_MAX}) AS firsts
+      WHERE strpos(lower(regexp_replace(firsts.title, '\\s+', ' ', 'g')), :needle) > 0)
+    END))"""
+)
 
 
-def feed(entries: list[tuple[Card, str]], query: str, sort: Sort) -> list[Card]:
-    """The feed: the cards a search matches, newest share first, or most reused
-    first with newest breaking the tie. The search is a case-insensitive
-    substring of the title, the note, or the cover's topic or terms."""
-    q = query.strip().lower()
-    cards = [c for c, topic in entries if matches(q, [c.title, c.note, topic, *c.terms])]
+async def search(s: AsyncSession, query: str) -> TextClause | None:
+    """`SEARCH` for a search as a person typed it, ready to filter a query
+    that joins `shares` and `collections`; None when it is empty and every
+    share matches."""
+    needle = query.strip().lower()
+    if not needle:
+        return None
+    key = st.COVERS_KEY
+    d = st.find(key)
+    shared = await s.scalar(select(InstanceSetting.value).where(InstanceSetting.key == key))
+    return SEARCH.bindparams(
+        needle=needle,
+        covers_key=key,
+        covers_env=st.from_env(key),
+        covers_user=d is None or d.scope == "user",
+        covers_default=(shared or "").strip() or (d.default if d else ""),
+    )
 
-    def newest(c: Card) -> tuple[datetime, uuid.UUID]:
-        return (c.updated_at, c.id)
 
-    if sort == "reused":
-        cards.sort(key=lambda c: (c.reuses, *newest(c)), reverse=True)
-    else:
-        cards.sort(key=newest, reverse=True)
-    return cards
+def _visible() -> Select[uuid.UUID]:
+    """The ids of the shares of people whose account is on, with their
+    collections joined, for a search to filter."""
+    return (
+        select(Share.id)
+        .join(User, User.id == Share.owner_id)
+        .join(Collection, Collection.id == Share.collection_id)
+        .where(User.disabled_at.is_(None))
+    )
+
+
+@dataclass
+class Feed:
+    """One page of the feed, and where the next starts; None on the last."""
+
+    cards: list[Card]
+    next_offset: int | None
+
+
+async def feed(
+    s: AsyncSession,
+    query: str,
+    sort: Sort,
+    limit: int = FEED_DEFAULT,
+    offset: int = 0,
+) -> Feed:
+    """One page of the feed: the cards a search matches, newest share first,
+    or most reused first with newest breaking the tie. Searched, sorted and
+    cut to the page in the database; only the page's cards are then read in
+    full, in a handful of queries whatever their number."""
+    limit = max(1, min(limit, FEED_MAX))
+    offset = max(0, offset)
+    q = _visible()
+    if (matched := await search(s, query)) is not None:
+        q = q.where(matched)
+    newest = (Share.updated_at.desc(), Share.id.desc())
+    q = q.order_by(Share.reuses.desc(), *newest) if sort == "reused" else q.order_by(*newest)
+    ids = list(await s.scalars(q.limit(limit + 1).offset(offset)))
+    more = len(ids) > limit
+    ids = ids[:limit]
+    found = {c.id: c for c in await entries(s, ids)}
+    return Feed([found[i] for i in ids if i in found], offset + limit if more else None)
 
 
 async def _source_titles(s: AsyncSession, cids: list[uuid.UUID]) -> dict[uuid.UUID, list[str]]:
@@ -372,26 +457,24 @@ async def _source_titles(s: AsyncSession, cids: list[uuid.UUID]) -> dict[uuid.UU
     return out
 
 
-async def entries(s: AsyncSession, share_id: uuid.UUID | None = None) -> list[tuple[Card, str]]:
-    """Every share of a person whose account is on (or the one asked for), as
-    feed entries: its card and its cover's topic, which a search reads but the
-    card does not carry."""
-    q = (
-        select(Share, User.display_name)
-        .join(User, User.id == Share.owner_id)
-        .where(User.disabled_at.is_(None))
+async def entries(s: AsyncSession, share_ids: list[uuid.UUID]) -> list[Card]:
+    """The cards of the shares asked for, of people whose account is on, in
+    a handful of queries however many there are."""
+    if not share_ids:
+        return []
+    rows = list(
+        await s.execute(
+            select(Share, User.display_name)
+            .join(User, User.id == Share.owner_id)
+            .where(User.disabled_at.is_(None), Share.id.in_(share_ids))
+        )
     )
-    if share_id is not None:
-        q = q.where(Share.id == share_id)
-    rows = list(await s.execute(q))
     cids = [sh.collection_id for sh, _ in rows]
     summaries = await collections.of_anyone(s, cids)
     held = await live(s, cids)
     titles = await _source_titles(s, cids)
-    covers_on = {
-        o: st.is_on(await st.value(s, o, st.COVERS_KEY)) for o in {sh.owner_id for sh, _ in rows}
-    }
-    out: list[tuple[Card, str]] = []
+    covers_on = await covers_on_of(s, {sh.owner_id for sh, _ in rows})
+    out: list[Card] = []
     for sh, name in rows:
         summary = summaries.get(sh.collection_id)
         if summary is None:
@@ -399,12 +482,7 @@ async def entries(s: AsyncSession, share_id: uuid.UUID | None = None) -> list[tu
         spec = covers.cover_spec(
             summary.collection, covers_on[sh.owner_id], titles[sh.collection_id]
         )
-        out.append(
-            (
-                card(sh, name, summary, included(sh.outputs, held[sh.collection_id]), spec),
-                spec.topic,
-            )
-        )
+        out.append(card(sh, name, summary, included(sh.outputs, held[sh.collection_id]), spec))
     return out
 
 
@@ -420,10 +498,10 @@ class View:
 
 
 async def view(s: AsyncSession, share_id: uuid.UUID) -> View:
-    found = await entries(s, share_id)
+    found = await entries(s, [share_id])
     if not found:
         raise gone()
-    c = found[0][0]
+    c = found[0]
     share = await s.get(Share, share_id)
     assert share is not None
     srcs = await shared_sources(s, share)
@@ -436,8 +514,11 @@ async def shared_sources(s: AsyncSession, share: Share) -> list[Source]:
     added."""
     if not share.include_sources:
         return []
+    # Without their text, which the share's page never shows and which can be
+    # megabytes each.
     rows = await s.scalars(
         select(Source)
+        .options(defer(Source.text, raiseload=True))
         .where(Source.collection_id == share.collection_id)
         .order_by(Source.created_at, Source.name)
     )
@@ -524,47 +605,32 @@ class Items:
 async def covers_on_of(s: AsyncSession, owners: set[uuid.UUID]) -> dict[uuid.UUID, bool]:
     """Whether each person's covers are designed, in two queries whatever their
     number, by the rule a single setting is read by."""
-    if not owners:
-        return {}
-    key = st.COVERS_KEY
-    mine = await s.execute(
-        select(UserSetting.owner_id, UserSetting.value).where(
-            UserSetting.owner_id.in_(owners), UserSetting.key == key
+    return {o: st.is_on(v) for o, v in (await st.value_of_each(s, owners, st.COVERS_KEY)).items()}
+
+
+def _included(kind: OutputKind | None) -> Any:
+    """Every output a share includes that is there and ready, of the kind
+    asked for (all four when none), with its share: each share's keys
+    unnested and each looked up by its id in its own table, so the work
+    grows with what is shared, not with everything everyone made."""
+    k = func.unnest(Share.outputs).table_valued("key").render_derived("k")
+    oid = func.split_part(k.c.key, ":", 2)
+    keys = (
+        select(
+            Share.id.label("share_id"),
+            Share.collection_id.label("collection_id"),
+            func.split_part(k.c.key, ":", 1).label("prefix"),
+            # A key whose id does not read as one names nothing, rather than
+            # failing the whole page.
+            case((func.pg_input_is_valid(oid, "uuid"), cast(oid, PgUUID(as_uuid=True)))).label(
+                "oid"
+            ),
+            k.c.key,
         )
+        .select_from(Share)
+        .join(k, true())
+        .subquery("keys")
     )
-    user = {o: v for o, v in mine}
-    shared = await s.execute(
-        select(InstanceSetting.key, InstanceSetting.value).where(InstanceSetting.key == key)
-    )
-    instance = {k: v for k, v in shared}
-    return {o: st.is_on(st.effective(key, {key: user.get(o, "")}, instance)) for o in owners}
-
-
-async def matching_shares(s: AsyncSession, q: str) -> list[uuid.UUID]:
-    """The shares of people whose account is on that a search, trimmed and
-    lowered, matches as the feed matches a card: in the collection's title,
-    the share's note, or the cover's topic or terms."""
-    rows = list(
-        await s.execute(
-            select(Share.id, Share.owner_id, Share.note, Collection)
-            .join(Collection, Collection.id == Share.collection_id)
-            .join(User, User.id == Share.owner_id)
-            .where(User.disabled_at.is_(None))
-        )
-    )
-    titles = await _source_titles(s, [c.id for *_, c in rows])
-    on = await covers_on_of(s, {owner for _, owner, _, _ in rows})
-    out: list[uuid.UUID] = []
-    for sid, owner, note, c in rows:
-        spec = covers.cover_spec(c, on[owner], titles[c.id])
-        if matches(q, [c.title, note, spec.topic, *spec.terms]):
-            out.append(sid)
-    return out
-
-
-def _outputs(kind: OutputKind | None) -> Any:
-    """Every ready output of the kind asked for (all four when none), each
-    with the key a share names it by, as one subquery."""
     parts: list[Any] = []
     for k in ("slides", "audio"):
         if kind in (None, k):
@@ -576,9 +642,18 @@ def _outputs(kind: OutputKind | None) -> Any:
                     cast(func.jsonb_array_length(Session.slides), Integer).label("parts"),
                     Session.duration_ms.label("duration_ms"),
                     Session.created_at.label("created_at"),
-                    Session.collection_id.label("collection_id"),
-                    literal("session:", Text).concat(cast(Session.id, Text)).label("key"),
-                ).where(Session.kind == k, Session.state == "ready")
+                    keys.c.share_id,
+                    keys.c.key,
+                )
+                .select_from(keys)
+                .join(
+                    Session,
+                    and_(
+                        Session.id == keys.c.oid,
+                        Session.collection_id == keys.c.collection_id,
+                    ),
+                )
+                .where(keys.c.prefix == "session", Session.kind == k, Session.state == "ready")
             )
     for k, model in (("mindmap", MindMap), ("notes", StudyNotes)):
         if kind in (None, k):
@@ -590,9 +665,15 @@ def _outputs(kind: OutputKind | None) -> Any:
                     literal(0, Integer).label("parts"),
                     literal(0, BigInteger).label("duration_ms"),
                     model.created_at.label("created_at"),
-                    model.collection_id.label("collection_id"),
-                    literal(f"{k}:", Text).concat(cast(model.id, Text)).label("key"),
+                    keys.c.share_id,
+                    keys.c.key,
                 )
+                .select_from(keys)
+                .join(
+                    model,
+                    and_(model.id == keys.c.oid, model.collection_id == keys.c.collection_id),
+                )
+                .where(keys.c.prefix == k, model.state == "ready")
             )
     return (parts[0] if len(parts) == 1 else union_all(*parts)).subquery("o")
 
@@ -614,31 +695,37 @@ async def items(
     share includes and is there and ready, only shares of people whose account
     is on. A search matches an item by its own title, or by its share as the
     feed matches a card. Newest made first, or the most reused share's first
-    with newest breaking the tie. A handful of queries whatever the page."""
+    with newest breaking the tie. Searched, sorted and cut to the page in the
+    database, in a handful of queries whatever the page."""
     limit = max(1, min(limit, ITEMS_MAX))
     offset = max(0, offset)
-    o = _outputs(kind)
+    o = _included(kind)
     q = (
         select(
-            o,
+            o.c.kind,
+            o.c.id,
+            o.c.title,
+            o.c.parts,
+            o.c.duration_ms,
+            o.c.created_at,
             Share.id,
             Share.owner_id,
             Share.reuses,
             Collection,
             User.display_name,
         )
-        .join(Share, Share.collection_id == o.c.collection_id)
+        .select_from(o)
+        .join(Share, Share.id == o.c.share_id)
         .join(Collection, Collection.id == Share.collection_id)
         .join(User, User.id == Share.owner_id)
-        .where(User.disabled_at.is_(None), o.c.key == any_(Share.outputs))
+        .where(User.disabled_at.is_(None))
     )
-    if needle := query.strip().lower():
-        q = q.where(
-            or_(
-                func.strpos(func.lower(o.c.title), needle) > 0,
-                Share.id.in_(await matching_shares(s, needle)),
-            )
-        )
+    if (matched := await search(s, query)) is not None:
+        needle = query.strip().lower()
+        # The shares a search matches, found once each rather than once per
+        # item: its own `shares` and `collections`, not the outer query's.
+        shared = _visible().where(matched).correlate(None)
+        q = q.where(or_(func.strpos(func.lower(o.c.title), needle) > 0, Share.id.in_(shared)))
     newest = (o.c.created_at.desc(), o.c.id.desc())
     q = q.order_by(Share.reuses.desc(), *newest) if sort == "reused" else q.order_by(*newest)
     rows: list[Any] = list(await s.execute(q.limit(limit + 1).offset(offset)))
@@ -656,7 +743,7 @@ async def items(
             names[cid] = sorted(ns)
     on = await covers_on_of(s, {owner for *_, owner, _, _, _ in rows})
     out: list[Item] = []
-    for k, id_, title, n, ms, at, _cid, _key, sid, owner, reuses, c, name in rows:
+    for k, id_, title, n, ms, at, sid, owner, reuses, c, name in rows:
         out.append(
             Item(
                 out=Out(cast_kind(k), id_, title, at, n, ms),
@@ -679,7 +766,7 @@ async def items(
 
 async def of_collection(s: AsyncSession, owner: uuid.UUID, cid: uuid.UUID) -> Share | None:
     """The share of one of the owner's collections, if it has one."""
-    await collections.summary(s, owner, cid)
+    await collections.owned(s, owner, cid)
     return await s.scalar(select(Share).where(Share.collection_id == cid, Share.owner_id == owner))
 
 
@@ -824,13 +911,43 @@ def _columns(row: DeclarativeBase, *skip: str) -> dict[str, Any]:
     }
 
 
-def _copy_rows(model: type[Chunk | QaPair], match: ColumnElement[bool], **over: Any) -> Insert:
+def _copy_rows(
+    model: type[Chunk | QaPair | MindMap | StudyNotes], match: ColumnElement[bool], **over: Any
+) -> Insert:
     """`INSERT … SELECT` of the rows `match` finds, with the columns in `over`
     set to new values and fresh ids."""
     table: Any = model.__table__
     cols = [c for c in table.columns if c.key != "id" and c.computed is None]
     exprs = [literal(over[c.key], c.type).label(c.key) if c.key in over else c for c in cols]
     return insert(table).from_select([c.name for c in cols], select(*exprs).where(match))
+
+
+def _id_map(pairs: dict[uuid.UUID, uuid.UUID]) -> Any:
+    """Old ids and the new ids that replace them, as a table to join on."""
+    return (
+        values(column("old", PgUUID(as_uuid=True)), column("new", PgUUID(as_uuid=True)), name="m")
+        .data(list(pairs.items()))
+        .alias("m")
+    )
+
+
+def _copy_mapped(model: type[Source | Chunk | QaPair], ids: Any, on: str, **over: Any) -> Insert:
+    """`INSERT … SELECT` of the rows whose `on` column holds one of the old
+    ids in `ids`, each with `on` set to the new id it maps to and the columns
+    in `over` set to new values. A row keyed on its own `id` takes the new id
+    as its own; any other takes a fresh one. One statement however many rows."""
+    table: Any = model.__table__
+    cols = [c for c in table.columns if c.computed is None and (c.key != "id" or on == "id")]
+
+    def expr(c: Any) -> Any:
+        if c.key == on:
+            return ids.c.new.label(c.key)
+        if c.key in over:
+            return literal(over[c.key], c.type).label(c.key)
+        return c
+
+    picked = select(*map(expr, cols)).join_from(table, ids, table.c[on] == ids.c.old)
+    return insert(table).from_select([c.name for c in cols], picked)
 
 
 def rewrite(old: Session, sid: uuid.UUID, owner: uuid.UUID, cid: uuid.UUID) -> Session:
@@ -915,47 +1032,43 @@ async def reuse(s: AsyncSession, me: uuid.UUID, share_id: uuid.UUID) -> Collecti
         [f"uploads/{copy.id}", *(f"{d}/{sid}" for sid in sids.values() for d in OUTPUT_DIRS)],
     )
 
-    for old_id in plan.sources:
-        src = await s.get(Source, old_id)
-        assert src is not None
-        new = Source(
-            owner_id=me,
-            collection_id=copy.id,
-            **_columns(src, "owner_id", "collection_id", "file_path"),
-        )
-        s.add(new)
-        await s.flush()
-        if src.file_path and storage.exists(src.file_path):
-            new.file_path = storage.copy_new(
-                src.file_path, f"uploads/{copy.id}/{new.id}{PurePosixPath(src.file_path).suffix}"
-            )
-        # The passages and their vectors come along, so the copy is searched
-        # and asked like the original without a model call.
+    # Every source, its passages and their vectors in three statements,
+    # whatever their number: the copy is searched and asked like the
+    # original without a model call. New ids are chosen here, so the
+    # passages can point at their copied source in the same statements.
+    srcs = {old: uuid.uuid7() for old in plan.sources}
+    if srcs:
+        ids = _id_map(srcs)
+        mine = {"owner_id": me, "collection_id": copy.id}
+        await s.execute(_copy_mapped(Source, ids, "id", file_path=None, **mine))
         for model in (Chunk, QaPair):
-            await s.execute(
-                _copy_rows(
-                    model,
-                    model.source_id == src.id,
-                    owner_id=me,
-                    collection_id=copy.id,
-                    source_id=new.id,
-                )
+            await s.execute(_copy_mapped(model, ids, "source_id", **mine))
+        # The original uploads, for the few sources that have one.
+        files = await s.execute(
+            select(Source.id, Source.file_path).where(
+                Source.id.in_(list(srcs)), Source.file_path.is_not(None)
             )
+        )
+        for old_id, path in files:
+            if path and storage.exists(path):
+                new = srcs[old_id]
+                kept = storage.copy_new(
+                    path, f"uploads/{copy.id}/{new}{PurePosixPath(path).suffix}"
+                )
+                await s.execute(update(Source).where(Source.id == new).values(file_path=kept))
 
+    olds = {o.id: o for o in await s.scalars(select(Session).where(Session.id.in_(list(sids))))}
     for old_id, sid in sids.items():
-        old = await s.get(Session, old_id)
-        assert old is not None
+        old = olds[old_id]
         for d in OUTPUT_DIRS:
             storage.copy_tree(f"{d}/{old_id}", f"{d}/{sid}")
         s.add(rewrite(old, sid, me, copy.id))
 
-    for model, ids in ((MindMap, plan.maps), (StudyNotes, plan.notes)):
-        for old_id in ids:
-            row = await s.get(model, old_id)
-            assert row is not None
-            s.add(
-                model(
-                    owner_id=me, collection_id=copy.id, **_columns(row, "owner_id", "collection_id")
+    for model, ids_ in ((MindMap, plan.maps), (StudyNotes, plan.notes)):
+        if ids_:
+            await s.execute(
+                _copy_rows(
+                    model, model.id.in_(ids_), owner_id=me, collection_id=copy.id, job_id=None
                 )
             )
     await s.flush()

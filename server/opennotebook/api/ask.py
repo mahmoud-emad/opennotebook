@@ -37,7 +37,7 @@ async def ask_sources(cid: uuid.UUID, body: AskReq, s: Db, me: Me) -> AskOut:
     question = body.question.strip()
     if not question:
         raise Problem(422, "The question is empty. Write a question, then ask again.")
-    await collections.summary(s, me.id, cid)
+    await collections.owned(s, me.id, cid)
     docs = await reading.read_docs(s, me.id, cid, body.sources)
     model = await config.value(s, me.id, config.CHAT_MODEL_KEY)
     rule = config.language_rule(await config.value(s, me.id, config.LANGUAGE_KEY))

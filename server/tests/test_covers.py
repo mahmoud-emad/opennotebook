@@ -529,13 +529,18 @@ async def test_what_a_cover_reads_is_the_ready_outputs_newest_first(client: Asyn
             ]
         )
     async with sessionmaker()() as s:
-        h = (await covers.gather(s, owner, [cid]))[cid]
+        h = (await covers.gather(s, owner, [cid], parts=True))[cid]
+        light = (await covers.gather(s, owner, [cid]))[cid]
     assert [(m.kind, m.title, m.parts) for m in h.made] == [
         ("Audio overview", "New talk", []),
         ("Narrated slides", "Old deck", ["Why"]),
         ("Mind map", "Map", ["A"]),
         ("Study notes", "Notes", ["One"]),
     ]
+    # Without the parts nothing but ids and titles is read, and the content
+    # key, which hashes only those, is the same.
+    assert all(m.parts == [] for m in light.made)
+    assert covers.content_key(light) == covers.content_key(h)
 
 
 # ── the routes ────────────────────────────────────────────────────────────────

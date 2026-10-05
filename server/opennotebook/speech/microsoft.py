@@ -19,6 +19,7 @@ only a few lines are read at once across the whole process.
 """
 
 import asyncio
+import functools
 import os
 import weakref
 from collections.abc import AsyncIterator, Awaitable, Callable, Mapping
@@ -231,6 +232,17 @@ def new_http() -> httpx.AsyncClient:
     return httpx.AsyncClient(timeout=httpx.Timeout(60, connect=10))
 
 
+@functools.cache
+def azure_http() -> httpx.AsyncClient:
+    """The one client the studio's Azure lines go through, made on first
+    use, so its connection to Azure is kept between lines rather than opened
+    (TLS and all) for each. Closed at shutdown (`speech.close_shared`).
+
+    Edge's voices are not shared this way: each line is a websocket of its
+    own, and the Edge client closes any connector it is handed."""
+    return new_http()
+
+
 def azure_ssml(text: str, voice: str) -> str:
     lang = ms.locale(voice)
     return (
@@ -260,6 +272,9 @@ class MicrosoftSpeech(speech.Speech):
     azure_region: str
     retry_delays: tuple[float, ...]
     _stream: EdgeStream | None
+    # The client Azure's lines go through when one is kept for them; else
+    # each line opens one of its own.
+    _azure_http: httpx.AsyncClient | None
 
     @classmethod
     def of(
@@ -270,6 +285,7 @@ class MicrosoftSpeech(speech.Speech):
         *,
         stream: EdgeStream | None = None,
         retry_delays: tuple[float, ...] = RETRY_DELAYS,
+        azure_http: httpx.AsyncClient | None = None,
     ) -> MicrosoftSpeech:
         e = os.environ if env is None else env
         out = cls.__new__(cls)
@@ -279,6 +295,9 @@ class MicrosoftSpeech(speech.Speech):
         out.azure_region = e.get(AZURE_REGION_KEY, "").strip().lower()
         out.retry_delays = retry_delays
         out._stream = stream
+        # Unless one is kept for Azure, the client `base` was made with, as
+        # before: a caller's own, or none.
+        out._azure_http = azure_http if azure_http is not None else base._http  # pyright: ignore[reportPrivateUsage]
         return out
 
     async def synthesize(self, text: str, voice: str) -> bytes:
@@ -350,7 +369,7 @@ class MicrosoftSpeech(speech.Speech):
             raise azure_unconfigured(AZURE_KEY_KEY)
         if not self.azure_region:
             raise azure_unconfigured(AZURE_REGION_KEY)
-        http = self._http or new_http()
+        http = self._azure_http or new_http()
         try:
             r = await http.post(
                 azure_url(self.azure_region),
@@ -365,7 +384,7 @@ class MicrosoftSpeech(speech.Speech):
         except httpx.HTTPError as e:
             raise _Again(azure_unreachable(self.azure_region, str(e) or type(e).__name__)) from e
         finally:
-            if self._http is None:
+            if self._azure_http is None:
                 await http.aclose()
         if r.status_code in (401, 403):
             raise azure_key_refused(r.status_code, self.azure_region)

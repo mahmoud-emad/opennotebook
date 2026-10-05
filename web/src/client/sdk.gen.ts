@@ -2,7 +2,7 @@
 
 import { type Client, type ClientMeta, formDataBodySerializer, type Options as Options2, type RequestResult, type ServerSentEventsResult, type TDataShape } from './client';
 import { client } from './client.gen';
-import type { AddFilesData, AddFilesErrors, AddFilesResponses, AddSourcesData, AddSourcesErrors, AddSourcesResponses, AskSourcesData, AskSourcesErrors, AskSourcesResponses, BuildData, BuildErrors, BuildResponses, ClearChatData, ClearChatErrors, ClearChatResponses, CollectionEventsData, CollectionEventsErrors, CollectionEventsResponses, CreateCollectionData, CreateCollectionErrors, CreateCollectionResponses, DeepResearchData, DeepResearchErrors, DeepResearchResponses, DeleteCollectionData, DeleteCollectionErrors, DeleteCollectionResponses, DeleteMindmapData, DeleteMindmapErrors, DeleteMindmapResponses, DeleteNotesData, DeleteNotesErrors, DeleteNotesResponses, DeleteSessionData, DeleteSessionErrors, DeleteSessionResponses, DeleteShareData, DeleteShareErrors, DeleteShareResponses, EpisodeData, EpisodeErrors, EpisodeResponses, EstimateData, EstimateErrors, EstimateMindmapData, EstimateMindmapErrors, EstimateMindmapResponses, EstimateNotesData, EstimateNotesErrors, EstimateNotesResponses, EstimateResponses, GetCollectionData, GetCollectionErrors, GetCollectionResponses, GetCollectionShareData, GetCollectionShareErrors, GetCollectionShareResponses, GetJobData, GetJobErrors, GetJobResponses, GetMindmapData, GetMindmapErrors, GetMindmapResponses, GetNotesData, GetNotesErrors, GetNotesResponses, GetPlaybackData, GetPlaybackErrors, GetPlaybackResponses, GetSessionData, GetSessionErrors, GetSessionResponses, GetSettingsData, GetSettingsResponses, GetShareData, GetShareErrors, GetShareResponses, GetStudioOptionsData, GetStudioOptionsErrors, GetStudioOptionsResponses, HealthData, HealthResponses, LineAudioData, LineAudioErrors, LineAudioResponses, ListCollectionsData, ListCollectionsResponses, ListCommandsData, ListCommandsResponses, ListKeysData, ListKeysResponses, ListMindmapsData, ListMindmapsErrors, ListMindmapsResponses, ListNotesData, ListNotesErrors, ListNotesResponses, ListSessionsData, ListSessionsResponses, ListSharedItemsData, ListSharedItemsErrors, ListSharedItemsResponses, ListSharesData, ListSharesErrors, ListSharesResponses, ListSourcesData, ListSourcesErrors, ListSourcesResponses, ListStylesData, ListStylesResponses, MakeKeyData, MakeKeyErrors, MakeKeyResponses, MakeMindmapData, MakeMindmapErrors, MakeMindmapResponses, MakeNotesData, MakeNotesErrors, MakeNotesResponses, MeData, MeResponses, ReadChatData, ReadChatErrors, ReadChatResponses, ReadCoverData, ReadCoverErrors, ReadCoverResponses, ReadShareCoverData, ReadShareCoverErrors, ReadShareCoverResponses, ReadSharedMindmapData, ReadSharedMindmapErrors, ReadSharedMindmapResponses, ReadSharedNotesData, ReadSharedNotesErrors, ReadSharedNotesResponses, ReadSharedSessionData, ReadSharedSessionErrors, ReadSharedSessionResponses, ReadSharedSourceData, ReadSharedSourceErrors, ReadSharedSourceResponses, ReadSourceData, ReadSourceErrors, ReadSourceResponses, ReadyData, ReadyErrors, ReadyResponses, RefreshCoverData, RefreshCoverErrors, RefreshCoverResponses, RemoveSourceData, RemoveSourceErrors, RemoveSourceResponses, RetitleMindmapData, RetitleMindmapErrors, RetitleMindmapResponses, RetitleNotesData, RetitleNotesErrors, RetitleNotesResponses, RetrySessionData, RetrySessionErrors, RetrySessionResponses, ReuseShareData, ReuseShareErrors, ReuseShareResponses, RevokeKeyData, RevokeKeyErrors, RevokeKeyResponses, RunCommandData, RunCommandErrors, RunCommandResponses, SayData, SayErrors, SayResponses, SessionEventsData, SessionEventsErrors, SessionEventsResponses, SetPlaybackData, SetPlaybackErrors, SetPlaybackResponses, SetSettingData, SetSettingErrors, SetSettingResponses, ShareCollectionData, ShareCollectionErrors, ShareCollectionResponses, SharedEpisodeData, SharedEpisodeErrors, SharedEpisodeResponses, SharedLineAudioData, SharedLineAudioErrors, SharedLineAudioResponses, SharedSlideData, SharedSlideErrors, SharedSlideResponses, SlideData, SlideErrors, SlideResponses, UpdateCollectionData, UpdateCollectionErrors, UpdateCollectionResponses, UpdateSessionData, UpdateSessionErrors, UpdateSessionResponses, UpdateShareData, UpdateShareErrors, UpdateShareResponses, VoiceAskData, VoiceAskErrors, VoiceAskResponses, WebSearchData, WebSearchErrors, WebSearchResponses } from './types.gen';
+import type { AddFilesData, AddFilesErrors, AddFilesResponses, AddSourcesData, AddSourcesErrors, AddSourcesResponses, AskSourcesData, AskSourcesErrors, AskSourcesResponses, BuildData, BuildErrors, BuildResponses, ClearChatData, ClearChatErrors, ClearChatResponses, CollectionEventsData, CollectionEventsErrors, CollectionEventsResponses, CreateCollectionData, CreateCollectionErrors, CreateCollectionResponses, DeepResearchData, DeepResearchErrors, DeepResearchResponses, DeleteCollectionData, DeleteCollectionErrors, DeleteCollectionResponses, DeleteMindmapData, DeleteMindmapErrors, DeleteMindmapResponses, DeleteNotesData, DeleteNotesErrors, DeleteNotesResponses, DeleteSessionData, DeleteSessionErrors, DeleteSessionResponses, DeleteShareData, DeleteShareErrors, DeleteShareResponses, EpisodeData, EpisodeErrors, EpisodeResponses, EstimateData, EstimateErrors, EstimateMindmapData, EstimateMindmapErrors, EstimateMindmapResponses, EstimateNotesData, EstimateNotesErrors, EstimateNotesResponses, EstimateResponses, GetCollectionData, GetCollectionErrors, GetCollectionResponses, GetCollectionShareData, GetCollectionShareErrors, GetCollectionShareResponses, GetJobData, GetJobErrors, GetJobResponses, GetMindmapData, GetMindmapErrors, GetMindmapResponses, GetNotesData, GetNotesErrors, GetNotesResponses, GetPlaybackData, GetPlaybackErrors, GetPlaybackResponses, GetSessionData, GetSessionErrors, GetSessionResponses, GetSettingsData, GetSettingsResponses, GetShareData, GetShareErrors, GetShareResponses, GetStudioOptionsData, GetStudioOptionsErrors, GetStudioOptionsResponses, HealthData, HealthResponses, LineAudioData, LineAudioErrors, LineAudioResponses, ListCollectionsData, ListCollectionsErrors, ListCollectionsResponses, ListCommandsData, ListCommandsResponses, ListKeysData, ListKeysErrors, ListKeysResponses, ListMindmapsData, ListMindmapsErrors, ListMindmapsResponses, ListNotesData, ListNotesErrors, ListNotesResponses, ListSessionsData, ListSessionsErrors, ListSessionsResponses, ListSharedItemsData, ListSharedItemsErrors, ListSharedItemsResponses, ListSharesData, ListSharesErrors, ListSharesResponses, ListSourcesData, ListSourcesErrors, ListSourcesResponses, ListStylesData, ListStylesResponses, MakeKeyData, MakeKeyErrors, MakeKeyResponses, MakeMindmapData, MakeMindmapErrors, MakeMindmapResponses, MakeNotesData, MakeNotesErrors, MakeNotesResponses, MeData, MeResponses, ReadChatData, ReadChatErrors, ReadChatResponses, ReadCoverData, ReadCoverErrors, ReadCoverResponses, ReadShareCoverData, ReadShareCoverErrors, ReadShareCoverResponses, ReadSharedMindmapData, ReadSharedMindmapErrors, ReadSharedMindmapResponses, ReadSharedNotesData, ReadSharedNotesErrors, ReadSharedNotesResponses, ReadSharedSessionData, ReadSharedSessionErrors, ReadSharedSessionResponses, ReadSharedSourceData, ReadSharedSourceErrors, ReadSharedSourceResponses, ReadSourceData, ReadSourceErrors, ReadSourceResponses, ReadyData, ReadyErrors, ReadyResponses, RefreshCoverData, RefreshCoverErrors, RefreshCoverResponses, RemoveSourceData, RemoveSourceErrors, RemoveSourceResponses, RetitleMindmapData, RetitleMindmapErrors, RetitleMindmapResponses, RetitleNotesData, RetitleNotesErrors, RetitleNotesResponses, RetrySessionData, RetrySessionErrors, RetrySessionResponses, ReuseShareData, ReuseShareErrors, ReuseShareResponses, RevokeKeyData, RevokeKeyErrors, RevokeKeyResponses, RunCommandData, RunCommandErrors, RunCommandResponses, SayData, SayErrors, SayResponses, SessionEventsData, SessionEventsErrors, SessionEventsResponses, SetPlaybackData, SetPlaybackErrors, SetPlaybackResponses, SetSettingData, SetSettingErrors, SetSettingResponses, ShareCollectionData, ShareCollectionErrors, ShareCollectionResponses, SharedEpisodeData, SharedEpisodeErrors, SharedEpisodeResponses, SharedLineAudioData, SharedLineAudioErrors, SharedLineAudioResponses, SharedSlideData, SharedSlideErrors, SharedSlideResponses, SlideData, SlideErrors, SlideResponses, UpdateCollectionData, UpdateCollectionErrors, UpdateCollectionResponses, UpdateSessionData, UpdateSessionErrors, UpdateSessionResponses, UpdateShareData, UpdateShareErrors, UpdateShareResponses, VoiceAskData, VoiceAskErrors, VoiceAskResponses, WebSearchData, WebSearchErrors, WebSearchResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -43,9 +43,10 @@ export const me = <ThrowOnError extends boolean = false>(options?: Options<MeDat
 /**
  * List Keys
  *
- * Your API keys that still work, newest first.
+ * Your API keys that still work, newest first, a page at a time:
+ * `X-Next-Offset` says where the next page starts when there is one.
  */
-export const listKeys = <ThrowOnError extends boolean = false>(options?: Options<ListKeysData, ThrowOnError>): RequestResult<ListKeysResponses, unknown, ThrowOnError> => (options?.client ?? client).get<ListKeysResponses, unknown, ThrowOnError>({ url: '/api/keys', ...options });
+export const listKeys = <ThrowOnError extends boolean = false>(options?: Options<ListKeysData, ThrowOnError>): RequestResult<ListKeysResponses, ListKeysErrors, ThrowOnError> => (options?.client ?? client).get<ListKeysResponses, ListKeysErrors, ThrowOnError>({ url: '/api/keys', ...options });
 
 /**
  * Make Key
@@ -71,9 +72,11 @@ export const revokeKey = <ThrowOnError extends boolean = false>(options: Options
 /**
  * List Collections
  *
- * Every collection, most recently updated first, with counts of what it holds.
+ * Your collections, most recently updated first, with counts of what
+ * each holds, a page at a time: `X-Next-Offset` says where the next page
+ * starts when there is one.
  */
-export const listCollections = <ThrowOnError extends boolean = false>(options?: Options<ListCollectionsData, ThrowOnError>): RequestResult<ListCollectionsResponses, unknown, ThrowOnError> => (options?.client ?? client).get<ListCollectionsResponses, unknown, ThrowOnError>({ url: '/api/collections', ...options });
+export const listCollections = <ThrowOnError extends boolean = false>(options?: Options<ListCollectionsData, ThrowOnError>): RequestResult<ListCollectionsResponses, ListCollectionsErrors, ThrowOnError> => (options?.client ?? client).get<ListCollectionsResponses, ListCollectionsErrors, ThrowOnError>({ url: '/api/collections', ...options });
 
 /**
  * Create Collection
@@ -151,7 +154,9 @@ export const collectionEvents = <ThrowOnError extends boolean = false>(options: 
 /**
  * List Sources
  *
- * The sources in a collection, in the order they were added.
+ * The sources in a collection, in the order they were added, a page at
+ * a time: `X-Next-Offset` says where the next page starts when there is
+ * one.
  */
 export const listSources = <ThrowOnError extends boolean = false>(options: Options<ListSourcesData, ThrowOnError>): RequestResult<ListSourcesResponses, ListSourcesErrors, ThrowOnError> => (options.client ?? client).get<ListSourcesResponses, ListSourcesErrors, ThrowOnError>({ url: '/api/collections/{cid}/sources', ...options });
 
@@ -282,9 +287,10 @@ export const estimate = <ThrowOnError extends boolean = false>(options: Options<
 /**
  * List Sessions
  *
- * Every deck and audio overview, newest first.
+ * Your decks and audio overviews, newest first, a page at a time:
+ * `X-Next-Offset` says where the next page starts when there is one.
  */
-export const listSessions = <ThrowOnError extends boolean = false>(options?: Options<ListSessionsData, ThrowOnError>): RequestResult<ListSessionsResponses, unknown, ThrowOnError> => (options?.client ?? client).get<ListSessionsResponses, unknown, ThrowOnError>({ url: '/api/sessions', ...options });
+export const listSessions = <ThrowOnError extends boolean = false>(options?: Options<ListSessionsData, ThrowOnError>): RequestResult<ListSessionsResponses, ListSessionsErrors, ThrowOnError> => (options?.client ?? client).get<ListSessionsResponses, ListSessionsErrors, ThrowOnError>({ url: '/api/sessions', ...options });
 
 /**
  * Delete Session
@@ -443,7 +449,12 @@ export const listMindmaps = <ThrowOnError extends boolean = false>(options: Opti
 /**
  * Make Mindmap
  *
- * Map the topics a collection's sources cover. Takes a few seconds.
+ * Map the topics a collection's sources cover, in the background: the
+ * map is listed at once as `making`, and drawn in a few seconds. Follow its
+ * job at /api/jobs/{id}; when it fails, the map is removed and the job
+ * says why. Refused at once when the collection cannot be changed, a
+ * source asked for is not there, or the map could cost more than the
+ * spending limit.
  */
 export const makeMindmap = <ThrowOnError extends boolean = false>(options: Options<MakeMindmapData, ThrowOnError>): RequestResult<MakeMindmapResponses, MakeMindmapErrors, ThrowOnError> => (options.client ?? client).post<MakeMindmapResponses, MakeMindmapErrors, ThrowOnError>({
     url: '/api/collections/{cid}/mindmaps',
@@ -464,6 +475,8 @@ export const estimateMindmap = <ThrowOnError extends boolean = false>(options: O
 
 /**
  * Delete Mindmap
+ *
+ * Delete a map; one still being made is stopped first.
  */
 export const deleteMindmap = <ThrowOnError extends boolean = false>(options: Options<DeleteMindmapData, ThrowOnError>): RequestResult<DeleteMindmapResponses, DeleteMindmapErrors, ThrowOnError> => (options.client ?? client).delete<DeleteMindmapResponses, DeleteMindmapErrors, ThrowOnError>({ url: '/api/collections/{cid}/mindmaps/{mid}', ...options });
 
@@ -494,7 +507,12 @@ export const listNotes = <ThrowOnError extends boolean = false>(options: Options
 /**
  * Make Notes
  *
- * Write study notes of a collection's sources. Takes 10 to 40 seconds.
+ * Write study notes of a collection's sources, in the background: they
+ * are listed at once as `making`, and written in 10 to 40 seconds. Follow
+ * their job at /api/jobs/{id}; when it fails, the notes are removed and
+ * the job says why. Refused at once when the collection cannot be changed,
+ * a source asked for is not there, or the notes could cost more than the
+ * spending limit.
  */
 export const makeNotes = <ThrowOnError extends boolean = false>(options: Options<MakeNotesData, ThrowOnError>): RequestResult<MakeNotesResponses, MakeNotesErrors, ThrowOnError> => (options.client ?? client).post<MakeNotesResponses, MakeNotesErrors, ThrowOnError>({
     url: '/api/collections/{cid}/notes',
@@ -515,6 +533,8 @@ export const estimateNotes = <ThrowOnError extends boolean = false>(options: Opt
 
 /**
  * Delete Notes
+ *
+ * Delete notes; ones still being written are stopped first.
  */
 export const deleteNotes = <ThrowOnError extends boolean = false>(options: Options<DeleteNotesData, ThrowOnError>): RequestResult<DeleteNotesResponses, DeleteNotesErrors, ThrowOnError> => (options.client ?? client).delete<DeleteNotesResponses, DeleteNotesErrors, ThrowOnError>({ url: '/api/collections/{cid}/notes/{nid}', ...options });
 
@@ -552,7 +572,9 @@ export const clearChat = <ThrowOnError extends boolean = false>(options: Options
 /**
  * Read Chat
  *
- * A collection's conversation, oldest first.
+ * A collection's conversation, oldest first: its newest `limit`
+ * messages, or the `limit` before `before`. When there are older ones,
+ * `X-Next-Before` is the `before` that reads them.
  */
 export const readChat = <ThrowOnError extends boolean = false>(options: Options<ReadChatData, ThrowOnError>): RequestResult<ReadChatResponses, ReadChatErrors, ThrowOnError> => (options.client ?? client).get<ReadChatResponses, ReadChatErrors, ThrowOnError>({ url: '/api/collections/{cid}/chat', ...options });
 
@@ -633,7 +655,9 @@ export const listStyles = <ThrowOnError extends boolean = false>(options?: Optio
 /**
  * List Shares
  *
- * Discover: what everyone on the studio shared.
+ * Discover: what everyone on the studio shared, a page at a time. When
+ * there are more after this page, the answer's `X-Next-Offset` header is
+ * the `offset` to ask for next.
  */
 export const listShares = <ThrowOnError extends boolean = false>(options?: Options<ListSharesData, ThrowOnError>): RequestResult<ListSharesResponses, ListSharesErrors, ThrowOnError> => (options?.client ?? client).get<ListSharesResponses, ListSharesErrors, ThrowOnError>({ url: '/api/shares', ...options });
 

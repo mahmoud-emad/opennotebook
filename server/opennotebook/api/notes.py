@@ -3,24 +3,38 @@ and a glossary, every claim cited to its passage."""
 
 import asyncio
 import uuid
+from collections.abc import Awaitable, Callable, Sequence
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
-from sqlalchemy import delete, select
+from sqlalchemy import (
+    ARRAY,
+    ColumnElement,
+    Select,
+    Text,
+    delete,
+    func,
+    literal_column,
+    select,
+    text,
+)
+from sqlalchemy.orm import defer
 
+from opennotebook import jobs
 from opennotebook.ai import client, ledger
 from opennotebook.ai.errors import AiError
 from opennotebook.api.deps import Db, Me
 from opennotebook.api.mindmaps import MakeReq, Retitle
-from opennotebook.api.sessions import SessionEstimate
-from opennotebook.db.models import StudyNotes
-from opennotebook.db.session import release
-from opennotebook.domain import collections, reading
+from opennotebook.api.sessions import JobOut, SessionEstimate
+from opennotebook.db.models import Job, StudyNotes, User
+from opennotebook.db.session import release, sessionmaker
+from opennotebook.domain import collections, making, reading
 from opennotebook.domain import settings as config
 from opennotebook.domain.reading import Estimate
 from opennotebook.errors import Problem, not_found
+from opennotebook.jobs.app import WORK_QUEUE
 from opennotebook.script import notes as sn
 from opennotebook.script.errors import ScriptError, problem, too_slow
 from opennotebook.script.mindmap import NamedDoc
@@ -66,10 +80,32 @@ class NotesSummary(BaseModel):
     questions: int
     terms: int
     headings: list[str]
+    state: Literal["making", "ready"] = Field(
+        default="ready",
+        description="`making` while its job writes them: empty until then. Notes whose "
+        "writing fails are removed, and their job says why",
+    )
+    job_id: uuid.UUID | None = Field(
+        default=None, description="The job that writes them: follow it at /api/jobs/{id}"
+    )
 
     @classmethod
     def of(cls, n: StudyNotes) -> NotesSummary:
         b = n.body
+        return cls.counted(
+            n,
+            len(b.get("ideas", [])),
+            len(b.get("quiz", [])),
+            len(b.get("glossary", [])),
+            [i.get("heading", "") for i in b.get("ideas", [])],
+        )
+
+    @classmethod
+    def counted(
+        cls, n: StudyNotes, ideas: int, questions: int, terms: int, headings: list[str]
+    ) -> NotesSummary:
+        """Notes as a list shows them, from counts read in the database
+        (`listed`) rather than from their body."""
         return cls(
             id=n.id,
             collection_id=n.collection_id,
@@ -78,11 +114,36 @@ class NotesSummary(BaseModel):
             focus=n.focus,
             sources=n.sources,
             created_at=n.created_at,
-            ideas=len(b.get("ideas", [])),
-            questions=len(b.get("quiz", [])),
-            terms=len(b.get("glossary", [])),
-            headings=[i.get("heading", "") for i in b.get("ideas", [])],
+            ideas=ideas,
+            questions=questions,
+            terms=terms,
+            headings=headings,
+            # A row not written yet has no state: it is a finished one.
+            state=n.state or "ready",  # pyright: ignore[reportArgumentType]
+            job_id=n.job_id,
         )
+
+
+def _length(key: str) -> ColumnElement[int]:
+    """How many entries one list of a body holds, 0 when it has none."""
+    return func.coalesce(
+        func.jsonb_array_length(func.coalesce(StudyNotes.body[key], text("'[]'::jsonb"))), 0
+    )
+
+
+def listed() -> Select[StudyNotes, int, int, int, Sequence[str]]:
+    """Notes as a list shows them: the counts and the idea headings, read in
+    the database; the body itself, every idea, answer and citation, stays
+    there."""
+    headings = literal_column(
+        "ARRAY(SELECT coalesce(idea ->> 'heading', '') FROM jsonb_array_elements("
+        "coalesce(study_notes.body -> 'ideas', '[]'::jsonb)) WITH ORDINALITY AS i(idea, n) "
+        "ORDER BY n)",
+        ARRAY(Text),
+    )
+    return select(
+        StudyNotes, _length("ideas"), _length("quiz"), _length("glossary"), headings
+    ).options(defer(StudyNotes.body, raiseload=True))
 
 
 class NotesOut(NotesSummary):
@@ -131,13 +192,16 @@ async def _one(s: Db, owner: uuid.UUID, cid: uuid.UUID, nid: uuid.UUID) -> Study
 @router.get("")
 async def list_notes(cid: uuid.UUID, s: Db, me: Me) -> list[NotesSummary]:
     """A collection's study notes, newest first."""
-    await collections.summary(s, me.id, cid)
-    rows = await s.scalars(
-        select(StudyNotes)
-        .where(StudyNotes.collection_id == cid, StudyNotes.owner_id == me.id)
-        .order_by(StudyNotes.created_at.desc())
+    await collections.owned(s, me.id, cid)
+    rows = list(
+        await s.execute(
+            listed()
+            .where(StudyNotes.collection_id == cid, StudyNotes.owner_id == me.id)
+            .order_by(StudyNotes.created_at.desc())
+        )
     )
-    return [NotesSummary.of(n) for n in rows]
+    kept = set(await making.settle(s, [n for n, *_ in rows]))
+    return [NotesSummary.counted(n, i, q, t, list(h)) for n, i, q, t, h in rows if n in kept]
 
 
 # How long a set of notes may take. One call that reads up to about 150k
@@ -182,64 +246,125 @@ def body_of(made: sn.StudyNotes, docs: list[NamedDoc]) -> dict[str, Any]:
     }
 
 
-@router.post("", status_code=201)
-async def make_notes(cid: uuid.UUID, body: MakeReq, s: Db, me: Me) -> NotesOut:
-    """Write study notes of a collection's sources. Takes 10 to 40 seconds."""
+class MakingNotes(BaseModel):
+    """Notes being written: their job, which says how far it got and, when
+    it fails, why; and their row, `making` until the job writes them."""
+
+    job: JobOut
+    notes: NotesSummary
+
+
+async def _start(s: Db, me: User, cid: uuid.UUID, body: MakeReq) -> tuple[Job, StudyNotes]:
+    """Check everything notes are checked for before they are started (the
+    collection is there and may be changed, the sources asked for are there,
+    the spending limit allows them), then write their `making` row and job."""
     await collections.editable(s, me.id, cid)
     docs = await reading.read_docs(s, me.id, cid, body.sources)
-    hint = docs[0].title if len(docs) == 1 else "Study notes"
-    focus = body.focus.strip() or None
     model = await config.value(s, me.id, config.NOTES_MODEL_KEY)
     limit = await reading.limit_of(s, me.id)
-    rule = config.language_rule(await config.value(s, me.id, config.LANGUAGE_KEY))
-    # Everything is read: the transaction goes before the price list and the
-    # model are asked, and the notes are written in a new one after.
+    # The price list is read with no transaction open.
     await release(s)
     # Checked against the spending limit before any model call, like a build.
     reading.refuse_over_limit(
         await reading.estimate(docs, model, lambda chars: (tokens_in(chars), OUTPUT_TOKENS), limit),
         "Study notes of these sources",
     )
-    try:
-        async with (
-            ledger.spending(me.id, "notes", collection_id=cid),
-            asyncio.timeout(CREATE_TIMEOUT_S),
-        ):
-            made = await sn.generate_notes(docs, hint, focus, model=model, language_rule=rule)
-    except TimeoutError as e:
-        raise too_slow(CREATE_TIMEOUT_S, "write the notes") from e
-    except (AiError, ScriptError) as e:
-        raise problem(e) from e
-    # Kept only while the collection is; see `make_mindmap`.
-    try:
-        await collections.lock(s, me.id, cid)
-    except Problem as e:
-        raise Problem(
-            404,
-            "The collection was deleted while the notes were being written, so nothing was kept.",
-        ) from e
-    n = StudyNotes(
-        owner_id=me.id,
-        collection_id=cid,
-        title=made.title,
-        focus=focus or "",
+    return await making.start(
+        s,
+        me.id,
+        cid,
+        StudyNotes,
+        "notes",
+        focus=body.focus.strip(),
         sources=[d.name for d in docs],
-        excerpted=made.excerpted,
-        model=made.model,
-        dropped=made.dropped,
-        unchecked=made.unchecked,
-        body=body_of(made, docs),
+        body={},
     )
-    s.add(n)
-    await s.flush()
-    await s.refresh(n)
-    await collections.touch(s, cid)
-    return NotesOut.full(n)
+
+
+@router.post("", status_code=202)
+async def make_notes(cid: uuid.UUID, body: MakeReq, s: Db, me: Me) -> MakingNotes:
+    """Write study notes of a collection's sources, in the background: they
+    are listed at once as `making`, and written in 10 to 40 seconds. Follow
+    their job at /api/jobs/{id}; when it fails, the notes are removed and
+    the job says why. Refused at once when the collection cannot be changed,
+    a source asked for is not there, or the notes could cost more than the
+    spending limit."""
+    job, n = await _start(s, me, cid, body)
+    args = {
+        "job_id": str(job.id),
+        "owner_id": str(me.id),
+        "collection_id": str(cid),
+        "made_id": str(n.id),
+        "focus": body.focus,
+        "sources": body.sources,
+    }
+    await jobs.defer(s, job, making.NOTES_TASK, args, queue=WORK_QUEUE)
+    return MakingNotes(job=JobOut.of(job), notes=NotesSummary.of(n))
+
+
+async def make_notes_now(cid: uuid.UUID, body: MakeReq, s: Db, me: User) -> NotesOut:
+    """Notes written while the caller waits, for the chat agent and the old
+    JSON-RPC API, which answer with the notes themselves: the same checks
+    and the same job, run here rather than on the queue."""
+    job, n = await _start(s, me, cid, body)
+    await release(s)
+    if failed := await fill(job.id, me.id, cid, n.id, body.focus, body.sources):
+        raise failed
+    done = await s.scalar(
+        select(StudyNotes).where(StudyNotes.id == n.id).execution_options(populate_existing=True)
+    )
+    if done is None:
+        raise not_found("Those notes")
+    return NotesOut.full(done)
+
+
+async def fill(
+    job_id: uuid.UUID,
+    owner: uuid.UUID,
+    cid: uuid.UUID,
+    nid: uuid.UUID,
+    focus: str,
+    sources: list[str] | None,
+) -> Problem | None:
+    """Write `making` notes: the job, run by the worker or inline. None when
+    they were written, else why not."""
+
+    async def make(say: Callable[[str], Awaitable[None]]) -> dict[str, Any]:
+        await say("Reading the sources")
+        async with sessionmaker()() as s:
+            docs = await reading.read_docs(s, owner, cid, sources)
+            model = await config.value(s, owner, config.NOTES_MODEL_KEY)
+            rule = config.language_rule(await config.value(s, owner, config.LANGUAGE_KEY))
+        hint = docs[0].title if len(docs) == 1 else "Study notes"
+        await say("Writing the study notes")
+        try:
+            async with (
+                ledger.spending(owner, "notes", collection_id=cid, job_id=job_id),
+                asyncio.timeout(CREATE_TIMEOUT_S),
+            ):
+                made = await sn.generate_notes(
+                    docs, hint, focus.strip() or None, model=model, language_rule=rule
+                )
+        except TimeoutError as e:
+            raise too_slow(CREATE_TIMEOUT_S, "write the notes") from e
+        except (AiError, ScriptError) as e:
+            raise problem(e) from e
+        return {
+            "title": made.title,
+            "sources": [d.name for d in docs],
+            "excerpted": made.excerpted,
+            "model": made.model,
+            "dropped": made.dropped,
+            "unchecked": made.unchecked,
+            "body": body_of(made, docs),
+        }
+
+    return await making.run(job_id, owner, cid, StudyNotes, nid, make, "the study notes")
 
 
 async def one_call(s: Db, owner: uuid.UUID, cid: uuid.UUID) -> Estimate:
     """What the one call that writes notes of every source would cost."""
-    await collections.summary(s, owner, cid)
+    await collections.owned(s, owner, cid)
     docs = await reading.read_docs(s, owner, cid, None)
     model = await config.value(s, owner, config.NOTES_MODEL_KEY)
     limit = await reading.limit_of(s, owner)
@@ -276,7 +401,10 @@ async def retitle_notes(
 
 @router.delete("/{nid}", status_code=204)
 async def delete_notes(cid: uuid.UUID, nid: uuid.UUID, s: Db, me: Me) -> None:
-    await _one(s, me.id, cid, nid)
+    """Delete notes; ones still being written are stopped first."""
+    n = await _one(s, me.id, cid, nid)
     await collections.refuse_read_only(s, await collections.lock(s, me.id, cid))
+    if n.state == "making" and n.job_id is not None:
+        await jobs.cancel(s, n.job_id)
     await s.execute(delete(StudyNotes).where(StudyNotes.id == nid))
     await collections.touch(s, cid)

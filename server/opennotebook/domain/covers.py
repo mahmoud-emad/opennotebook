@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import null, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from opennotebook import cover, jobs
@@ -67,8 +67,15 @@ def _names_of(v: Any, key: str) -> list[str]:
     return [str(x.get(key) or "") for x in v if isinstance(x, dict)]
 
 
-async def gather(s: AsyncSession, owner: uuid.UUID, cids: list[uuid.UUID]) -> dict[uuid.UUID, Held]:
-    """What each of `cids` holds, in four queries whatever their number."""
+async def gather(
+    s: AsyncSession, owner: uuid.UUID, cids: list[uuid.UUID], *, parts: bool = False
+) -> dict[uuid.UUID, Held]:
+    """What each of `cids` holds, in four queries whatever their number.
+
+    Without `parts`, only what `content_key` hashes is read: each output's id
+    and title, never a deck's lines, a map's tree or a set of notes. With
+    them, each output's part names too (a deck's slide titles, a map's main
+    topics, the headings of a set of notes), for a design's digest."""
     out: dict[uuid.UUID, Held] = {cid: Held() for cid in cids}
     sources = await s.execute(
         select(Source.collection_id, Source.name, Source.title).where(
@@ -80,30 +87,51 @@ async def gather(s: AsyncSession, owner: uuid.UUID, cids: list[uuid.UUID]) -> di
         out[cid].titles.append(title)
     made: dict[uuid.UUID, list[list[Made]]] = defaultdict(lambda: [[], [], []])
     sessions = await s.execute(
-        select(Session).where(
+        select(
+            Session.collection_id,
+            Session.id,
+            Session.kind,
+            Session.title,
+            Session.created_at,
+            Session.slides if parts else null(),
+        ).where(
             Session.owner_id == owner, Session.collection_id.in_(cids), Session.state == "ready"
         )
     )
-    for o in sessions.scalars():
-        kind = "Audio overview" if o.kind == "audio" else "Narrated slides"
-        parts = [t.strip() for t in _names_of(o.slides, "title") if t.strip()]
-        made[o.collection_id][0].append(Made(str(o.id), kind, o.title, o.created_at, parts))
+    for cid, id_, k, title, at, slides in sessions:
+        kind = "Audio overview" if k == "audio" else "Narrated slides"
+        names = [t.strip() for t in _names_of(slides, "title") if t.strip()]
+        made[cid][0].append(Made(str(id_), kind, title, at, names))
     maps = await s.execute(
-        select(MindMap).where(MindMap.owner_id == owner, MindMap.collection_id.in_(cids))
-    )
-    for m in maps.scalars():
-        children = _names_of(m.root.get("children"), "name")
-        made[m.collection_id][1].append(
-            Made(str(m.id), "Mind map", m.title, m.created_at, children)
+        select(
+            MindMap.collection_id,
+            MindMap.id,
+            MindMap.title,
+            MindMap.created_at,
+            MindMap.root if parts else null(),
+        ).where(
+            MindMap.owner_id == owner, MindMap.collection_id.in_(cids), MindMap.state == "ready"
         )
+    )
+    for cid, id_, title, at, root in maps:
+        children = _names_of((root or {}).get("children"), "name")
+        made[cid][1].append(Made(str(id_), "Mind map", title, at, children))
     notes = await s.execute(
-        select(StudyNotes).where(StudyNotes.owner_id == owner, StudyNotes.collection_id.in_(cids))
-    )
-    for n in notes.scalars():
-        headings = _names_of(n.body.get("ideas"), "heading")
-        made[n.collection_id][2].append(
-            Made(str(n.id), "Study notes", n.title, n.created_at, headings)
+        select(
+            StudyNotes.collection_id,
+            StudyNotes.id,
+            StudyNotes.title,
+            StudyNotes.created_at,
+            StudyNotes.body if parts else null(),
+        ).where(
+            StudyNotes.owner_id == owner,
+            StudyNotes.collection_id.in_(cids),
+            StudyNotes.state == "ready",
         )
+    )
+    for cid, id_, title, at, body in notes:
+        headings = _names_of((body or {}).get("ideas"), "heading")
+        made[cid][2].append(Made(str(id_), "Study notes", title, at, headings))
     for cid, groups in made.items():
         out[cid].made = [m for group in groups for m in _newest_first(group)]
     return out
@@ -231,7 +259,7 @@ async def redraw(owner: uuid.UUID, cid: uuid.UUID, *, force: bool) -> None:
             summary = await collections.summary(s, owner, cid)
         except Problem:
             return
-        held = (await gather(s, owner, [cid]))[cid]
+        held = (await gather(s, owner, [cid], parts=True))[cid]
         key = content_key(held)
         if not wants_design(True, force, holds(summary), summary.collection.cover_from, key):
             return

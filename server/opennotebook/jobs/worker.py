@@ -16,6 +16,7 @@ from opennotebook.db.models import Job
 from opennotebook.db.session import sessionmaker
 from opennotebook.jobs import CANCELLED, FAILED, LIVE, QUEUED, notify, now
 from opennotebook.jobs.app import app
+from opennotebook.shutdown import close_clients
 
 log = logging.getLogger(__name__)
 
@@ -93,3 +94,4 @@ async def run(concurrency: int = 4) -> None:
             recovering.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await recovering
+            await close_clients()

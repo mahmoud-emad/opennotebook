@@ -14,6 +14,8 @@ describe("mind maps", () => {
       display_title: "Untitled mind map",
       node_count: 0,
       created_ms: 0,
+      state: "ready",
+      job_id: null,
     });
     const maps = [map("new", "", ["a.md", "b.md"]), map("old", "", ["a.md"])];
     // Same sources, any order: the newest such map.

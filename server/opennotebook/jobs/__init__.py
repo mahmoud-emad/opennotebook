@@ -20,6 +20,7 @@ Stopping is Procrastinate's abort, which arrives in an async task as
 
 import json
 import uuid
+from collections.abc import Sequence
 from datetime import UTC, datetime
 from typing import Any
 
@@ -160,16 +161,68 @@ async def stop(s: AsyncSession, session_id: uuid.UUID) -> list[uuid.UUID]:
         )
     )
     for job in live:
-        job.status, job.error, job.finished_at = CANCELLED, STOPPED, now()
-        if job.procrastinate_job_id is not None:
-            # A job waiting its turn is cancelled; a running one is asked to
-            # abort, which reaches its task as `CancelledError`.
-            await s.execute(
-                text("SELECT procrastinate_cancel_job_v1(:id, true, false)"),
-                {"id": job.procrastinate_job_id},
-            )
-        await notify(s, job.id)
+        await _cancel(s, job)
     return [j.id for j in live]
+
+
+async def cancel(s: AsyncSession, job_id: uuid.UUID) -> None:
+    """Stop one job, wherever it is; one that already ended is left as it
+    ended."""
+    job = await s.scalar(
+        select(Job).where(Job.id == job_id, Job.status.in_(LIVE)).with_for_update()
+    )
+    if job is not None:
+        await _cancel(s, job)
+
+
+async def _cancel(s: AsyncSession, job: Job) -> None:
+    job.status, job.error, job.finished_at = CANCELLED, STOPPED, now()
+    if job.procrastinate_job_id is not None:
+        # A job waiting its turn is cancelled; a running one is asked to
+        # abort, which reaches its task as `CancelledError`.
+        await s.execute(
+            text("SELECT procrastinate_cancel_job_v1(:id, true, false)"),
+            {"id": job.procrastinate_job_id},
+        )
+    await notify(s, job.id)
+
+
+# A job run in the api rather than the queue (`procrastinate_job_id` none)
+# that is still not done after this long was lost with the process that ran
+# it.
+INLINE_LOST_SECONDS = 600
+
+
+async def alive(s: AsyncSession, job_ids: Sequence[uuid.UUID]) -> set[uuid.UUID]:
+    """Which of `job_ids` are still being worked on: our row queued or
+    running, and the queue's own record of it waiting or running. Two
+    queries however many there are."""
+    if not job_ids:
+        return set()
+    rows = list(
+        await s.execute(
+            select(Job.id, Job.procrastinate_job_id, Job.created_at).where(
+                Job.id.in_(job_ids), Job.status.in_(LIVE)
+            )
+        )
+    )
+    asked = [pid for _, pid, _ in rows if pid is not None]
+    queued: set[int] = set()
+    if asked:
+        found = await s.execute(
+            text(
+                "SELECT id FROM procrastinate_jobs WHERE id = ANY(:ids)"
+                " AND status IN ('todo', 'doing')"
+            ),
+            {"ids": asked},
+        )
+        queued = {int(i) for (i,) in found}
+    lost = now().timestamp() - INLINE_LOST_SECONDS
+    return {
+        jid
+        for jid, pid, at in rows
+        if (pid is not None and pid in queued) or (pid is None and at.timestamp() > lost)
+    }
 
 
 class NoJob(Exception):

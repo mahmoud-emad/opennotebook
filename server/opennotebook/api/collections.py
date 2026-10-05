@@ -8,22 +8,23 @@ from collections.abc import AsyncGenerator, AsyncIterator
 from datetime import datetime
 from typing import Annotated, Any
 
-from fastapi import APIRouter, BackgroundTasks, Query, Request
+from fastapi import APIRouter, BackgroundTasks, Query, Request, Response
 from fastapi.responses import HTMLResponse, StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 
 from opennotebook import storage
+from opennotebook.api import paging
 from opennotebook.api.deps import SANDBOXED, Db, Me
-from opennotebook.api.sessions import SessionSummary, summaries_of
-from opennotebook.api.sources import SourceOut
+from opennotebook.api.sessions import SessionSummary, summaries_and_jobs, summaries_of
+from opennotebook.api.sources import SourceOut, listed
 from opennotebook.auth import current_user
 from opennotebook.cover import Theme
-from opennotebook.db.models import Source
+from opennotebook.db.models import Job, Source
 from opennotebook.db.session import release, sessionmaker
-from opennotebook.domain import collections, covers, refresh, sessions
+from opennotebook.domain import collections, covers, refresh
 from opennotebook.errors import Problem
-from opennotebook.jobs.events import REREAD_SECONDS, hub
+from opennotebook.jobs.events import JOB, REREAD_SECONDS, hub
 
 router = APIRouter(prefix="/api/collections", tags=["collections"])
 
@@ -135,10 +136,26 @@ class CollectionPatch(BaseModel):
     pinned: bool | None = None
 
 
+# How many collections a page of the list holds unless asked for fewer, and
+# at most.
+LIST_DEFAULT = 200
+LIST_MAX = 500
+
+
 @router.get("")
-async def list_collections(s: Db, me: Me) -> list[CollectionSummary]:
-    """Every collection, most recently updated first, with counts of what it holds."""
-    listed = await collections.list_all(s, me.id)
+async def list_collections(
+    s: Db,
+    me: Me,
+    response: Response,
+    limit: Annotated[int, paging.limit(LIST_DEFAULT, LIST_MAX, "collections")] = LIST_DEFAULT,
+    offset: paging.Offset = 0,
+) -> list[CollectionSummary]:
+    """Your collections, most recently updated first, with counts of what
+    each holds, a page at a time: `X-Next-Offset` says where the next page
+    starts when there is one."""
+    listed = paging.cut(
+        await collections.list_all(s, me.id, limit + 1, offset), limit, offset, response
+    )
     # A collection whose cover is older than what it holds (an output that
     # finished while nothing was listening) gets one designed in the
     # background. This list shows the cover it has.
@@ -239,25 +256,13 @@ async def _read(owner: uuid.UUID, cid: uuid.UUID) -> dict[str, Any] | None:
             summary = await collections.summary(s, owner, cid)
         except Problem:
             return None
-        outputs = await summaries_of(s, owner, cid)
-        progress: dict[str, dict[str, Any]] = {}
-        for o in outputs:
-            if o.state != "preparing":
-                continue
-            job, _ = await sessions.job_status(s, o.id)
-            if job is None:
-                continue
+        outputs, making = await summaries_and_jobs(s, owner, cid)
+        for job in making.values():
             # Its job's reports wake this collection's streams.
             hub.follow_job(job.id, cid)
-            if job.steps_total:
-                progress[str(o.id)] = {
-                    "session_id": str(o.id),
-                    "step": job.step,
-                    "steps_done": job.steps_done,
-                    "steps_total": job.steps_total,
-                }
+        progress = _progress(list(making.values()))
         rows = await s.scalars(
-            select(Source)
+            listed()
             .where(Source.collection_id == cid, Source.owner_id == owner)
             .order_by(Source.created_at)
         )
@@ -266,7 +271,31 @@ async def _read(owner: uuid.UUID, cid: uuid.UUID) -> dict[str, Any] | None:
             "outputs": [o.model_dump(mode="json") for o in outputs],
             "sources": [SourceOut.of(r).model_dump(mode="json") for r in rows],
             "progress": progress,
+            "jobs": [j.id for j in making.values()],
         }
+
+
+def _progress(made: list[Job]) -> dict[str, dict[str, Any]]:
+    """How far each output being made is, by its id, from its job; only jobs
+    that report their steps."""
+    return {
+        str(j.session_id): {
+            "session_id": str(j.session_id),
+            "step": j.step,
+            "steps_done": j.steps_done,
+            "steps_total": j.steps_total,
+        }
+        for j in made
+        if j.steps_total and j.session_id is not None
+    }
+
+
+async def _progress_of(owner: uuid.UUID, job_ids: list[uuid.UUID]) -> dict[str, dict[str, Any]]:
+    """`_progress` read again from the jobs alone: what a job's report can
+    have changed, without reading the collection again."""
+    async with sessionmaker()() as s:
+        made = await s.scalars(select(Job).where(Job.id.in_(job_ids), Job.owner_id == owner))
+        return _progress(list(made))
 
 
 async def events_of(owner: uuid.UUID, cid: uuid.UUID) -> AsyncGenerator[Event | None]:
@@ -276,22 +305,30 @@ async def events_of(owner: uuid.UUID, cid: uuid.UUID) -> AsyncGenerator[Event | 
     is deleted."""
     last: dict[str, Any] = {}
     sent: dict[str, Any] = {}
+    # The jobs of the outputs being made, as the last whole read found them.
+    jobs: list[uuid.UUID] = []
     async with hub.subscribe(cid) as woken:
         while True:
-            woken.clear()
-            now = await _read(owner, cid)
-            if now is None:
-                yield ("gone", {"collection_id": str(cid)})
-                return
-            for part in ("collection", "outputs", "sources"):
-                if last.get(part) != now[part]:
-                    yield (part, now[part])
-                    last[part] = now[part]
-            for sid, p in now["progress"].items():
+            why = woken.clear()
+            if why == {JOB} and jobs:
+                # Only a job reported: its progress is all that can have
+                # moved. Its outcome comes with a change to the collection.
+                progress = await _progress_of(owner, jobs)
+            else:
+                now = await _read(owner, cid)
+                if now is None:
+                    yield ("gone", {"collection_id": str(cid)})
+                    return
+                for part in ("collection", "outputs", "sources"):
+                    if last.get(part) != now[part]:
+                        yield (part, now[part])
+                        last[part] = now[part]
+                progress, jobs = now["progress"], now["jobs"]
+            for sid, p in progress.items():
                 if sent.get(sid) != p:
                     yield ("progress", p)
                     sent[sid] = p
-            wait = BUSY_REREAD_SECONDS if now["collection"]["busy"] else REREAD_SECONDS
+            wait = BUSY_REREAD_SECONDS if last["collection"]["busy"] else REREAD_SECONDS
             try:
                 async with asyncio.timeout(wait):
                     await woken.wait()
@@ -323,7 +360,7 @@ async def collection_events(cid: uuid.UUID, request: Request) -> StreamingRespon
     # transaction.
     async with sessionmaker()() as s, s.begin():
         me = await current_user(request, s)
-        await collections.summary(s, me.id, cid)
+        await collections.owned(s, me.id, cid)
     return StreamingResponse(
         _frames(me.id, cid),
         media_type="text/event-stream",

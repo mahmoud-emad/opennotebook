@@ -5,13 +5,15 @@ import uuid
 from datetime import datetime
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, BackgroundTasks, File, UploadFile
+from fastapi import APIRouter, BackgroundTasks, File, Response, UploadFile
 from pydantic import BaseModel, Field, HttpUrl, computed_field
-from sqlalchemy import delete, select
+from sqlalchemy import Select, delete, select
+from sqlalchemy.orm import defer
 
 from opennotebook import jobs, research, storage
 from opennotebook.ai import ledger
 from opennotebook.ai.errors import AiError
+from opennotebook.api import paging
 from opennotebook.api.deps import Db, Me
 from opennotebook.api.sessions import JobOut
 from opennotebook.db.models import Source
@@ -98,16 +100,39 @@ class ResearchReq(BaseModel):
     topic: str = Field(min_length=1, max_length=400)
 
 
+# How many sources a page of the list holds unless asked for fewer, and at
+# most.
+LIST_DEFAULT = 500
+LIST_MAX = 1000
+
+
 @router.get("/collections/{cid}/sources")
-async def list_sources(cid: uuid.UUID, s: Db, me: Me) -> list[SourceOut]:
-    """The sources in a collection, in the order they were added."""
-    await collections.summary(s, me.id, cid)
+async def list_sources(
+    cid: uuid.UUID,
+    s: Db,
+    me: Me,
+    response: Response,
+    limit: Annotated[int, paging.limit(LIST_DEFAULT, LIST_MAX, "sources")] = LIST_DEFAULT,
+    offset: paging.Offset = 0,
+) -> list[SourceOut]:
+    """The sources in a collection, in the order they were added, a page at
+    a time: `X-Next-Offset` says where the next page starts when there is
+    one."""
+    await collections.owned(s, me.id, cid)
     rows = await s.scalars(
-        select(Source)
+        listed()
         .where(Source.collection_id == cid, Source.owner_id == me.id)
-        .order_by(Source.created_at)
+        .order_by(Source.created_at, Source.id)
+        .limit(limit + 1)
+        .offset(offset)
     )
-    return [SourceOut.of(r) for r in rows]
+    return [SourceOut.of(r) for r in paging.cut(list(rows), limit, offset, response)]
+
+
+def listed() -> Select[Source]:
+    """Sources as a list shows them: everything but their text, which a list
+    never shows and which can be megabytes each."""
+    return select(Source).options(defer(Source.text, raiseload=True))
 
 
 @router.post("/collections/{cid}/sources", status_code=201)

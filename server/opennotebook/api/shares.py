@@ -9,11 +9,12 @@ import uuid
 from datetime import datetime
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Response
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field, computed_field
 from sqlalchemy import select
 
+from opennotebook.api import paging
 from opennotebook.api.collections import CollectionSummary
 from opennotebook.api.deps import SANDBOXED, Db, Me
 from opennotebook.api.mindmaps import MindMapOut
@@ -25,6 +26,7 @@ from opennotebook.db.models import MindMap, Session, Share, StudyNotes
 from opennotebook.domain import collections, covers, refresh, shares
 
 router = APIRouter(prefix="/api", tags=["shares"])
+
 
 OUTPUT_KEY = "`session:<id>` (a deck or an audio overview), `mindmap:<id>` or `notes:<id>`"
 
@@ -241,6 +243,7 @@ class SharePatch(BaseModel):
 async def list_shares(
     s: Db,
     me: Me,
+    response: Response,
     query: Annotated[
         str,
         Query(
@@ -252,9 +255,18 @@ async def list_shares(
     sort: Annotated[
         shares.Sort, Query(description="`newest` (the default) or `reused`: most reused first")
     ] = "newest",
+    limit: Annotated[
+        int, Query(ge=1, le=shares.FEED_MAX, description="The most shares in one answer")
+    ] = shares.FEED_DEFAULT,
+    offset: paging.Offset = 0,
 ) -> list[ShareCard]:
-    """Discover: what everyone on the studio shared."""
-    return [ShareCard.of(c, me.id) for c in shares.feed(await shares.entries(s), query, sort)]
+    """Discover: what everyone on the studio shared, a page at a time. When
+    there are more after this page, the answer's `X-Next-Offset` header is
+    the `offset` to ask for next."""
+    page = await shares.feed(s, query, sort, limit, offset)
+    if page.next_offset is not None:
+        response.headers[paging.NEXT_OFFSET] = str(page.next_offset)
+    return [ShareCard.of(c, me.id) for c in page.cards]
 
 
 @router.get("/shares/items")
@@ -414,30 +426,32 @@ async def get_collection_share(cid: uuid.UUID, s: Db, me: Me) -> ShareState:
     """One of your collections as the share dialog shows it: its share, if it
     has one, what it holds that a share can include, and what the dialog
     opens on."""
-    summary = await collections.summary(s, me.id, cid)
     share = await shares.of_collection(s, me.id, cid)
+    sources = await collections.source_count(s, cid)
     items: list[Shareable] = []
-    for o in await s.scalars(
-        select(Session).where(
+    # Only what a row of the dialog shows: never a deck's lines, a map's tree
+    # or a set of notes.
+    for id_, k, title, at in await s.execute(
+        select(Session.id, Session.kind, Session.title, Session.created_at).where(
             Session.collection_id == cid, Session.owner_id == me.id, Session.state == "ready"
         )
     ):
-        kind: shares.OutputKind = "audio" if o.kind == "audio" else "slides"
-        items.append(
-            Shareable(key=f"session:{o.id}", kind=kind, title=o.title, created_at=o.created_at)
+        kind: shares.OutputKind = "audio" if k == "audio" else "slides"
+        items.append(Shareable(key=f"session:{id_}", kind=kind, title=title, created_at=at))
+    for id_, title, at in await s.execute(
+        select(MindMap.id, MindMap.title, MindMap.created_at).where(
+            MindMap.collection_id == cid, MindMap.owner_id == me.id, MindMap.state == "ready"
         )
-    for m in await s.scalars(
-        select(MindMap).where(MindMap.collection_id == cid, MindMap.owner_id == me.id)
     ):
-        items.append(
-            Shareable(key=f"mindmap:{m.id}", kind="mindmap", title=m.title, created_at=m.created_at)
+        items.append(Shareable(key=f"mindmap:{id_}", kind="mindmap", title=title, created_at=at))
+    for id_, title, at in await s.execute(
+        select(StudyNotes.id, StudyNotes.title, StudyNotes.created_at).where(
+            StudyNotes.collection_id == cid,
+            StudyNotes.owner_id == me.id,
+            StudyNotes.state == "ready",
         )
-    for n in await s.scalars(
-        select(StudyNotes).where(StudyNotes.collection_id == cid, StudyNotes.owner_id == me.id)
     ):
-        items.append(
-            Shareable(key=f"notes:{n.id}", kind="notes", title=n.title, created_at=n.created_at)
-        )
+        items.append(Shareable(key=f"notes:{id_}", kind="notes", title=title, created_at=at))
     for i in items:
         i.title = " ".join(i.title.split()) or KIND_LABELS[i.kind]
     items.sort(key=lambda i: i.created_at, reverse=True)
@@ -445,9 +459,9 @@ async def get_collection_share(cid: uuid.UUID, s: Db, me: Me) -> ShareState:
     if share is None:
         return ShareState(
             share=None,
-            sources=summary.sources,
+            sources=sources,
             items=items,
-            include_sources=summary.sources > 0,
+            include_sources=sources > 0,
             picked=keys,
             note="",
             allow_edits=False,
@@ -455,9 +469,9 @@ async def get_collection_share(cid: uuid.UUID, s: Db, me: Me) -> ShareState:
         )
     return ShareState(
         share=ShareOut.of(share),
-        sources=summary.sources,
+        sources=sources,
         items=items,
-        include_sources=share.include_sources and summary.sources > 0,
+        include_sources=share.include_sources and sources > 0,
         picked=[k for k in share.outputs if k in keys],
         note=share.note,
         allow_edits=share.allow_edits,

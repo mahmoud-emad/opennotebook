@@ -704,10 +704,12 @@ async def make(t: Turn, ids: Ids, kind: str, title: str, focus: str) -> AsyncIte
                 o = await sessions.build(t.cid, req, s, t.me)
                 made = (str(o.id), o.title, "started · follow it in the Studio tab")
             elif kind == "mindmap":
-                m = await mindmaps.make_mindmap(t.cid, mindmaps.MakeReq(focus=focus[:400]), s, t.me)
+                req = mindmaps.MakeReq(focus=focus[:400])
+                # Made while the turn waits, so the turn can say what it made.
+                m = await mindmaps.make_mindmap_now(t.cid, req, s, t.me)
                 made = (str(m.id), m.title, f"{m.node_count} topics")
             else:
-                n = await notes.make_notes(t.cid, mindmaps.MakeReq(focus=focus[:400]), s, t.me)
+                n = await notes.make_notes_now(t.cid, mindmaps.MakeReq(focus=focus[:400]), s, t.me)
                 made = (str(n.id), n.title, f"{n.ideas} key ideas, {n.questions} questions")
     except Problem as e:
         yield done(id, False, e.detail)

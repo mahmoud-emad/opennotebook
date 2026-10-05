@@ -29,6 +29,8 @@ describe("study notes", () => {
       ideas: 1,
       questions: 1,
       terms: 1,
+      state: "ready",
+      job_id: null,
     });
     const list = [s("a", "latency", ["x.md"]), s("b", "", ["x.md", "y.md"])];
     expect(coveringNotes(list, ["y.md", "x.md"])).toBe("b");

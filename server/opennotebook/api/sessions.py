@@ -9,18 +9,20 @@ import uuid
 from collections.abc import AsyncIterator
 from datetime import datetime
 from decimal import Decimal
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
-from fastapi import APIRouter, BackgroundTasks, Query, Request
+from fastapi import APIRouter, BackgroundTasks, Query, Request, Response
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
-from sqlalchemy import delete, select, text
+from sqlalchemy import Select, delete, func, select, text
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import defer
 
 from opennotebook import jobs, storage
 from opennotebook.ai import client
 from opennotebook.ai.prices import Price
+from opennotebook.api import paging
 from opennotebook.api.deps import Db, Me
 from opennotebook.auth import current_user
 from opennotebook.build import narrate, pipeline, slides
@@ -80,7 +82,9 @@ class SessionSummary(BaseModel):
     )
 
     @classmethod
-    def of(cls, o: Session) -> SessionSummary:
+    def of(cls, o: Session, parts: int | None = None) -> SessionSummary:
+        """`o` as a list shows it. `parts` is how many it has, when the row
+        was read without them (`listed`)."""
         return cls(
             id=o.id,
             collection_id=o.collection_id,
@@ -90,7 +94,7 @@ class SessionSummary(BaseModel):
             description=o.description,
             state=o.state,  # pyright: ignore[reportArgumentType]
             failure=sessions.failure_said(o.failure, None)[0] if o.state == "failed" else None,
-            parts=len(o.slides),
+            parts=len(o.slides) if parts is None else parts,
             speakers=len(o.speakers),
             audio_format=str((o.audio or {}).get("format", "")),
             audio_label=sessions.FORMAT_LABELS[
@@ -363,23 +367,60 @@ class JobOut(BaseModel):
 # ── reading ──────────────────────────────────────────────────────────────────
 
 
+def listed() -> Select[Session, int]:
+    """Outputs as a list shows them, each with how many parts it has: its
+    parts themselves, every narration line, are left in the database."""
+    return select(Session, func.jsonb_array_length(Session.slides)).options(
+        defer(Session.slides, raiseload=True)
+    )
+
+
 async def summaries_of(s: AsyncSession, owner: uuid.UUID, cid: uuid.UUID) -> list[SessionSummary]:
-    rows = await s.scalars(
-        select(Session)
+    return (await summaries_and_jobs(s, owner, cid))[0]
+
+
+async def summaries_and_jobs(
+    s: AsyncSession, owner: uuid.UUID, cid: uuid.UUID
+) -> tuple[list[SessionSummary], dict[uuid.UUID, Job]]:
+    """A collection's outputs as its page lists them, newest first, with the
+    job of each one still being made."""
+    rows = await s.execute(
+        listed()
         .where(Session.owner_id == owner, Session.collection_id == cid)
         .order_by(Session.created_at.desc())
     )
-    return [await _summary(s, o) for o in list(rows)]
+    return await _summaries(s, list(rows))
 
 
-async def _summary(s: AsyncSession, o: Session) -> SessionSummary:
-    """An output as a list shows it, reconciled, saying why it waits, and why
-    it failed with its detail."""
-    o = await sessions.reconcile(s, o)
-    out = SessionSummary.of(o)
-    out.waiting = await sessions.waiting(s, o)
-    await _failure(s, o, out)
-    return out
+async def _summaries(
+    s: AsyncSession, rows: list[tuple[Session, int]]
+) -> tuple[list[SessionSummary], dict[uuid.UUID, Job]]:
+    """Outputs as a list shows them, each reconciled, saying why it waits,
+    and why it failed with its detail; with the job of each one still being
+    made. The jobs of all of them are read together, and whether a worker is
+    running at most once, however many there are."""
+    asked = [o.id for o, _ in rows if o.state in ("preparing", "failed")]
+    statuses = await sessions.job_statuses(s, asked)
+    alive: bool | None = None
+    out: list[SessionSummary] = []
+    making: dict[uuid.UUID, Job] = {}
+    for o, parts in rows:
+        job, status = statuses.get(o.id, (None, "inactive"))
+        o = await sessions.reconcile(s, o, status)
+        one = SessionSummary.of(o, parts)
+        if o.state == "preparing":
+            if job is not None:
+                making[o.id] = job
+            if status == "queued":
+                if alive is None:
+                    alive = await sessions.worker_alive(s)
+                one.waiting = None if alive else sessions.WAITING
+        elif o.state == "failed":
+            one.failure, one.failure_detail = sessions.failure_said(
+                o.failure, job.error if job is not None else None
+            )
+        out.append(one)
+    return out, making
 
 
 async def _failure(s: AsyncSession, o: Session, out: SessionSummary) -> None:
@@ -545,13 +586,30 @@ async def estimate(cid: uuid.UUID, body: BuildReq, s: Db, me: Me) -> SessionEsti
     return SessionEstimate.of(live)
 
 
+# How many outputs a page of the list holds unless asked for fewer, and at
+# most.
+LIST_DEFAULT = 200
+LIST_MAX = 500
+
+
 @router.get("/sessions")
-async def list_sessions(s: Db, me: Me) -> list[SessionSummary]:
-    """Every deck and audio overview, newest first."""
-    rows = await s.scalars(
-        select(Session).where(Session.owner_id == me.id).order_by(Session.created_at.desc())
+async def list_sessions(
+    s: Db,
+    me: Me,
+    response: Response,
+    limit: Annotated[int, paging.limit(LIST_DEFAULT, LIST_MAX, "outputs")] = LIST_DEFAULT,
+    offset: paging.Offset = 0,
+) -> list[SessionSummary]:
+    """Your decks and audio overviews, newest first, a page at a time:
+    `X-Next-Offset` says where the next page starts when there is one."""
+    rows = await s.execute(
+        listed()
+        .where(Session.owner_id == me.id)
+        .order_by(Session.created_at.desc(), Session.id.desc())
+        .limit(limit + 1)
+        .offset(offset)
     )
-    return [await _summary(s, o) for o in list(rows)]
+    return (await _summaries(s, paging.cut(list(rows), limit, offset, response)))[0]
 
 
 @router.get("/sessions/{sid}")

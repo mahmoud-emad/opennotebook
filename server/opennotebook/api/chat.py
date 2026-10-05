@@ -13,16 +13,17 @@ import logging
 import uuid
 from collections.abc import AsyncIterator
 from datetime import datetime
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Query, Request, Response
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from opennotebook.agent import commands, loop
 from opennotebook.agent.loop import Event, Picks, Turn
+from opennotebook.api import paging
 from opennotebook.api.deps import Db, Me
 from opennotebook.auth import current_user
 from opennotebook.db.models import ChatMessage, Collection, User
@@ -99,16 +100,57 @@ async def list_commands(me: Me) -> list[Command]:
     return [Command(name=c.name, arg=c.arg, label=c.label, icon=c.icon) for c in commands.COMMANDS]
 
 
+# How many messages a page of the conversation holds unless asked for fewer,
+# and at most.
+CHAT_DEFAULT = 200
+CHAT_MAX = 500
+
+NO_SUCH_MESSAGE = (
+    "That message is no longer in the conversation, so there is nothing before it to read. "
+    "Reload the conversation to start again from its newest message."
+)
+
+
 @router.get("/collections/{cid}/chat")
-async def read_chat(cid: uuid.UUID, s: Db, me: Me) -> list[Message]:
-    """A collection's conversation, oldest first."""
+async def read_chat(
+    cid: uuid.UUID,
+    s: Db,
+    me: Me,
+    response: Response,
+    limit: Annotated[int, paging.limit(CHAT_DEFAULT, CHAT_MAX, "messages")] = CHAT_DEFAULT,
+    before: Annotated[
+        uuid.UUID | None,
+        Query(
+            description="Only the messages before this one: the `X-Next-Before` header of "
+            "the page after. The newest when absent"
+        ),
+    ] = None,
+) -> list[Message]:
+    """A collection's conversation, oldest first: its newest `limit`
+    messages, or the `limit` before `before`. When there are older ones,
+    `X-Next-Before` is the `before` that reads them."""
     await _mine(s, me.id, cid)
-    rows = await s.scalars(
-        select(ChatMessage)
-        .where(ChatMessage.collection_id == cid, ChatMessage.owner_id == me.id)
-        .order_by(ChatMessage.created_at, ChatMessage.id)
+    q = select(ChatMessage).where(ChatMessage.collection_id == cid, ChatMessage.owner_id == me.id)
+    if before is not None:
+        at = await s.scalar(
+            select(ChatMessage.created_at).where(
+                ChatMessage.id == before,
+                ChatMessage.collection_id == cid,
+                ChatMessage.owner_id == me.id,
+            )
+        )
+        if at is None:
+            raise Problem(404, NO_SUCH_MESSAGE)
+        q = q.where(tuple_(ChatMessage.created_at, ChatMessage.id) < tuple_(at, before))
+    rows = list(
+        await s.scalars(
+            q.order_by(ChatMessage.created_at.desc(), ChatMessage.id.desc()).limit(limit + 1)
+        )
     )
-    return [Message.model_validate(m, from_attributes=True) for m in rows]
+    if len(rows) > limit:
+        rows = rows[:limit]
+        response.headers[paging.NEXT_BEFORE] = str(rows[-1].id)
+    return [Message.model_validate(m, from_attributes=True) for m in reversed(rows)]
 
 
 @router.delete("/collections/{cid}/chat", status_code=204)
