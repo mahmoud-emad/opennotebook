@@ -15,6 +15,7 @@ from opennotebook.ai.errors import AiError
 from opennotebook.api.deps import Db, Me
 from opennotebook.api.sessions import JobOut
 from opennotebook.db.models import Source
+from opennotebook.db.session import release
 from opennotebook.domain import collections, refresh, sources
 from opennotebook.domain import settings as config
 from opennotebook.errors import Problem, not_found
@@ -95,22 +96,30 @@ async def add_sources(
     """Add a note, or read web pages, into a collection. One result per thing
     asked for, failures included, each saying why."""
     await collections.editable(s, me.id, cid)
+    # Pages are read and text is embedded with no transaction open; each
+    # source is then kept in a short one under the collection's lock.
+    await release(s)
     if isinstance(body, AddNote):
         try:
-            src = await sources.add_note(s, me.id, cid, body.text, body.title)
+            ready = await sources.prepare_note(body.text, body.title)
         except sources.Refused as e:
             raise Problem(422, str(e)) from e
+        src = await sources.keep(s, me.id, cid, ready)
         await refresh.schedule(s, me.id, cid)
         return [AddResult(url="", ok=True, source=SourceOut.of(src), error="")]
-    await collections.summary(s, me.id, cid)
     out: list[AddResult] = []
     async with sources.http_client() as http:
         for u in dict.fromkeys(str(u) for u in body.urls):
             try:
-                src = await sources.fetch_and_keep(s, me.id, cid, http, u)
-                out.append(AddResult(url=u, ok=True, source=SourceOut.of(src), error=""))
+                ready = await sources.prepare_page(http, u)
             except sources.Refused as e:
                 out.append(AddResult(url=u, ok=False, error=str(e)))
+                continue
+            src = await sources.keep(s, me.id, cid, ready)
+            # Committed before the next page is read, so the lock is not
+            # held while it is.
+            await release(s)
+            out.append(AddResult(url=u, ok=True, source=SourceOut.of(src), error=""))
     if any(r.ok for r in out):
         await refresh.schedule(s, me.id, cid)
     return out
@@ -123,18 +132,29 @@ async def add_files(
     me: Me,
     files: Annotated[list[UploadFile], File(description="pdf, docx, pptx, xlsx, md, txt or csv")],
 ) -> list[AddResult]:
-    """Add documents to a collection. Each is read into text verbatim and
-    titled by its file name; a result says why when one could not be read."""
+    """Add documents to a collection, at most ten at a time. Each is read
+    into text verbatim and titled by its file name; a result says why when
+    one could not be read."""
+    if len(files) > sources.MAX_FILES:
+        raise Problem(
+            422,
+            f"That is {len(files)} files; at most {sources.MAX_FILES} can be added at once. "
+            "Add the rest in another go.",
+        )
     await collections.editable(s, me.id, cid)
+    await release(s)
     out: list[AddResult] = []
     for f in files:
         name = f.filename or "document"
         data = await f.read(sources.MAX_UPLOAD_BYTES + 1)
         try:
-            src = await sources.add_file(s, me.id, cid, name, data)
-            out.append(AddResult(url="", ok=True, source=SourceOut.of(src), error=""))
+            ready = await sources.prepare_file(name, data)
         except sources.Refused as e:
             out.append(AddResult(url="", ok=False, error=str(e)))
+            continue
+        src = await sources.keep(s, me.id, cid, ready)
+        await release(s)
+        out.append(AddResult(url="", ok=True, source=SourceOut.of(src), error=""))
     if any(r.ok for r in out):
         await refresh.schedule(s, me.id, cid)
     return out
@@ -180,6 +200,7 @@ async def web_search(body: SearchReq, s: Db, me: Me) -> list[WebHit]:
     if not query:
         raise Problem(422, "The search is empty. Write what to look for, then search again.")
     model = await config.value(s, me.id, config.SEARCH_MODEL_KEY)
+    await release(s)
     try:
         async with ledger.spending(me.id, "web_search"):
             hits = await research.web_search(model, query)

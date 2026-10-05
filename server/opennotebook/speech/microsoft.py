@@ -49,6 +49,9 @@ PARALLEL = 4
 RETRY_DELAYS: tuple[float, ...] = (0.5, 2.0)
 # The longest wait an Azure `Retry-After` is honoured for.
 MAX_RETRY_AFTER = 5.0
+# The longest one line may take to arrive from Edge, every chunk of it. A
+# line is seconds of audio and comes in well under this.
+EDGE_LINE_TIMEOUT_S = 60
 
 # Edge reports times in ticks of 100 ns.
 _TICKS_PER_MS = 10_000
@@ -317,25 +320,30 @@ class MicrosoftSpeech(speech.Speech):
         audio = bytearray()
         words: list[WordTiming] = []
         try:
-            async for chunk in stream(text, voice):
-                if chunk.get("type") == "audio":
-                    data = chunk.get("data")
-                    if isinstance(data, bytes | bytearray):
-                        audio += data
-                elif (w := word_of(chunk)) is not None:
-                    words.append(w)
+            # A whole line, however slowly the service sends it: a stalled
+            # socket is tried again rather than waited on for good.
+            async with asyncio.timeout(EDGE_LINE_TIMEOUT_S):
+                async for chunk in stream(text, voice):
+                    if chunk.get("type") == "audio":
+                        data = chunk.get("data")
+                        if isinstance(data, bytes | bytearray):
+                            audio += data
+                    elif (w := word_of(chunk)) is not None:
+                        words.append(w)
+        except TimeoutError as e:
+            raise _Again(edge_unreachable(f"no whole line within {EDGE_LINE_TIMEOUT_S} s")) from e
         except edge_tts.exceptions.NoAudioReceived as e:
             raise _Again(edge_silent(voice)) from e
         except (
             aiohttp.ClientError,
-            TimeoutError,
             edge_tts.exceptions.EdgeTTSException,
             OSError,
         ) as e:
             raise _Again(edge_unreachable(str(e) or type(e).__name__)) from e
         if not audio:
             raise _Again(edge_silent(voice))
-        return mp3_to_wav(bytes(audio)), words
+        # Decoding is CPU work: off the event loop.
+        return await asyncio.to_thread(mp3_to_wav, bytes(audio)), words
 
     async def _azure(self, text: str, voice: str) -> bytes:
         if not self.azure_key:
@@ -367,7 +375,7 @@ class MicrosoftSpeech(speech.Speech):
             said = r.text.strip()[:300] or r.reason_phrase
             raise azure_refused(r.status_code, said)
         try:
-            return normalize(r.content, speech.SAMPLE_RATE)
+            return await asyncio.to_thread(normalize, r.content, speech.SAMPLE_RATE)
         except EmptyAudio as e:
             raise no_audio() from e
         except NotWav as e:

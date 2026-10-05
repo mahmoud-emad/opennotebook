@@ -38,8 +38,25 @@ class Settings(BaseSettings):
     auth: Literal["local", "keys"] = "local"
     local_owner_email: str = "owner@localhost"
 
+    # `local` signs in anyone who can reach the api, so serving it beyond this
+    # machine is refused unless the operator says they mean it.
+    allow_local_auth_on_network: bool = False
+
     # Where the web app is served from in development, for CORS.
     web_origin: str = "http://localhost:5173"
+
+    # The database connections one process keeps: this many open, up to
+    # `db_max_overflow` more at a busy moment, and a request that finds none
+    # free waits `db_pool_timeout_s` before it is answered with an error.
+    db_pool_size: int = 10
+    db_max_overflow: int = 10
+    db_pool_timeout_s: float = 30.0
+    # Enforced by Postgres itself: a statement running longer than this is
+    # cancelled, and a connection left inside an open transaction this long
+    # is closed, so one stuck request cannot hold rows locked for everyone.
+    # 0 turns either off. Work that needs longer sets its own with SET LOCAL.
+    db_statement_timeout_s: float = 30.0
+    db_idle_in_transaction_timeout_s: float = 60.0
 
     @property
     def sqlalchemy_url(self) -> str:

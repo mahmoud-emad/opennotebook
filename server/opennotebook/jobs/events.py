@@ -43,6 +43,10 @@ class Hub:
         # Which output a job belongs to, learnt when a stream subscribes.
         self._jobs: dict[uuid.UUID, uuid.UUID] = {}
         self._task: asyncio.Task[None] | None = None
+        # Whether the `LISTEN` connection is up, and why it last failed while
+        # it is not: what readiness reports.
+        self.connected = False
+        self.failure: str | None = None
 
     def follow_job(self, job_id: uuid.UUID, sid: uuid.UUID) -> None:
         self._jobs[job_id] = sid
@@ -78,12 +82,17 @@ class Hub:
                 ) as conn:
                     await conn.execute(f"LISTEN {CHANNEL}")
                     await conn.execute(f"LISTEN {SESSION_CHANNEL}")
-                    async for n in conn.notifies():
-                        self._on(n.channel, n.payload)
-                        if not self._waiters:
-                            return
+                    self.connected, self.failure = True, None
+                    try:
+                        async for n in conn.notifies():
+                            self._on(n.channel, n.payload)
+                            if not self._waiters:
+                                return
+                    finally:
+                        self.connected = False
             except (psycopg.Error, OSError) as e:
                 log.warning("the progress listener lost its connection (%s); reconnecting", e)
+                self.failure = str(e) or type(e).__name__
                 await asyncio.sleep(1)
 
     def _on(self, channel: str, payload: str) -> None:
@@ -100,6 +109,12 @@ class Hub:
             # its rows again, which costs a query each and misses nothing.
             for sid in list(self._waiters):
                 self.wake(sid)
+
+    @property
+    def listening(self) -> bool:
+        """Whether a stream is following anything, so the listener should be
+        connected."""
+        return self._task is not None and not self._task.done()
 
     async def close(self) -> None:
         if self._task is not None:

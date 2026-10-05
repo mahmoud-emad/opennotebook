@@ -292,6 +292,7 @@ class Ai:
         usage: Usage | None = None
         finish: Finish | None = None
         answered_by = ""
+        finished = False
         try:
             async for line in resp.http_response.aiter_lines():
                 data = line.removeprefix("data:").strip() if line.startswith("data:") else None
@@ -327,10 +328,17 @@ class Ai:
                     slot["args"] += fn.get("arguments") or ""
                 finish = _finish(choice.get("finish_reason")) or finish
                 usage = _usage(chunk.get("usage")) or usage
+            finished = True
         except httpx2.HTTPError as e:
             raise AiError(Kind.UNAVAILABLE, f"the stream broke: {e}") from e
         finally:
             await resp.http_response.aclose()
+            if not finished and (text or calls or usage is not None):
+                # Broken off part way, by the provider, the network or a
+                # reader that stopped listening: what was written was still
+                # paid for, so it goes on the ledger, unpriced unless the
+                # provider already said what it cost.
+                await asyncio.shield(self._charge(model, usage))
         await self._charge(model, usage)
         yield Done(
             Completion(
@@ -350,11 +358,23 @@ class Ai:
         `/embeddings`. Charged like any other call."""
         if not texts:
             return []
+        try:
+            async with asyncio.timeout(self._timeout):
+                resp = await self._embed_tries(model, texts)
+        except TimeoutError as e:
+            raise AiError(Kind.UNAVAILABLE, f"no vectors within {self._timeout:.0f}s") from e
+        data = sorted(resp.data, key=lambda d: d.index)
+        if len(data) != len(texts):
+            raise AiError(Kind.DECODE, f"asked for {len(texts)} vectors, got {len(data)}")
+        u: Any = resp.usage.model_dump() if resp.usage else None
+        await self._charge(model, _usage(u))
+        return [list(d.embedding) for d in data]
+
+    async def _embed_tries(self, model: str, texts: list[str]) -> Any:
         attempt = 0
         while True:
             try:
-                resp = await self._client.embeddings.create(model=model, input=texts)
-                break
+                return await self._client.embeddings.create(model=model, input=texts)
             except openai.APIStatusError as e:
                 err = AiError.from_status(e.status_code, e.response.text)
             except (openai.APIConnectionError, openai.APITimeoutError) as e:
@@ -363,12 +383,10 @@ class Ai:
                 raise err
             attempt += 1
             await asyncio.sleep(self._backoff * 2 ** (attempt - 1))
-        data = sorted(resp.data, key=lambda d: d.index)
-        if len(data) != len(texts):
-            raise AiError(Kind.DECODE, f"asked for {len(texts)} vectors, got {len(data)}")
-        u: Any = resp.usage.model_dump() if resp.usage else None
-        await self._charge(model, _usage(u))
-        return [list(d.embedding) for d in data]
+
+    async def aclose(self) -> None:
+        """Close the connections the client keeps open, at shutdown."""
+        await self._client.close()
 
     async def _charge(self, model: str, usage: Usage | None) -> None:
         u = usage or Usage()

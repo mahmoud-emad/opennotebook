@@ -13,6 +13,7 @@ from opennotebook.ai import ledger
 from opennotebook.ai.errors import AiError
 from opennotebook.api.deps import Db, Me
 from opennotebook.db.models import MindMap
+from opennotebook.db.session import release
 from opennotebook.domain import collections, reading
 from opennotebook.domain import settings as config
 from opennotebook.domain.reading import Estimate
@@ -129,12 +130,15 @@ async def make_mindmap(cid: uuid.UUID, body: MakeReq, s: Db, me: Me) -> MindMapO
     hint = docs[0].title if len(docs) == 1 else named or GENERIC_ROOT
     focus = body.focus.strip() or None
     model = await config.value(s, me.id, config.MINDMAP_MODEL_KEY)
+    limit = await reading.limit_of(s, me.id)
+    rule = config.language_rule(await config.value(s, me.id, config.LANGUAGE_KEY))
+    # Everything is read: the transaction goes before the price list and the
+    # model are asked, and the map is written in a new one after.
+    await release(s)
     # Checked against the spending limit before any model call, like a build.
     reading.refuse_over_limit(
-        await reading.estimate(docs, model, tokens_for, await reading.limit_of(s, me.id)),
-        "A mind map of these sources",
+        await reading.estimate(docs, model, tokens_for, limit), "A mind map of these sources"
     )
-    rule = config.language_rule(await config.value(s, me.id, config.LANGUAGE_KEY))
     try:
         async with (
             ledger.spending(me.id, "mindmap", collection_id=cid),
@@ -182,7 +186,10 @@ async def estimate_mindmap(cid: uuid.UUID, s: Db, me: Me) -> Estimate:
     await collections.summary(s, me.id, cid)
     docs = await reading.read_docs(s, me.id, cid, None)
     model = await config.value(s, me.id, config.MINDMAP_MODEL_KEY)
-    return await reading.estimate(docs, model, tokens_for, await reading.limit_of(s, me.id))
+    limit = await reading.limit_of(s, me.id)
+    # The price list can take seconds to read; no transaction waits for it.
+    await release(s)
+    return await reading.estimate(docs, model, tokens_for, limit)
 
 
 @router.get("/{mid}")

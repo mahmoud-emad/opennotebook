@@ -11,6 +11,7 @@ which keeps tests hermetic and lets the studio run against an endpoint that
 offers no embedding model.
 """
 
+import asyncio
 import math
 import re
 import uuid
@@ -95,14 +96,31 @@ async def _embed(model: str, texts: list[str]) -> list[list[float]]:
     return out
 
 
-async def index_source(s: AsyncSession, src: Source, model: str | None = None) -> int:
-    """Split, embed and store one source's passages, replacing what was there.
-    Returns how many passages were stored."""
+@dataclass
+class Passages:
+    """A text split into passages and, with an embedding model, embedded:
+    ready to store, with nothing slow left to do."""
+
+    model: str
+    rows: list[tuple[int, str]]
+    vectors: list[list[float]] | None
+
+
+async def passages(text_: str, model: str | None = None) -> Passages:
+    """Split and embed a source's text. Call it outside any transaction:
+    embedding is a model call, and splitting a large document is seconds of
+    work, done off the event loop."""
     model = embed_model() if model is None else model
-    await s.execute(delete(Chunk).where(Chunk.source_id == src.id))
-    rows = split(src.text)
+    rows = await asyncio.to_thread(split, text_)
     vectors = await _embed(model, [t for _, t in rows]) if model and rows else None
-    for i, (start, t) in enumerate(rows):
+    return Passages(model, rows, vectors)
+
+
+async def store(s: AsyncSession, src: Source, p: Passages) -> int:
+    """Store one source's passages, replacing what was there. Returns how
+    many passages were stored."""
+    await s.execute(delete(Chunk).where(Chunk.source_id == src.id))
+    for i, (start, t) in enumerate(p.rows):
         s.add(
             Chunk(
                 owner_id=src.owner_id,
@@ -112,12 +130,12 @@ async def index_source(s: AsyncSession, src: Source, model: str | None = None) -
                 start=start,
                 end=start + len(t),
                 text=t,
-                embed_model=model or None,
-                embedding=vectors[i] if vectors else None,
+                embed_model=p.model or None,
+                embedding=p.vectors[i] if p.vectors else None,
             )
         )
     await s.flush()
-    return len(rows)
+    return len(p.rows)
 
 
 async def search(

@@ -15,11 +15,14 @@ import json
 import logging
 import re
 from typing import Any
+from urllib.parse import urlsplit
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException
+
+from opennotebook.config import settings
 
 log = logging.getLogger(__name__)
 
@@ -35,6 +38,25 @@ class Problem(Exception):
 
 def not_found(what: str) -> Problem:
     return Problem(404, f"{what} is no longer there. Reload the page to see what is.")
+
+
+# Said for an exhausted AI account; where to add credit depends on whose
+# account it is (`credit_sentence`).
+OUT_OF_CREDIT = "The AI account is out of credit, so nothing can be read or made right now."
+
+
+def credit_sentence() -> str:
+    """Out of credit, with where to add it: OpenRouter's page when the studio
+    calls OpenRouter, the provider's own account otherwise."""
+    try:
+        host = urlsplit(settings().ai_base_url).hostname or ""
+    except Exception:
+        # Settings that cannot be read (no DATABASE_URL in a script, say)
+        # must not turn one error into another.
+        host = ""
+    if host == "openrouter.ai" or host.endswith(".openrouter.ai"):
+        return f"{OUT_OF_CREDIT} Add credit at openrouter.ai/settings/credits, then try again."
+    return f"{OUT_OF_CREDIT} Add credit with the AI provider the studio uses, then try again."
 
 
 # The failures with a fixed wording, and the words that give each away. No
@@ -53,8 +75,7 @@ KNOWN: list[tuple[tuple[str, ...], str]] = [
             "exceeded your current quota",
             "http 402",
         ),
-        "The AI account is out of credit, so nothing can be read or made right now. "
-        "Add credit at openrouter.ai/settings/credits, then try again.",
+        OUT_OF_CREDIT,
     ),
     (
         (
@@ -100,7 +121,7 @@ def known(raw: str) -> str | None:
     low = raw.lower()
     for keys, say in KNOWN:
         if any(k in low for k in keys):
-            return say
+            return credit_sentence() if say == OUT_OF_CREDIT else say
     return None
 
 

@@ -22,7 +22,6 @@ from opennotebook.api.rpc_methods import METHODS
 from opennotebook.config import settings as config
 from opennotebook.db.session import engine
 from opennotebook.domain import settings as st
-from opennotebook.domain import sources
 from opennotebook.jobs.events import hub
 from tests.builds.fake import install as install_build
 from tests.conftest import other_person
@@ -30,6 +29,7 @@ from tests.model import add_note, fails, install, says
 from tests.test_ingest import PAGE
 from tests.test_mindmap import OUTLINE, REEFS
 from tests.test_notes import MIMI, MOSHI, NOTES
+from tests.web import fake_web
 
 OSCHEMA = Path(__file__).parents[2] / "crates" / "opennotebook_api" / "oschema"
 
@@ -555,14 +555,7 @@ async def test_notes_files_and_pages_are_added_listed_and_removed(
     def pages(request: httpx.Request) -> httpx.Response:
         return httpx.Response(200, html=PAGE)
 
-    real = sources.http_client
-
-    def mocked() -> httpx.AsyncClient:
-        c = real()
-        c._transport = httpx.MockTransport(pages)  # pyright: ignore[reportPrivateUsage]
-        return c
-
-    monkeypatch.setattr(sources, "http_client", mocked)
+    fake_web(monkeypatch, pages)
     got = await ok(
         client,
         "sources",

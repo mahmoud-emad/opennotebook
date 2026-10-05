@@ -15,6 +15,7 @@ from opennotebook.ai.errors import AiError
 from opennotebook.api.deps import Db, Me
 from opennotebook.api.mindmaps import MakeReq, Retitle
 from opennotebook.db.models import StudyNotes
+from opennotebook.db.session import release
 from opennotebook.domain import collections, reading
 from opennotebook.domain import settings as config
 from opennotebook.domain.reading import Estimate
@@ -183,17 +184,16 @@ async def make_notes(cid: uuid.UUID, body: MakeReq, s: Db, me: Me) -> NotesOut:
     hint = docs[0].title if len(docs) == 1 else "Study notes"
     focus = body.focus.strip() or None
     model = await config.value(s, me.id, config.NOTES_MODEL_KEY)
+    limit = await reading.limit_of(s, me.id)
+    rule = config.language_rule(await config.value(s, me.id, config.LANGUAGE_KEY))
+    # Everything is read: the transaction goes before the price list and the
+    # model are asked, and the notes are written in a new one after.
+    await release(s)
     # Checked against the spending limit before any model call, like a build.
     reading.refuse_over_limit(
-        await reading.estimate(
-            docs,
-            model,
-            lambda chars: (tokens_in(chars), OUTPUT_TOKENS),
-            await reading.limit_of(s, me.id),
-        ),
+        await reading.estimate(docs, model, lambda chars: (tokens_in(chars), OUTPUT_TOKENS), limit),
         "Study notes of these sources",
     )
-    rule = config.language_rule(await config.value(s, me.id, config.LANGUAGE_KEY))
     try:
         async with (
             ledger.spending(me.id, "notes", collection_id=cid),
@@ -237,11 +237,11 @@ async def estimate_notes(cid: uuid.UUID, s: Db, me: Me) -> Estimate:
     await collections.summary(s, me.id, cid)
     docs = await reading.read_docs(s, me.id, cid, None)
     model = await config.value(s, me.id, config.NOTES_MODEL_KEY)
+    limit = await reading.limit_of(s, me.id)
+    # The price list can take seconds to read; no transaction waits for it.
+    await release(s)
     return await reading.estimate(
-        docs,
-        model,
-        lambda chars: (tokens_in(chars), OUTPUT_TOKENS),
-        await reading.limit_of(s, me.id),
+        docs, model, lambda chars: (tokens_in(chars), OUTPUT_TOKENS), limit
     )
 
 

@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 from opennotebook.ai.client import ai
 from opennotebook.ai.prices import Price, hint
 from opennotebook.api.deps import Db, Me
+from opennotebook.db.session import release
 from opennotebook.domain import settings
 from opennotebook.domain.settings import TAB_INFO, Current
 from opennotebook.domain.styles import STYLES
@@ -116,12 +117,15 @@ class Style(BaseModel):
 @router.get("/settings")
 async def get_settings(s: Db, me: Me) -> SettingsOut:
     """Every setting with its current value, default and allowed values."""
+    described = await settings.describe(s, me.id)
+    # The price list can take seconds to read; no transaction waits for it.
+    await release(s)
     prices = await ai().catalogue.prices()
     return SettingsOut(
         tabs=[
             SettingTab(id=t.id, label=t.label, note=t.note, advanced=t.advanced) for t in TAB_INFO
         ],
-        settings=[Setting.of(c, prices) for c in await settings.describe(s, me.id)],
+        settings=[Setting.of(c, prices) for c in described],
     )
 
 
@@ -131,6 +135,8 @@ async def set_setting(key: str, body: SetValue, s: Db, me: Me) -> Setting:
     only for the person asking; an instance setting changes for everyone and
     only whoever runs the studio may change it."""
     saved = await settings.save(s, me, key, body.value)
+    # Saved before the price list is read, which can take seconds.
+    await release(s)
     return Setting.of(saved, await ai().catalogue.prices())
 
 

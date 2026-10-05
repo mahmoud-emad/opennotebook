@@ -154,22 +154,12 @@ async def persist(sid: uuid.UUID, spend: ledger.Spend | None = None, **fields: A
 
 async def add_research(owner: uuid.UUID, cid: uuid.UUID, found: research.Found) -> Source:
     """The report, kept as one more source of the collection, searchable at
-    once."""
-    async with sessionmaker()() as s, s.begin():
-        await collections.lock(s, owner, cid)
-        src = await sources_keep(s, owner, cid, found)
-        await collections.touch(s, cid)
-        return src
-
-
-async def sources_keep(
-    s: AsyncSession, owner: uuid.UUID, cid: uuid.UUID, found: research.Found
-) -> Source:
+    once. Embedded first, then written in a short transaction."""
     from opennotebook.domain import sources
 
-    return await sources._keep(  # pyright: ignore[reportPrivateUsage]
-        s, owner, cid, kind="research", title=found.title, text=found.text
-    )
+    ready = await sources.prepare("research", found.title, found.text)
+    async with sessionmaker()() as s, s.begin():
+        return await sources.keep(s, owner, cid, ready)
 
 
 async def ingest(owner: uuid.UUID, cid: uuid.UUID) -> int:
@@ -193,8 +183,11 @@ async def ingest(owner: uuid.UUID, cid: uuid.UUID) -> int:
         raise NoSources
     for src, indexed, paired in rows:
         if not indexed:
+            # Embedded outside any transaction: it is a model call.
+            passages = await memory.passages(src.text)
             async with sessionmaker()() as s, s.begin():
-                await memory.index_source(s, await s.merge(src))
+                if await s.get(Source, src.id) is not None:
+                    await memory.store(s, src, passages)
         if not paired:
             # The model calls run outside any transaction: they take minutes.
             found = await qa.extract(qa.qa_model(), src.name, src.text, qa.DIMENSIONS)

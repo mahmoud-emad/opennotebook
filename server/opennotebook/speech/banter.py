@@ -17,6 +17,7 @@ counter walks the bank in order from a per-output offset, so nothing repeats
 until the bank is exhausted.
 """
 
+import asyncio
 import contextlib
 import logging
 from enum import StrEnum
@@ -174,7 +175,7 @@ async def spoken(voice: str, text: str) -> bytes | None:
     voice = provider.resolve(provider.provider(), voice)
     path = cache_path(voice, text)
     try:
-        return storage.read(path)
+        return await asyncio.to_thread(storage.read, path)
     except OSError:
         pass
     try:
@@ -184,5 +185,5 @@ async def spoken(voice: str, text: str) -> bytes | None:
         return None
     # A write that fails costs a re-synthesis next time and nothing else.
     with contextlib.suppress(OSError):
-        storage.put(path, wav)
+        await asyncio.to_thread(storage.put, path, wav)
     return wav

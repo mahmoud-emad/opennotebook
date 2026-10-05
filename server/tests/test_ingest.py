@@ -1,5 +1,8 @@
 """Files and web pages becoming sources."""
 
+import asyncio
+import socket
+from collections.abc import AsyncIterator
 from pathlib import Path
 
 import httpx
@@ -7,6 +10,7 @@ import pytest
 from httpx import AsyncClient
 
 from opennotebook.domain import sources
+from tests.web import fake_web
 
 FIXTURES = Path(__file__).parent / "convert" / "fixtures"
 
@@ -90,18 +94,7 @@ def _pages(request: httpx.Request) -> httpx.Response:
 async def test_pages_are_read_and_refusals_say_why(
     client: AsyncClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    def loopback_only(host: str) -> bool:
-        return host == "127.0.0.1"
-
-    monkeypatch.setattr(sources, "_private", loopback_only)
-    real = sources.http_client
-
-    def mocked() -> httpx.AsyncClient:
-        c = real()
-        c._transport = httpx.MockTransport(_pages)  # pyright: ignore[reportPrivateUsage]
-        return c
-
-    monkeypatch.setattr(sources, "http_client", mocked)
+    fake_web(monkeypatch, _pages)
     cid = await _collection(client)
     urls = [
         "https://example.com/reefs",
@@ -139,6 +132,113 @@ def test_refusal_pages_are_known_by_their_title_or_words() -> None:
     assert not sources.is_refusal("Blocked I/O in Linux", "long text " * 50)
 
 
-def test_private_addresses_are_this_network() -> None:
-    assert sources._private("127.0.0.1")  # pyright: ignore[reportPrivateUsage]
-    assert sources._private("localhost")  # pyright: ignore[reportPrivateUsage]
+def test_addresses_of_this_machine_and_its_network_are_refused() -> None:
+    for host in ("127.0.0.1", "localhost", "10.0.0.8", "169.254.169.254", "::1"):
+        with pytest.raises(sources.Refused, match="inside the studio's own network"):
+            sources.public_address(host)
+    # Dressed as IPv6, the loopback address is still this machine.
+    with pytest.raises(sources.Refused, match="inside the studio's own network"):
+        sources.public_address("::ffff:127.0.0.1")
+    assert sources.public_address("8.8.8.8") == "8.8.8.8"
+
+
+def test_a_name_that_does_not_resolve_is_refused(monkeypatch: pytest.MonkeyPatch) -> None:
+    def nowhere(*_: object, **__: object) -> list[object]:
+        raise socket.gaierror(socket.EAI_NONAME, "Name or service not known")
+
+    monkeypatch.setattr(socket, "getaddrinfo", nowhere)
+    with pytest.raises(sources.Refused, match="its address does not exist"):
+        sources.public_address("no-such-site.example")
+
+
+def test_one_private_address_among_public_ones_is_refused(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def both(*_: object, **__: object) -> list[tuple[object, ...]]:
+        return [
+            (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.215.14", 0)),
+            (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("127.0.0.1", 0)),
+        ]
+
+    monkeypatch.setattr(socket, "getaddrinfo", both)
+    with pytest.raises(sources.Refused, match="inside the studio's own network"):
+        sources.public_address("rebinding.example")
+
+
+async def test_a_page_is_fetched_from_the_address_that_was_checked(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Resolved once: the connection goes to the checked address, with the
+    site's name kept for its Host header and its certificate, and a name
+    that later answers with a private address cannot be read."""
+    answers = iter(["203.0.113.9", "127.0.0.1"])
+
+    def resolve(host: str) -> str:
+        addr = next(answers)
+        if addr.startswith("127."):
+            raise sources.Refused(sources.INSIDE)
+        return addr
+
+    seen: list[httpx.Request] = []
+
+    def site(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, html=PAGE)
+
+    monkeypatch.setattr(sources, "public_address", resolve)
+    monkeypatch.setattr(sources, "network", lambda: httpx.MockTransport(site))
+    async with sources.http_client() as http:
+        page = await sources.read_page(http, "https://news.example/reefs")
+        assert page.title.startswith("Coral reefs")
+        (sent,) = seen
+        assert sent.url.host == "203.0.113.9" and sent.url.path == "/reefs"
+        assert sent.headers["host"] == "news.example"
+        assert sent.extensions["sni_hostname"] == "news.example"
+        with pytest.raises(sources.Refused, match="inside the studio's own network"):
+            await sources.read_page(http, "https://news.example/again")
+    assert len(seen) == 1
+
+
+async def test_a_redirect_inside_is_refused(monkeypatch: pytest.MonkeyPatch) -> None:
+    def bounce(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(302, headers={"location": "http://127.0.0.1/admin"})
+
+    fake_web(monkeypatch, bounce)
+    async with sources.http_client() as http:
+        with pytest.raises(sources.Refused, match="inside the studio's own network"):
+            await sources.read_page(http, "https://public.example/")
+
+
+def test_proxies_in_the_environment_are_ignored(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("HTTPS_PROXY", "http://127.0.0.1:3128")
+    monkeypatch.setenv("HTTP_PROXY", "http://127.0.0.1:3128")
+    c = sources.http_client()
+    assert c._mounts == {}  # pyright: ignore[reportPrivateUsage]
+    assert isinstance(c._transport, sources.OutsideOnly)  # pyright: ignore[reportPrivateUsage]
+
+
+async def test_a_page_that_never_finishes_is_given_up_on(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class Slow(httpx.AsyncByteStream):
+        async def __aiter__(self) -> AsyncIterator[bytes]:
+            yield b"<html>"
+            await asyncio.sleep(10)
+            yield b"</html>"
+
+    def slow(_: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, headers={"content-type": "text/html"}, stream=Slow())
+
+    fake_web(monkeypatch, slow)
+    monkeypatch.setattr(sources, "PAGE_DEADLINE_S", 0.2)
+    async with sources.http_client() as http:
+        with pytest.raises(sources.Refused, match="took longer than"):
+            await sources.read_page(http, "https://slow.example/")
+
+
+async def test_too_many_files_at_once_are_refused(client: AsyncClient) -> None:
+    cid = await _collection(client)
+    files = [("files", (f"n{i}.md", b"# Note\n\nSome text.", "text/markdown")) for i in range(11)]
+    r = await client.post(f"/api/collections/{cid}/sources/files", files=files)
+    assert r.status_code == 422
+    assert r.json()["detail"].startswith("That is 11 files; at most 10 can be added at once.")

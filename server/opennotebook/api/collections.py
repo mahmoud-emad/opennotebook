@@ -10,9 +10,10 @@ from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 
 from opennotebook import storage
-from opennotebook.api.deps import Db, Me
+from opennotebook.api.deps import SANDBOXED, Db, Me
 from opennotebook.api.sessions import SessionSummary, summaries_of
 from opennotebook.cover import Theme
+from opennotebook.db.session import release
 from opennotebook.domain import collections, covers, refresh
 
 router = APIRouter(prefix="/api/collections", tags=["collections"])
@@ -155,8 +156,11 @@ async def refresh_cover(cid: uuid.UUID, s: Db, me: Me) -> CollectionSummary:
     the collection had is kept and the answer says why."""
     before = await collections.summary(s, me.id, cid)
     await collections.refuse_read_only(s, before.collection)
+    # The model is asked with no transaction open; the design is written in
+    # a short one of its own, under the collection's lock.
+    await release(s)
     await covers.redraw(me.id, cid, force=True)
-    # The design was written in its own transaction; read it fresh.
+    # Read fresh, after the design was written.
     await s.refresh(before.collection)
     return CollectionSummary.of(await collections.summary(s, me.id, cid))
 
@@ -174,4 +178,4 @@ async def read_cover(
     version drawn now, so a new version is a new URL."""
     html, version = await covers.page(s, me.id, cid, Theme.parse(theme))
     cache = "private, max-age=31536000, immutable" if v == version else "no-cache"
-    return HTMLResponse(html, headers={"Cache-Control": cache})
+    return HTMLResponse(html, headers={"Cache-Control": cache, **SANDBOXED})

@@ -25,6 +25,13 @@ log = logging.getLogger(__name__)
 
 PREP_TASK = "prep"
 RESEARCH_TASK = "research"
+# Why a job whose arguments do not decode failed, as a person reads it; the
+# detail goes to the log.
+UNREADABLE = (
+    "This work reached the worker in a form it could not read, so it was not started. "
+    "Start it again; if it keeps happening, the api and the worker may be running different "
+    "versions, so restart both."
+)
 
 
 async def _fail_unreadable(job_id: object, e: ValidationError) -> None:
@@ -33,7 +40,8 @@ async def _fail_unreadable(job_id: object, e: ValidationError) -> None:
     except ValueError:
         log.error("a job arrived with no readable job id: %s", e)
         return
-    await Progress(jid, 0).finish(f"the job's arguments did not decode: {e}")
+    log.error("job %s: its arguments did not decode: %s", jid, e)
+    await Progress(jid, 0).finish(UNREADABLE)
 
 
 @app.task(name=PREP_TASK, pass_context=False)

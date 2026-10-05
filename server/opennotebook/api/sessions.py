@@ -24,7 +24,7 @@ from opennotebook.api.deps import Db, Me
 from opennotebook.auth import current_user
 from opennotebook.build import narrate, pipeline, slides
 from opennotebook.db.models import Job, Playback, Session
-from opennotebook.db.session import sessionmaker
+from opennotebook.db.session import release, sessionmaker
 from opennotebook.domain import collections, sessions, voice
 from opennotebook.domain import sessions_estimate as est
 from opennotebook.domain import settings as st
@@ -313,6 +313,12 @@ async def build(cid: uuid.UUID, body: BuildReq, s: Db, me: Me) -> SessionSummary
         # Refused at once rather than queued: a build with no key fails at
         # its first call, minutes later, after waiting its turn.
         raise Problem(503, NO_KEY)
+    # The price list, which can take seconds to read, is read before the
+    # lock is taken and with no transaction open. Only with a limit to check.
+    prices = None
+    if st.parse_limit(await st.value(s, me.id, st.MAX_BUILD_USD_KEY)) is not None:
+        await release(s)
+        prices = await client.ai().catalogue.prices()
     # Under the collection's lock: a build never lands in a collection being
     # deleted, and a deleted output is never written back.
     await collections.lock(s, me.id, cid)
@@ -325,7 +331,11 @@ async def build(cid: uuid.UUID, body: BuildReq, s: Db, me: Me) -> SessionSummary
     # and no job behind, only the reason. Priced on the shape the pipeline
     # will build, so an audio overview is checked on its chapters and its
     # format's voices.
-    if why := await est.refuse_over_limit(s, me.id, chars, planned.shape(), bool(research)):
+    if prices is not None and (
+        why := await est.refuse_over_limit(
+            s, me.id, chars, planned.shape(), bool(research), prices=prices
+        )
+    ):
         raise Problem(422, why)
     audio = planned.audio
     style = None if audio else planned.style
@@ -380,6 +390,8 @@ async def estimate(cid: uuid.UUID, body: BuildReq, s: Db, me: Me) -> SessionEsti
     if not chars and not research:
         raise Problem(422, NO_SOURCES)
     planned = await _planned(s, me.id, body, len(chars))
+    # The price list can take seconds to read; no transaction waits for it.
+    await release(s)
     try:
         live = await est.compute(
             s,

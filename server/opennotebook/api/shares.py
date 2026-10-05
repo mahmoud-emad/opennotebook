@@ -14,7 +14,7 @@ from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 
 from opennotebook.api.collections import CollectionSummary
-from opennotebook.api.deps import Db, Me
+from opennotebook.api.deps import SANDBOXED, Db, Me
 from opennotebook.api.mindmaps import MindMapOut
 from opennotebook.api.notes import NotesOut
 from opennotebook.api.sessions import SessionDetail
@@ -287,7 +287,7 @@ async def read_share_cover(
     share = await shares.readable(s, share_id)
     html, version = await covers.page(s, share.owner_id, share.collection_id, Theme.parse(theme))
     cache = "private, max-age=31536000, immutable" if v == version else "no-cache"
-    return HTMLResponse(html, headers={"Cache-Control": cache})
+    return HTMLResponse(html, headers={"Cache-Control": cache, **SANDBOXED})
 
 
 @router.get("/shares/{share_id}/sources/{name}")

@@ -53,6 +53,10 @@ INTERNAL_ERROR = -32603
 
 BATCH_MAX = 100
 
+# The largest request body read: a 25 MB file as base64 is about 34 MB, and
+# the rest of a request is small. Past this the body is not read at all.
+MAX_BODY_BYTES = 40 * 1024 * 1024
+
 # What every answer says about this API: it is going away, and what replaces it.
 DEPRECATED = {"Deprecation": "true", "Link": '</docs>; rel="successor-version"'}
 
@@ -210,6 +214,20 @@ async def handle(domain: str, body: bytes, me: User, tasks: BackgroundTasks) -> 
     return await _one(domain, parsed, me, tasks)
 
 
+async def _body(request: Request) -> bytes | None:
+    """The request body, or None once it runs past `MAX_BODY_BYTES`: read a
+    piece at a time, so an oversized one is never held whole."""
+    declared = request.headers.get("content-length", "")
+    if declared.isdigit() and int(declared) > MAX_BODY_BYTES:
+        return None
+    body = bytearray()
+    async for chunk in request.stream():
+        body += chunk
+        if len(body) > MAX_BODY_BYTES:
+            return None
+    return bytes(body)
+
+
 def _route(domain: str) -> None:
     async def rpc(request: Request) -> Response:
         # Signed in on a session of its own, closed at once: a call such as
@@ -217,7 +235,21 @@ def _route(domain: str) -> None:
         async with sessionmaker()() as s, s.begin():
             me = await current_user(request, s)
         tasks = BackgroundTasks()
-        out = await handle(domain, await request.body(), me, tasks)
+        body = await _body(request)
+        if body is None:
+            return JSONResponse(
+                _error(
+                    None,
+                    RpcError(
+                        INVALID_REQUEST,
+                        f"The request is larger than {MAX_BODY_BYTES // (1024 * 1024)} MB, so "
+                        "it was not read. Send a smaller file, or one request at a time.",
+                        413,
+                    ),
+                ),
+                headers=DEPRECATED,
+            )
+        out = await handle(domain, body, me, tasks)
         if out is None:
             return Response(status_code=204, headers=DEPRECATED, background=tasks)
         return JSONResponse(out, headers=DEPRECATED, background=tasks)

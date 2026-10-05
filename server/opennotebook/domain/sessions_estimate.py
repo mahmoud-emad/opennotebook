@@ -647,9 +647,11 @@ async def compute(
     sh: Shape,
     style: str,
     research: bool,
+    prices: dict[str, Price] | None = None,
 ) -> Live:
     """Gather the real inputs and price them. Nothing here calls a model:
-    the prices come from the endpoint's catalogue, which needs no key."""
+    the prices come from the endpoint's catalogue, which needs no key, or
+    are `prices` when the caller read them already (outside its lock)."""
     v = await st.values(s, owner)
     # An audio overview runs as long as its format says, not the session
     # length setting.
@@ -666,7 +668,8 @@ async def compute(
         audio=sh.audio is not None,
         research=research,
     )
-    prices = await client.ai().catalogue.prices()
+    if prices is None:
+        prices = await client.ai().catalogue.prices()
     if not prices:
         # A local server (Ollama, LM Studio) lists models without prices.
         raise NoPrices
@@ -692,7 +695,12 @@ def over_limit_message(high: float, limit: float, audio: bool) -> str:
 
 
 async def refuse_over_limit(
-    s: AsyncSession, owner: uuid.UUID, chars: list[int], sh: Shape, research: bool
+    s: AsyncSession,
+    owner: uuid.UUID,
+    chars: list[int],
+    sh: Shape,
+    research: bool,
+    prices: dict[str, Price] | None = None,
 ) -> str | None:
     """Why a build whose HIGH estimate is over the person's spending limit is
     refused, or None.
@@ -705,7 +713,7 @@ async def refuse_over_limit(
     if st.parse_limit(await st.value(s, owner, st.MAX_BUILD_USD_KEY)) is None:
         return None
     try:
-        live = await compute(s, owner, chars, sh, "", research)
+        live = await compute(s, owner, chars, sh, "", research, prices)
     except NoPrices:
         return None
     if live.over_limit:

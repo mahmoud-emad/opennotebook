@@ -14,8 +14,10 @@ Four steps, each a plain call:
 4. a model writes a report from those pages, citing each claim by number.
 
 The depth setting decides how wide it goes: `quick` reads a handful of
-pages, `standard` about a dozen. It runs as a job, never in a request: a run
-is minutes.
+pages, `standard` about a dozen. A run is minutes, so it never runs inside a
+request's transaction: it runs as a job (asked for on its own, or as the
+first step of a build), or in a chat turn, which streams its progress and
+holds no transaction while it does.
 """
 
 import asyncio

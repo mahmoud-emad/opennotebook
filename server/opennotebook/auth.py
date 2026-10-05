@@ -16,19 +16,24 @@ nothing else changes.
 
 import hashlib
 import secrets
-from datetime import UTC, datetime
+import uuid
+from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
 from fastapi import Depends, Request
-from sqlalchemy import select, text, update
+from sqlalchemy import or_, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from opennotebook.config import settings
 from opennotebook.db.models import ApiKey, User
-from opennotebook.db.session import db
+from opennotebook.db.session import db, sessionmaker
 from opennotebook.errors import Problem
 
 KEY_PREFIX = "onk_"
+
+# How stale a key's "last used" may get before a request writes it again: a
+# key in steady use is written once a minute, not on every request.
+LAST_USED_EVERY = timedelta(seconds=60)
 
 
 def new_key() -> str:
@@ -69,13 +74,30 @@ async def _by_key(s: AsyncSession, key: str) -> User:
     if found is None:
         raise Problem(401, "That API key is not valid or was revoked. Make a new one in Settings.")
     api_key, user = found
-    await s.execute(
-        update(ApiKey).where(ApiKey.id == api_key.id).values(last_used_at=datetime.now(UTC))
-    )
+    now = datetime.now(UTC)
+    if api_key.last_used_at is None or now - api_key.last_used_at >= LAST_USED_EVERY:
+        await _mark_used(api_key.id, now)
     return user
 
 
-async def current_user(request: Request, s: Annotated[AsyncSession, Depends(db)]) -> User:
+async def _mark_used(key_id: uuid.UUID, now: datetime) -> None:
+    """Note when a key was used, in a transaction of its own that ends at
+    once: the request's own transaction may last a minute, and a row lock on
+    the key held that long would queue every other request that uses it."""
+    async with sessionmaker()() as t, t.begin():
+        await t.execute(
+            update(ApiKey)
+            .where(
+                ApiKey.id == key_id,
+                or_(ApiKey.last_used_at.is_(None), ApiKey.last_used_at < now - LAST_USED_EVERY),
+            )
+            .values(last_used_at=now)
+        )
+
+
+async def current_user(
+    request: Request, s: Annotated[AsyncSession, Depends(db, scope="function")]
+) -> User:
     header = request.headers.get("authorization", "")
     scheme, _, key = header.partition(" ")
     if scheme.lower() == "bearer" and key.strip():

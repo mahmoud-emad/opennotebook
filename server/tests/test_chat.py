@@ -18,9 +18,9 @@ from opennotebook.agent import commands, loop
 from opennotebook.ai import client as client_module
 from opennotebook.ai.client import Ai
 from opennotebook.db.session import engine
-from opennotebook.domain import sources
 from tests.conftest import other_person
 from tests.model import Model, Reply, add_note, fails, install, says, spent
+from tests.web import fake_web
 
 # ── ported from agent.rs ─────────────────────────────────────────────────────
 
@@ -151,7 +151,7 @@ def _page(title: str, body: str) -> str:
 
 
 def _web(request: httpx.Request) -> httpx.Response:
-    match (request.url.host, request.url.path):
+    match (request.headers.get("host", ""), request.url.path):
         case ("example.com", "/reefs"):
             return httpx.Response(200, html=_page("Coral reefs", REEFS))
         case ("kelp.example", "/kelp"):
@@ -163,15 +163,7 @@ def _web(request: httpx.Request) -> httpx.Response:
 @pytest.fixture
 def web(monkeypatch: pytest.MonkeyPatch) -> None:
     """The web, as a few pages; every other address is a 404."""
-    monkeypatch.setattr(sources, "_private", lambda _host: False)  # pyright: ignore[reportUnknownLambdaType]
-    real = sources.http_client
-
-    def mocked() -> httpx.AsyncClient:
-        c = real()
-        c._transport = httpx.MockTransport(_web)  # pyright: ignore[reportPrivateUsage]
-        return c
-
-    monkeypatch.setattr(sources, "http_client", mocked)
+    fake_web(monkeypatch, _web)
 
 
 @pytest.fixture(autouse=True)

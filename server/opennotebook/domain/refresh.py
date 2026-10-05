@@ -32,6 +32,7 @@ from opennotebook import jobs
 from opennotebook.db.session import engine, sessionmaker
 from opennotebook.domain import covers, naming
 from opennotebook.jobs.app import REFRESH_QUEUE, REFRESH_TASK, app, refresh_lock
+from opennotebook.shutdown import finish
 
 log = logging.getLogger(__name__)
 
@@ -74,8 +75,14 @@ async def request(owner: uuid.UUID, cid: uuid.UUID) -> bool:
 
 
 # The `request`s `spawn` started and that have not queued yet, held so none is
-# collected half way and so `settle` can wait for them.
+# collected half way and so `settle` and `drain` can wait for them.
 _queueing: set[asyncio.Task[bool]] = set()
+
+
+async def drain(seconds: float) -> None:
+    """At shutdown: give the refreshes not yet queued `seconds` to reach the
+    queue, then stop the rest. Each is a row written, so it is quick."""
+    await finish(_queueing, seconds)
 
 
 def spawn(owner: uuid.UUID, cid: uuid.UUID) -> None:

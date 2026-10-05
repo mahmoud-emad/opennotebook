@@ -63,7 +63,7 @@ from opennotebook.ai import client, ledger
 from opennotebook.ai.errors import AiError, Kind
 from opennotebook.build import pipeline
 from opennotebook.db.models import Collection, Source, User
-from opennotebook.db.session import sessionmaker
+from opennotebook.db.session import sessionmaker, unit
 from opennotebook.domain import collections, reading, refresh, sources
 from opennotebook.domain import settings as st
 from opennotebook.errors import Problem
@@ -573,10 +573,12 @@ async def source_count(t: Turn) -> int:
 
 async def fetch_one(t: Turn, http: httpx.AsyncClient, url: str) -> Fetched:
     """Read one page into the collection, committed at once, so a closed tab
-    loses nothing that was read."""
+    loses nothing that was read. Read with no transaction open; kept in a
+    short one."""
     try:
+        ready = await sources.prepare_page(http, url)
         async with sessionmaker()() as s, s.begin():
-            src = await sources.fetch_and_keep(s, t.owner, t.cid, http, url)
+            src = await sources.keep(s, t.owner, t.cid, ready)
             return Fetched.of(src, url)
     except sources.Refused as e:
         return Fetched(url=url, ok=False, error=str(e))
@@ -600,8 +602,9 @@ async def keep_note(t: Turn, text: str) -> Fetched:
     if why := await refusal(t):
         return Fetched(url="", ok=False, title="your note", error=why)
     try:
+        ready = await sources.prepare_note(text)
         async with sessionmaker()() as s, s.begin():
-            src = await sources.add_note(s, t.owner, t.cid, text)
+            src = await sources.keep(s, t.owner, t.cid, ready)
             return Fetched.of(src)
     except (sources.Refused, Problem) as e:
         why = e.detail if isinstance(e, Problem) else str(e)
@@ -683,7 +686,9 @@ async def make(t: Turn, ids: Ids, kind: str, title: str, focus: str) -> AsyncIte
         return
     p = t.picks
     try:
-        async with sessionmaker()() as s, s.begin():
+        # A unit of work, as a request has: the routes let their transaction
+        # go while the model writes, and write in a new one after.
+        async with unit() as s:
             if kind in ("session", "audio"):
                 audio = kind == "audio"
                 req = sessions.BuildReq.model_validate(

@@ -1,5 +1,8 @@
-"""The FastAPI app: every router, the readable-error layer, and CORS for the
-web app's dev server."""
+"""The FastAPI app: every router, the readable-error layer, CORS for the
+web app's dev server, and a clean stop."""
+
+from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -21,6 +24,7 @@ from opennotebook.api import (
     sources,
 )
 from opennotebook.config import settings as config
+from opennotebook.shutdown import close_all
 
 
 def _operation_id(route: APIRoute) -> str:
@@ -28,8 +32,17 @@ def _operation_id(route: APIRoute) -> str:
     return route.name
 
 
+@asynccontextmanager
+async def lifespan(_: FastAPI) -> AsyncGenerator[None]:
+    yield
+    # Running chat turns get a moment to finish and keep what they said;
+    # then every connection the process holds is closed.
+    await close_all()
+
+
 def create_app() -> FastAPI:
     app = FastAPI(
+        lifespan=lifespan,
         title="OpenNotebook",
         version="0.1.0",
         description="Collections of sources, and the decks, audio overviews, mind maps and "

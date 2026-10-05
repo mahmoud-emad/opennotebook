@@ -10,6 +10,7 @@ from opennotebook.ai import ledger
 from opennotebook.ai.errors import AiError
 from opennotebook.api.deps import Db, Me
 from opennotebook.api.notes import Citation
+from opennotebook.db.session import release
 from opennotebook.domain import collections, reading
 from opennotebook.domain import settings as config
 from opennotebook.errors import Problem
@@ -40,6 +41,8 @@ async def ask_sources(cid: uuid.UUID, body: AskReq, s: Db, me: Me) -> AskOut:
     docs = await reading.read_docs(s, me.id, cid, body.sources)
     model = await config.value(s, me.id, config.CHAT_MODEL_KEY)
     rule = config.language_rule(await config.value(s, me.id, config.LANGUAGE_KEY))
+    # Nothing is written: the transaction goes before the model is asked.
+    await release(s)
     try:
         async with ledger.spending(me.id, "ask", collection_id=cid):
             got = await cite.answer(docs, question, model=model, language_rule=rule)

@@ -299,4 +299,4 @@ async def test_arguments_that_do_not_decode_fail_the_job(client: AsyncClient) ->
         row = await s.get(Job, job.id)
         assert row is not None
         assert row.status == "failed"
-        assert "did not decode" in (row.error or "")
+        assert row.error == tasks.UNREADABLE

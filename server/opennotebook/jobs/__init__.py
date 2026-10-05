@@ -36,6 +36,9 @@ LIVE = (QUEUED, RUNNING)
 
 CHANNEL = "job_progress"
 
+# The error a stopped job is closed with, as a person reads it.
+STOPPED = "This was stopped before it finished. Start it again to make it."
+
 
 def now() -> datetime:
     return datetime.now(UTC)
@@ -147,7 +150,7 @@ async def stop(s: AsyncSession, session_id: uuid.UUID) -> list[uuid.UUID]:
         )
     )
     for job in live:
-        job.status, job.error, job.finished_at = CANCELLED, "stopped", now()
+        job.status, job.error, job.finished_at = CANCELLED, STOPPED, now()
         if job.procrastinate_job_id is not None:
             # A job waiting its turn is cancelled; a running one is asked to
             # abort, which reaches its task as `CancelledError`.
@@ -204,7 +207,7 @@ class Progress:
             await s.execute(
                 update(Job)
                 .where(Job.id == self.job_id, Job.status.in_(LIVE))
-                .values(status=CANCELLED, error="stopped", finished_at=now())
+                .values(status=CANCELLED, error=STOPPED, finished_at=now())
             )
             await notify(s, self.job_id)
 

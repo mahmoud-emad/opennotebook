@@ -44,7 +44,9 @@ from opennotebook.api import sessions as sessions_api
 from opennotebook.api import settings as settings_api
 from opennotebook.api import sources as sources_api
 from opennotebook.db.models import Job, MindMap, Session, Source, StudyNotes, User
+from opennotebook.db.session import release
 from opennotebook.domain import settings as config
+from opennotebook.domain import sources
 from opennotebook.domain.sessions import Line, Part
 from opennotebook.errors import Problem, not_found
 from opennotebook.script import retrieval
@@ -564,6 +566,8 @@ async def session_ask(c: Ctx, p: SessionAskIn) -> dict[str, Any]:
         )
     model = await config.value(c.s, c.me.id, config.CHAT_MODEL_KEY)
     rule = config.language_rule(await config.value(c.s, c.me.id, config.LANGUAGE_KEY))
+    # Nothing is written: the transaction goes before the model is asked.
+    await release(c.s)
     system = (
         f'You answer a listener\'s question about a narrated learning session titled "{o.title}". '
         "Answer in two to four plain sentences, as you would say them aloud. Use only the "
@@ -775,12 +779,20 @@ async def source_add_text(c: Ctx, p: SourceAddTextIn) -> dict[str, Any]:
     return add_result_of(r)
 
 
+def base64_chars(n: int) -> int:
+    """How long `n` bytes are as padded base64."""
+    return -(-n // 3) * 4
+
+
 @method("sources", "source_add_file", SourceAddFileIn)
 async def source_add_file(c: Ctx, p: SourceAddFileIn) -> dict[str, Any]:
     cid = _id(p.req.sid, "That collection")
     name = p.req.name.strip()
     if not name:
         raise Problem(422, "Give the file its name, extension included, so it can be read.")
+    # Measured before decoding, so an oversized file is never decoded.
+    if len(p.req.data_base64) > base64_chars(sources.MAX_UPLOAD_BYTES):
+        raise Problem(413, f"{name} is larger than 25 MB. Split it, or upload the part you need.")
     try:
         data = base64.b64decode(p.req.data_base64, validate=True)
     except binascii.Error, ValueError:

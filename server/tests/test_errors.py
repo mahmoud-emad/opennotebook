@@ -13,9 +13,24 @@ def test_out_of_credit_is_said_in_words_with_what_to_do() -> None:
     )
     m = readable(e)
     assert m.startswith("The AI account is out of credit"), m
-    assert "openrouter.ai/settings/credits" in m and "{" not in m
+    # The tests call no real provider, so the sentence names none.
+    assert "AI provider the studio uses" in m and "{" not in m
     # What the chat showed, cut in half, is still recognised.
     assert readable('credits","type":"insufficient_quota"}}') == m
+
+
+def test_out_of_credit_names_openrouter_only_when_it_is_the_provider(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from opennotebook.config import settings
+
+    monkeypatch.setenv("OPENNOTEBOOK_AI_BASE_URL", "https://openrouter.ai/api/v1")
+    settings.cache_clear()
+    try:
+        assert "openrouter.ai/settings/credits" in readable("insufficient_quota")
+    finally:
+        monkeypatch.undo()
+        settings.cache_clear()
 
 
 @pytest.mark.parametrize(

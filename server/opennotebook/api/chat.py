@@ -28,6 +28,7 @@ from opennotebook.auth import current_user
 from opennotebook.db.models import ChatMessage, Collection, User
 from opennotebook.db.session import sessionmaker
 from opennotebook.errors import SERVER_FAULT, Problem, not_found
+from opennotebook.shutdown import finish
 
 log = logging.getLogger(__name__)
 
@@ -241,14 +242,15 @@ class Record:
         )
 
 
-# Turns still running, held so none is collected mid-turn, and so tests and
-# a clean shutdown can wait for them.
+# Turns still running, held so none is collected mid-turn, and so the api's
+# shutdown can let them finish (`drain`).
 _turns: set[asyncio.Task[None]] = set()
 
 
-async def settle() -> None:
-    while _turns:
-        await asyncio.gather(*_turns, return_exceptions=True)
+async def drain(seconds: float) -> None:
+    """At shutdown: give the running turns `seconds` to finish, then stop
+    the rest. A stopped turn still keeps what it said and did."""
+    await finish(_turns, seconds)
 
 
 def _stream(turn: Turn, events: AsyncIterator[Event]) -> StreamingResponse:
