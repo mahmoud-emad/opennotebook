@@ -12,7 +12,8 @@ It is one Rust binary that serves a JSON-RPC API, the narration and slide bytes,
 - [Mind map specification](docs/mindmap-spec.md): a mind map of a collection's sources, where clicking a topic asks the chat about it with citations
 - [Study notes specification](docs/study-notes-spec.md): a study guide of a collection's sources, with a quiz, a glossary and every claim cited to its passage
 - [Audio overview specification](docs/audio-overview-spec.md): an audio overview of a collection's sources, in four formats, to listen to and join with spoken questions
-- [Migration record](docs/opennotebook-migration.md): how the project moved off its original service stack, and what replaced what
+- [Stack migration plan](docs/stack-migration-plan.md): moving to a TypeScript web app, a FastAPI server and Postgres, with what carries over and in which order
+- [Open questions](docs/open-questions.md): decisions not made yet (distribution, hosting, sign-in, billing and credits), what each one blocks, and what the work assumes until then
 
 ## What it needs
 
@@ -133,7 +134,7 @@ A five-slide deck costs a few cents on the default models: about $0.03 to $0.05 
 | `opennotebook_build` | The slide writer and style kits, narration synthesis, duration from the WAV header, the checks, and the prep job row |
 | `opennotebook_speech` | Text to speech and speech to text over OpenAI-compatible audio endpoints, always returning 24 kHz mono 16-bit WAV |
 | `opennotebook_vad` | Voice activity detection, native and wasm32 from one source: when a spoken turn ends, and whether a clip held speech |
-| `opennotebook_convert2md` | Office documents and PDF to Markdown, verbatim, no model and no network (see its [VENDORED.md](crates/opennotebook_convert2md/VENDORED.md)) |
+| `opennotebook_convert` | Word, PowerPoint, Excel and PDF to Markdown, verbatim, no model and no network |
 | `opennotebook_ui` | The Dioxus web app (separate workspace, built with `dx`) |
 
 ## API
@@ -177,4 +178,4 @@ Phase 1 is complete: resources in, narrated deck out, plays start to finish, in 
 
 ## Licence
 
-MIT, see [LICENSE](LICENSE). `opennotebook_convert2md` originated in another project; see its [VENDORED.md](crates/opennotebook_convert2md/VENDORED.md).
+MIT, see [LICENSE](LICENSE). The document converter, `opennotebook_convert`, is original OpenNotebook code under the same licence.

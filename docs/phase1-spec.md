@@ -2,7 +2,7 @@
 
 Static session: resources in, narrated deck out, plays start to finish. No interruption, no live mic, no streaming.
 
-> **Written against an earlier service stack.** This spec dates from September 2026, when the studio was one service among several: an external slide renderer, a retrieval service with two separate stores, a local Kokoro TTS server, an embedding service, a job supervisor that also held secrets, and a key-value store. The decisions and the measurements stand; the plumbing does not. Today the studio is one binary, `opennotebook_server`: retrieval is `opennotebook_memory` (one SQLite store), sessions, collections and prep jobs are SQLite rows, a prep runs as a child process of the server, model calls go through `opennotebook_ai` to any OpenAI-compatible endpoint, speech goes through `opennotebook_speech` to any OpenAI-compatible speech server, and the studio writes its own slides. [opennotebook-migration.md](opennotebook-migration.md) records what replaced what. Below, a component of that time is named by its role. The phase 0 verification record and the stack survey this spec cites were not carried into this repository.
+> **Written against an earlier service stack.** This spec dates from September 2026, when the studio was one service among several: an external slide renderer, a retrieval service with two separate stores, a local Kokoro TTS server, an embedding service, a job supervisor that also held secrets, and a key-value store. The decisions and the measurements stand; the plumbing does not. Today the studio is one binary, `opennotebook_server`: retrieval is `opennotebook_memory` (one SQLite store), sessions, collections and prep jobs are SQLite rows, a prep runs as a child process of the server, model calls go through `opennotebook_ai` to any OpenAI-compatible endpoint, speech goes through `opennotebook_speech` to any OpenAI-compatible speech server, and the studio writes its own slides. Below, a component of that time is named by its role. The phase 0 verification record and the stack survey this spec cites were not carried into this repository.
 
 Everything here rests on the phase 0 verification run and on the slices built since. Where this spec states a number or a behaviour, it was measured or called, not read from a schema. It has been amended several times as building revealed things the draft had wrong; [Amendments](#amendments) is the dated list, newest first, and is the place to look before trusting a number.
 
@@ -64,7 +64,7 @@ ingest_resources(session_sid, files[]) -> IngestResult
 
 ### The sequence
 
-1. **Convert, verbatim only.** Each file through vendored `convert2md` (`pdf.rs`, `docx.rs`, `pptx.rs`, `xlsx.rs`) to Markdown. Bytes in, model out, no network.
+1. **Convert, verbatim only.** Each file through `opennotebook_convert` (`pdf.rs`, `docx.rs`, `pptx.rs`, `xlsx.rs`) to Markdown. Bytes in, model out, no network.
 2. **Refuse what cannot be extracted.** A PDF whose pages fall under the 80 byte selectable-text threshold has no text layer. Refuse it with a clear message. Do not OCR and do not flag-and-continue: nothing downstream in phase 1 reads the flag, and OCR in the grounding store will be quoted back as if it were the document.
 3. **Write to the session directory.** Materialise the Markdown into the session's directory with a `.collection` marker.
 4. **`collection_import`** that directory.
