@@ -9,9 +9,9 @@ use crate::api::service_root;
 
 /// The screen this URL names.
 ///
-/// The mount is arbitrary — the bundle is served at `<prefix>/local/opennotebook/ui/`
-/// and a router may put a prefix in front — so the route is whatever follows
-/// `/ui`, never a fixed absolute path.
+/// The mount is not fixed — the studio serves the bundle at `/ui/`, and a
+/// proxy in front may add a prefix — so the route is whatever follows `/ui`,
+/// never a fixed absolute path.
 ///
 /// Reading the screen off the URL instead of holding it only in a signal is what
 /// makes a refresh land where you were.

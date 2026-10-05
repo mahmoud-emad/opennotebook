@@ -148,11 +148,39 @@ pub(crate) async fn lock(cid: &str) -> tokio::sync::OwnedMutexGuard<()> {
     m.lock_owned().await
 }
 
+/// How many empty collections a person may have before a new one is refused.
+///
+/// The New collection button made one per click, so a few clicks left a row
+/// of untitled, empty cards on the home page. Past this many, the empty ones
+/// are where the next sources should go.
+pub(crate) const MAX_EMPTY_COLLECTIONS: usize = 5;
+
+/// A collection with nothing in it: no sources and nothing made.
+pub(crate) fn is_empty(c: &CollectionSummary) -> bool {
+    c.sources == 0 && c.decks == 0 && c.audios == 0 && c.maps == 0 && c.notes == 0
+}
+
+/// Why another collection may not be started, when it may not.
+pub(crate) fn refuse_another(all: &[CollectionSummary]) -> Option<String> {
+    let empty = all.iter().filter(|c| is_empty(c)).count();
+    (empty >= MAX_EMPTY_COLLECTIONS).then(|| {
+        format!(
+            "You already have {empty} empty collections. Add sources to one of them, \
+             or delete the ones you don't need, before starting another."
+        )
+    })
+}
+
 /// Start a collection: mint its cid, make its staging directory, write its row.
+/// Refused while [`MAX_EMPTY_COLLECTIONS`] empty ones already exist, whoever
+/// asks: the page, the chat or an agent.
 ///
 /// `title` empty leaves the naming to the studio.
 pub(crate) async fn create(title: &str) -> Result<Collection, String> {
     let store = open_store().await?;
+    if let Some(why) = refuse_another(&synthesize(&gather(&store).await?)) {
+        return Err(why);
+    }
     let cid = mint(&store).await?;
     create::staging_dir_made(&cid)?;
     let mut c = Collection::new(&cid, now_ms());
@@ -1560,6 +1588,31 @@ pub(crate) async fn delete(store: &SessionStore, cid: &str) -> Result<bool, Stri
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_sixth_empty_collection_is_refused_and_a_used_one_does_not_count() {
+        let empty = |cid: &str| CollectionSummary {
+            cid: cid.into(),
+            ..Default::default()
+        };
+        let mut all: Vec<CollectionSummary> = (0..4).map(|i| empty(&format!("c{i}"))).collect();
+        all.push(CollectionSummary {
+            sources: 2,
+            ..empty("used")
+        });
+        assert!(super::refuse_another(&all).is_none(), "four empty is fine");
+        all.push(empty("c4"));
+        let why = super::refuse_another(&all).expect("five empty refuses the sixth");
+        assert!(
+            why.starts_with("You already have 5 empty collections"),
+            "{why}"
+        );
+        assert!(super::is_empty(&empty("x")));
+        assert!(!super::is_empty(&CollectionSummary {
+            maps: 1,
+            ..empty("m")
+        }));
+    }
+
     use super::*;
 
     fn session(sid: &str, collection: Option<&str>, audio: bool, state: SessionState) -> Session {

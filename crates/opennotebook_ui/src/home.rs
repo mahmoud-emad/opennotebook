@@ -347,7 +347,7 @@ pub(crate) fn CollectionCard(
                                 let cid = cid.clone();
                                 spawn(async move {
                                     if let Err(e) = collection_retitle(cid, next).await {
-                                        report(format!("The collection could not be renamed: {e}"));
+                                        report(format!("The collection could not be renamed. {e}"));
                                     }
                                     on_changed.call(());
                                 });
@@ -367,7 +367,7 @@ pub(crate) fn CollectionCard(
                                 .await;
                                 if let Err(e) = done {
                                     let what = if pinned { "unpinned" } else { "pinned" };
-                                    report(format!("The collection could not be {what}: {e}"));
+                                    report(format!("The collection could not be {what}. {e}"));
                                 }
                                 on_changed.call(());
                             });
@@ -385,7 +385,7 @@ pub(crate) fn CollectionCard(
                                 }
                                 .await;
                                 if let Err(e) = done {
-                                    report(format!("A new cover could not be designed: {e}"));
+                                    report(format!("A new cover could not be designed. {e}"));
                                 }
                                 redrawing.set(false);
                                 // The new cover has a new version; the list's
@@ -402,7 +402,7 @@ pub(crate) fn CollectionCard(
                                     let cid = cid.clone();
                                     spawn(async move {
                                         if let Err(e) = collection_delete(&cid).await {
-                                            report(format!("The collection could not be deleted: {e}"));
+                                            report(format!("The collection could not be deleted. {e}"));
                                         }
                                         on_changed.call(());
                                     });

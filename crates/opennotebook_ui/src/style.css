@@ -871,3 +871,40 @@ select.set-input { padding-right: 6px; }
 .cmd-menu .cmd-a { color: var(--bs-tertiary-color); font-family: var(--bs-font-monospace); font-size: 12px; }
 .cmd-menu .cmd-l { margin-left: auto; color: var(--bs-secondary-color); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 @media (max-width: 520px) { .cmd-menu .cmd-l { display: none; } }
+
+/* A source opened from a citation: a drawer at the right edge, over the page,
+   its text at a reading measure with the cited passage marked. */
+.srcv { position: fixed; top: 0; right: 0; bottom: 0; z-index: 40; display: flex; flex-direction: column;
+        width: min(560px, 100vw); background: var(--bs-body-bg); border-left: 1px solid var(--st-border-strong);
+        box-shadow: var(--bs-box-shadow-lg); animation: srcv-in var(--st-dur-fast) var(--st-ease-enter); }
+@keyframes srcv-in { from { transform: translateX(24px); opacity: 0; } }
+.srcv-head { display: flex; align-items: flex-start; gap: 12px; padding: 14px 16px 12px; border-bottom: 1px solid var(--bs-border-color); }
+.srcv-t { flex: 1; min-width: 0; }
+.srcv-n { font-weight: 600; color: var(--bs-emphasis-color); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.srcv-u { display: inline-flex; align-items: center; gap: 4px; margin-top: 2px; font-size: 12.5px; color: var(--bs-link-color); }
+.srcv-body { flex: 1; min-height: 0; overflow-y: auto; padding: 12px 20px 48px; font-size: 14px; line-height: 1.6;
+             overflow-wrap: anywhere; }
+.srcv-body .md { padding: 4px 8px; margin: 0 -8px 8px; border-radius: var(--bs-border-radius); }
+.srcv-body .md > :last-child { margin-bottom: 0; }
+.srcv-body .md.mark { background: var(--bs-warning-bg-subtle); box-shadow: inset 3px 0 0 var(--bs-warning); }
+.srcv-body table, .cbub .md table { display: block; max-width: 100%; overflow-x: auto; border-collapse: collapse; font-size: 13px; }
+.srcv-body th, .srcv-body td, .cbub .md th, .cbub .md td { padding: 3px 8px; border: 1px solid var(--bs-border-color); }
+.srcv-body img { max-width: 100%; }
+.srcv-body pre { white-space: pre-wrap; }
+.srcv-msg { display: flex; align-items: center; gap: 8px; padding: 24px 0; color: var(--bs-secondary-color); font-size: 13px; }
+.srcv-msg.bad { color: var(--bs-danger-text-emphasis); }
+/* A chip that opens its source says so. */
+.cite[data-src] { cursor: pointer; }
+
+/* The snackbar: a short message at the bottom centre that leaves on its own
+   (main::snack). Inverted, so it reads over any page in either theme. */
+.snack { position: fixed; left: 50%; bottom: 24px; z-index: 60; transform: translateX(-50%);
+         display: flex; align-items: center; gap: 10px; width: max-content; max-width: min(560px, calc(100vw - 32px));
+         padding: 8px 8px 8px 14px; border-radius: var(--bs-border-radius-lg); box-shadow: var(--bs-box-shadow-lg);
+         background: var(--bs-emphasis-color); color: var(--bs-body-bg); font-size: 13.5px; line-height: 1.4;
+         animation: snack-in var(--st-dur-fast) var(--st-ease-enter); }
+.snack > .ic:first-child { flex: 0 0 auto; color: var(--bs-warning); }
+.snack .icon-btn { color: inherit; opacity: .75; }
+.snack .icon-btn:hover:not(:disabled) { opacity: 1; background: transparent; }
+@keyframes snack-in { from { transform: translate(-50%, 12px); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .snack, .srcv { animation: none; } }

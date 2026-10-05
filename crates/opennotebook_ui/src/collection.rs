@@ -7,8 +7,8 @@
 //! newest first and every kind mixed, each saying where it is: preparing with
 //! its live step, failed with the reason and a retry, or ready to open.
 //!
-//! Nothing here waits on a build. A deck or an audio overview prepares in
-//! the job runner for minutes; its row follows the prep's own event stream and the
+//! Nothing here waits on a build. A deck or an audio overview prepares in a
+//! background job for minutes; its row follows the prep's own event stream and the
 //! page polls the collection while anything is moving, so the person can start
 //! another output, read, or leave, and the work is where they left it.
 //!
@@ -365,6 +365,8 @@ pub(crate) fn CollectionPage(
     let mm = mindmap::use_map_state();
     let nt = notes::use_notes_state();
     use_hook(notes::install_cite_flip);
+    // A citation clicked anywhere on the page: its source, open at the passage.
+    let mut cited = crate::source::use_cite_open();
 
     use_hook(move || {
         let cid = cid_s.peek().clone();
@@ -542,7 +544,7 @@ pub(crate) fn CollectionPage(
             .await;
             if let Err(e) = done {
                 report(format!(
-                    "\u{201c}{}\u{201d} could not be removed: {e}",
+                    "\u{201c}{}\u{201d} could not be removed. {e}",
                     s.name
                 ));
             }
@@ -608,7 +610,7 @@ pub(crate) fn CollectionPage(
         let cid = cid_s.peek().clone();
         spawn(async move {
             if let Err(e) = outputs::retitle(cid, &target, next.clone()).await {
-                report(format!("{} could not be renamed: {e}", target.subject()));
+                report(format!("{} could not be renamed. {e}", target.subject()));
                 return;
             }
             match target {
@@ -646,7 +648,7 @@ pub(crate) fn CollectionPage(
         }
         spawn(async move {
             if let Err(e) = outputs::delete(cid.clone(), &target).await {
-                report(format!("{} could not be deleted: {e}", target.subject()));
+                report(format!("{} could not be deleted. {e}", target.subject()));
             }
             match target {
                 Target::Map(_) => mindmap::load(cid, mm).await,
@@ -678,7 +680,7 @@ pub(crate) fn CollectionPage(
         let cid = cid_s.peek().clone();
         spawn(async move {
             if let Err(e) = crate::home::collection_retitle(cid, t).await {
-                report(format!("The collection could not be renamed: {e}"));
+                report(format!("The collection could not be renamed. {e}"));
             }
             load().await;
         });
@@ -1780,6 +1782,14 @@ pub(crate) fn CollectionPage(
                     }
                 },
                 None => rsx! {},
+            }
+        }
+
+        if let Some(o) = cited.read().clone() {
+            crate::source::SourceDrawer {
+                cid: cid_s.read().clone(),
+                opened: o,
+                on_close: move |_| cited.set(None),
             }
         }
 

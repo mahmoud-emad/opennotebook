@@ -10,8 +10,8 @@
 //! from the server's own oschema, so a schema change breaks the build rather
 //! than the page. And it does not hard-code its own mount: the API base is
 //! derived from `location.pathname`, because hard-coding `/api/session` is
-//! exactly what broke the player when it was first served behind a router's
-//! routing prefix, and only a real browser found it.
+//! exactly what broke the player when it was first served behind a routing
+//! prefix, and only a real browser found it.
 
 use dioxus::prelude::*;
 use opennotebook_sdk::session::{CollectionListInput, CollectionSummary};
@@ -21,6 +21,7 @@ mod api;
 mod chat;
 mod collection;
 mod dialogs;
+mod errors;
 mod home;
 mod mindmap;
 mod notes;
@@ -28,6 +29,7 @@ mod outputs;
 mod pick;
 mod routes;
 mod settings;
+mod source;
 
 use api::{clean_rpc_error, client, gloo_sleep, sources_client};
 use collection::CollectionPage;
@@ -47,11 +49,10 @@ fn main() {
 /// The thumbnail URL for a style, relative to the bundle's mount.
 ///
 /// `asset!` renders a ROOT-absolute `/assets/…`, which is the one form that
-/// cannot work here: the bundle has no fixed mount, a router injects a
-/// `<base href>` per request, and a leading slash ignores it. Measured in a
-/// real browser on 2026-09-22 — the swatches resolved to
-/// `localhost:9988/assets/…` and 404'd, while the same file under the mount
-/// answered 200. dx's own script and wasm tags are relative for this reason;
+/// cannot be relied on: the studio serves the bundle at `/ui/`, a proxy in
+/// front may add a prefix, and a leading slash ignores both. Measured in a
+/// real browser on 2026-09-22 — the swatches resolved to the origin's
+/// `/assets/…` and 404'd, while the same file under the mount answered 200. dx's own script and wasm tags are relative for this reason;
 /// this puts `asset!` back on the same footing.
 fn thumb_url(id: &str) -> String {
     let url = style_thumb(id).to_string();
@@ -249,6 +250,24 @@ fn report(msg: impl Into<String>) {
     }
 }
 
+/// A short message at the bottom of the screen that goes on its own: for a
+/// refusal the person can act on at once, like a seventh empty collection,
+/// where a banner that stays until dismissed would outlast its point. Each
+/// message has a number, so the timer of an older one never clears a newer.
+#[derive(Clone, Copy)]
+struct Snack(Signal<Option<(u32, String)>>);
+
+/// How long a snackbar stays, in ms.
+const SNACK_MS: i32 = 6000;
+
+/// Say something in the snackbar.
+fn snack(msg: impl Into<String>) {
+    if let Some(Snack(mut s)) = try_consume_context::<Snack>() {
+        let n = s.peek().as_ref().map_or(0, |(n, _)| n + 1);
+        s.set(Some((n, msg.into())));
+    }
+}
+
 #[component]
 fn App() -> Element {
     let mut view = use_signal(route_from_location);
@@ -270,6 +289,17 @@ fn App() -> Element {
     // could not be made, a rename or a delete that was refused. Shown under
     // the top bar until dismissed; any screen reports through `report`.
     let mut flash = use_context_provider(|| Flash(Signal::new(String::new()))).0;
+    let mut snack_s = use_context_provider(|| Snack(Signal::new(None))).0;
+    use_effect(move || {
+        if let Some((n, _)) = *snack_s.read() {
+            spawn(async move {
+                gloo_sleep(SNACK_MS).await;
+                if snack_s.peek().as_ref().is_some_and(|(m, _)| *m == n) {
+                    snack_s.set(None);
+                }
+            });
+        }
+    });
     // The kind to open a new collection on, from an address that asked for one.
     // Kept with the collection it was asked for, so it opens that one on the
     // kind and no other: Back to a collection never reopens a stale tile.
@@ -418,7 +448,7 @@ fn App() -> Element {
                         view.set(v);
                     }
                     Err(e) => {
-                        flash.set(format!("A new collection could not be started: {e}"));
+                        snack(e);
                         set_route(&View::Home, true);
                         view.set(View::Home);
                     }
@@ -432,14 +462,15 @@ fn App() -> Element {
             return;
         }
         creating.set(true);
-        flash.set(String::new());
         spawn(async move {
             match create_collection().await {
                 Ok(cid) => {
                     preselect.set(None);
                     view.set(View::Collection { cid, open: None });
                 }
-                Err(e) => flash.set(format!("A new collection could not be started: {e}")),
+                // The studio's own words: the empty-collection limit is
+                // decided there, for every caller, and says what to do.
+                Err(e) => snack(e),
             }
             creating.set(false);
         });
@@ -583,16 +614,19 @@ fn App() -> Element {
                     }
                 }
             }
-            // The one primary of a list page. On a collection the primary is
-            // its own Generate, so here it steps back to chrome.
-            button {
-                class: if on_list { "primary" } else { "ghost" },
-                title: "Start a new collection of sources",
-                aria_label: "New collection",
-                disabled: *creating.read(),
-                onclick: move |_| new_collection(),
-                Icon { name: "plus-lg" }
-                span { class: "hide-sm", "New collection" }
+            // The one primary of a list page. Only there: on a collection,
+            // where the person is already filling one, it made another empty
+            // collection per click.
+            if on_list {
+                button {
+                    class: "primary",
+                    title: "Start a new collection of sources",
+                    aria_label: "New collection",
+                    disabled: *creating.read(),
+                    onclick: move |_| new_collection(),
+                    Icon { name: "plus-lg" }
+                    span { class: "hide-sm", "New collection" }
+                }
             }
             button {
                 class: "icon-btn",
@@ -611,6 +645,19 @@ fn App() -> Element {
                     title: "Dismiss",
                     aria_label: "Dismiss",
                     onclick: move |_| flash.set(String::new()),
+                    Icon { name: "x-lg" }
+                }
+            }
+        }
+        if let Some((n, msg)) = snack_s.read().clone() {
+            div { key: "{n}", class: "snack", role: "alert",
+                Icon { name: "exclamation-triangle-fill" }
+                span { class: "grow", "{msg}" }
+                button {
+                    class: "icon-btn",
+                    title: "Dismiss",
+                    aria_label: "Dismiss",
+                    onclick: move |_| snack_s.set(None),
                     Icon { name: "x-lg" }
                 }
             }
@@ -960,10 +1007,7 @@ fn src_from(g: &serde_json::Value) -> Src {
         icon: g["icon"].as_str().unwrap_or_default().to_string(),
         name: if name.is_empty() { url.clone() } else { name },
         detail: if !ok {
-            g["error"]
-                .as_str()
-                .unwrap_or("could not read it")
-                .to_string()
+            errors::readable(g["error"].as_str().unwrap_or("could not read it"))
         } else if url.is_empty() {
             format!("note · {} words", chars / 6)
         } else {
