@@ -15,4 +15,9 @@ describe("outputs", () => {
     expect(detail).toBe("deck came back failed after 600s (0/5 rendered)");
     expect(prepFailureText("HTTP 402 insufficient credit")[0]).toContain("out of credit");
   });
+
+  it("shows the server's own sentence as the message", () => {
+    const said = "The AI provider refused the studio's API key. Check the key, then try again.";
+    expect(prepFailureText(said)).toEqual([said, ""]);
+  });
 });

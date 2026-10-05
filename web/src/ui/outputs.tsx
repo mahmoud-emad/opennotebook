@@ -103,6 +103,9 @@ export function prepFailureText(raw: string): [string, string] {
   const r = raw.trim();
   if (r === "") return ["Something went wrong while making this. Your sources are kept.", ""];
   const low = r.toLowerCase();
+  // The new server writes the reason as a sentence a person can act on; it is
+  // the message itself, not a detail to hide behind a disclosure.
+  if (/^[A-Z][^{}<>]*[.!?]$/.test(r) && !/\bHTTP \d{3}\b/.test(r)) return [r, ""];
   // The AI provider's failures read the same here as everywhere else.
   let plain = known(r);
   if (plain === null) {
