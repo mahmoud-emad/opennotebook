@@ -72,6 +72,7 @@ def main() -> None:
         import uvicorn
 
         from opennotebook.config import settings
+        from opennotebook.shutdown import CONNECTIONS_SECONDS
 
         c = settings()
         if why := refuse_open_local(args.host, c.auth, c.allow_local_auth_on_network):
@@ -83,6 +84,7 @@ def main() -> None:
             port=args.port,
             reload=args.reload,
             log_config=log_config(),
+            timeout_graceful_shutdown=CONNECTIONS_SECONDS,
         )
     elif args.cmd == "worker":
         import asyncio

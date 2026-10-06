@@ -7,8 +7,13 @@ from collections.abc import Set
 
 log = logging.getLogger(__name__)
 
-# How long running work is given to end when the api stops: inside the ten
-# seconds a container is given before it is killed.
+# How long the api waits for its open connections to close when it stops,
+# before it closes them itself. A page's live stream never ends on its own,
+# and the clean-up below only starts once every connection is gone, so
+# without a bound the api would never stop. A page reconnects by itself.
+CONNECTIONS_SECONDS = 2
+# How long running work is then given to end: inside the fifteen seconds the
+# api's container is given before it is killed (deploy/compose.yaml).
 DRAIN_SECONDS = 8.0
 
 

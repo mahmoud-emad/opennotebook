@@ -60,6 +60,9 @@ services:
   api:
     <<: *server
     command: ["opennotebook", "serve", "--host", "0.0.0.0", "--port", "8000"]
+    # Two seconds for open connections, eight for running work, then the rest
+    # of the clean-up (opennotebook/shutdown.py).
+    stop_grace_period: 15s
     healthcheck:
       test:
         - CMD
