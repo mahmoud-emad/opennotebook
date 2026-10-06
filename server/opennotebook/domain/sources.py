@@ -191,8 +191,10 @@ async def prepare_note(text: str, title: str = "") -> Ready:
     title = one_line(title)
     named = title or " ".join(text.split()[:NOTE_NAME_WORDS])
     # A title, when given, becomes the note's heading, which is what a build
-    # and the source list read it by.
-    body = f"# {title}\n\n{text}" if title else text
+    # and the source list read it by; unless the note already opens with it.
+    first = text.splitlines()[0].strip()
+    headed = first.startswith("# ") and first[2:].strip().casefold() == title.casefold()
+    body = f"# {title}\n\n{text}" if title and not headed else text
     return await prepare("text", named, body)
 
 

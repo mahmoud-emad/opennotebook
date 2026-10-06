@@ -86,11 +86,13 @@ header {
   color: var(--bs-emphasis-color);
 }
 .brand:hover:not(:disabled) { background: var(--st-hover-bg); border-color: transparent; }
-.mark {
+/* The studio's mark: only inside the brand button, since `.mark` also names
+   the cited paragraphs in the source drawer. */
+.brand .mark {
   width: 24px; height: 24px; border-radius: 7px; display: grid; place-items: center;
   background: var(--bs-primary); color: var(--st-on-primary);
 }
-.mark .ic { width: 14px; height: 14px; }
+.brand .mark .ic { width: 14px; height: 14px; }
 h1 { font-size: 14px; margin: 0; font-weight: 600; letter-spacing: -.005em; }
 /* Where you are, after the brand: "Studio / <the collection's name>". */
 .crumb { display: flex; align-items: center; gap: 8px; color: var(--bs-secondary-color); font-size: 13px; font-weight: 500; min-width: 0; }
@@ -997,6 +999,9 @@ select.set-input { padding-right: 6px; }
              overflow-wrap: anywhere; }
 .srcv-body .md { padding: 4px 8px; margin: 0 -8px 8px; border-radius: var(--bs-border-radius); }
 .srcv-body .md > :last-child { margin-bottom: 0; }
+/* A source's own top heading, at a heading's size: the global `h1` is the
+   header's small "Studio" label. */
+.srcv-body h1 { font-size: 1.75em; font-weight: 700; margin: .67em 0; letter-spacing: normal; }
 .srcv-body .md.mark { background: var(--bs-warning-bg-subtle); box-shadow: inset 3px 0 0 var(--bs-warning); }
 .srcv-body table, .cbub .md table { display: block; max-width: 100%; overflow-x: auto; border-collapse: collapse; font-size: 13px; }
 .srcv-body th, .srcv-body td, .cbub .md th, .cbub .md td { padding: 3px 8px; border: 1px solid var(--bs-border-color); }

@@ -60,6 +60,17 @@ async def test_a_titled_note_keeps_its_title_as_a_heading(client: AsyncClient) -
     assert read["text"] == f"# Reefs\n\n{NOTE}"
 
 
+async def test_a_note_that_opens_with_its_title_is_not_headed_twice(client: AsyncClient) -> None:
+    cid = await _collection(client)
+    text = f"# Reefs\n\n{NOTE}"
+    r = await client.post(
+        f"/api/collections/{cid}/sources", json={"kind": "text", "text": text, "title": "reefs"}
+    )
+    src = r.json()[0]["source"]
+    read = (await client.get(f"/api/collections/{cid}/sources/{src['name']}")).json()
+    assert read["text"] == text
+
+
 def test_a_source_is_described_by_where_it_came_from_and_its_length() -> None:
     from opennotebook.domain.sources import described
 

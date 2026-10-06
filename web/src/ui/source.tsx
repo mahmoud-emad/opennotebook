@@ -76,6 +76,13 @@ export function markedParagraphs(text: string, passage: string): [string, boolea
   return paras.map((p, i) => [p, marks[i] ?? false]);
 }
 
+/** Whether a paragraph is only the heading the drawer already shows as its
+ * title, so the text does not open by saying it twice. */
+export function repeatsTitle(paragraph: string, title: string): boolean {
+  const m = /^#\s+(.*)$/.exec(paragraph.trim());
+  return m !== null && title.trim() !== "" && m[1]!.trim().toLowerCase() === title.trim().toLowerCase();
+}
+
 type Text = { title: string; url: string; text: string };
 
 /** The drawer: the source's title and page, then its text with the passage
@@ -119,9 +126,11 @@ export function SourceDrawer({ cid, opened, onClose }: { cid: string; opened: Op
       </div>
     );
   else
-    body = markedParagraphs(got.ok.text, passage).map(([p, mark], i) => (
-      <div key={i} className={mark ? "md mark" : "md"} dangerouslySetInnerHTML={{ __html: mdToHtml(p) }} />
-    ));
+    body = markedParagraphs(got.ok.text, passage)
+      .filter(([p], i) => i > 0 || !repeatsTitle(p, got.ok.title))
+      .map(([p, mark], i) => (
+        <div key={i} className={mark ? "md mark" : "md"} dangerouslySetInnerHTML={{ __html: mdToHtml(p) }} />
+      ));
   const [title, url] = got && "ok" in got ? [got.ok.title, got.ok.url] : ["", ""];
   return (
     <aside className="srcv" role="dialog" aria-label="Source" onKeyDown={(e) => e.key === "Escape" && onClose()}>
