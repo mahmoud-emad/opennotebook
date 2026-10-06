@@ -11,6 +11,7 @@ import type * as Rest from "@/client/types.gen";
 import {
   apiBase,
   call,
+  callAllBack,
   enc,
   errText,
   isAbort,
@@ -402,7 +403,7 @@ function stepOf(s: Record<string, unknown>): Msg {
 /** The collection's conversation as the server keeps it, oldest first: each
  * answer's work lines before it, as they were shown while it ran. */
 export async function chatHistory(cid: string, signal?: AbortSignal): Promise<Msg[]> {
-  const rows = await call<Rest.Message[]>("GET", `/collections/${enc(cid)}/chat`, undefined, { signal });
+  const rows = await callAllBack<Rest.Message>(`/collections/${enc(cid)}/chat`, { signal });
   const out: Msg[] = [];
   for (const m of rows) {
     if (m.role === "user") {

@@ -55,6 +55,16 @@ export async function call<T>(
   body?: unknown,
   init: RequestInit = {},
 ): Promise<T> {
+  return (await send<T>(method, path, body, init)).data;
+}
+
+/** `call`, with the headers the answer came with. */
+async function send<T>(
+  method: string,
+  path: string,
+  body?: unknown,
+  init: RequestInit = {},
+): Promise<{ data: T; headers: Headers }> {
   let resp: Response;
   try {
     const isForm = body instanceof FormData;
@@ -69,12 +79,64 @@ export async function call<T>(
     throw new Error(UNREACHABLE, { cause: e });
   }
   if (!resp.ok) throw new ApiError(await refusal(resp), resp.status);
-  if (resp.status === 204) return undefined as T;
+  if (resp.status === 204) return { data: undefined as T, headers: resp.headers };
   try {
-    return (await resp.json()) as T;
+    return { data: (await resp.json()) as T, headers: resp.headers };
   } catch {
     throw new Error(UNREADABLE);
   }
+}
+
+/** The most pages one list is read in: a server that kept saying there is
+ * more would otherwise be asked forever. */
+const PAGES_MAX = 100;
+
+/** `path` with one query parameter set. */
+function withParam(path: string, key: string, value: string): string {
+  const [base, query = ""] = path.split("?", 2) as [string, string?];
+  const params = new URLSearchParams(query);
+  params.set(key, value);
+  return `${base}?${params.toString()}`;
+}
+
+/** A whole list the server answers a page at a time: each page asked for in
+ * turn, from where the `X-Next-Offset` header of the one before says the
+ * next starts, until a page says there is no more. */
+export async function callAll<T>(path: string, init: RequestInit = {}): Promise<T[]> {
+  const out: T[] = [];
+  let next: string | null = null;
+  for (let i = 0; i < PAGES_MAX; i++) {
+    const { data, headers }: { data: T[]; headers: Headers } = await send<T[]>(
+      "GET",
+      next === null ? path : withParam(path, "offset", next),
+      undefined,
+      init,
+    );
+    out.push(...data);
+    next = headers.get("X-Next-Offset");
+    if (next === null) break;
+  }
+  return out;
+}
+
+/** A whole list the server answers newest page first, each page in order:
+ * the pages before are asked for from the `X-Next-Before` header, and put
+ * ahead of the ones already read. */
+export async function callAllBack<T>(path: string, init: RequestInit = {}): Promise<T[]> {
+  let out: T[] = [];
+  let before: string | null = null;
+  for (let i = 0; i < PAGES_MAX; i++) {
+    const { data, headers }: { data: T[]; headers: Headers } = await send<T[]>(
+      "GET",
+      before === null ? path : withParam(path, "before", before),
+      undefined,
+      init,
+    );
+    out = [...data, ...out];
+    before = headers.get("X-Next-Before");
+    if (before === null) break;
+  }
+  return out;
 }
 
 /** What a refused request says, as the person should read it. */
@@ -284,7 +346,7 @@ export function sessionOf(o: Rest.SessionSummary): SessionSummary {
 }
 
 export async function listCollections(): Promise<CollectionSummary[]> {
-  return (await call<Rest.CollectionSummary[]>("GET", "/collections")).map(collectionOf);
+  return (await callAll<Rest.CollectionSummary>("/collections")).map(collectionOf);
 }
 
 export async function getCollection(
@@ -400,9 +462,7 @@ const serverSourceOf = (s: Rest.SourceOut): ServerSource => ({
 });
 
 export async function sourceList(cid: string, signal?: AbortSignal): Promise<ServerSource[]> {
-  return (await call<Rest.SourceOut[]>("GET", `/collections/${enc(cid)}/sources`, undefined, { signal })).map(
-    serverSourceOf,
-  );
+  return (await callAll<Rest.SourceOut>(`/collections/${enc(cid)}/sources`, { signal })).map(serverSourceOf);
 }
 
 /** One thing asked to be added, as the old `Fetched` shape the rows read. */

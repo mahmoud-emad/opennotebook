@@ -6,7 +6,7 @@
 // What a share includes is read through the share's own routes, never the
 // collection's: those stay its owner's.
 
-import { apiBase, call, enc, isGone } from "./api";
+import { apiBase, call, callAll, enc, isGone } from "./api";
 import { mapOf, notesOf, playerUrl, type MindMap, type StudyNotes } from "./api-studio";
 import { fromWireKind, ms, toWireKind } from "./helpers";
 import type { Output } from "./shell";
@@ -206,7 +206,7 @@ export async function shareFeed(
   const q = query.trim();
   const params = new URLSearchParams({ sort });
   if (q !== "") params.set("query", q);
-  return (await call<Rest.ShareCard[]>("GET", `/shares?${params.toString()}`, undefined, { signal })).map(cardOf);
+  return (await callAll<Rest.ShareCard>(`/shares?${params.toString()}`, { signal })).map(cardOf);
 }
 
 /** How many items Discover asks for at a time. */
