@@ -29,8 +29,8 @@ All six steps of section 11 are built, and section 8 holds what was measured. Th
 | Are nodes grounded | Yes, checked: a node whose words appear nowhere in the sources is dropped and counted | Decided, and a departure. NotebookLM enforces nothing; its nodes carry no citations and grounding rests on the prompt alone. |
 | What a click asks | NotebookLM's exact sentence (section 1) | Observed. |
 | How the answer is grounded | Excerpts from the staged files, numbered, cited as `[n]` | Decided by the owner: citations are in v1. A draft has no retrieval index until it is built, so `session_ask` cannot serve it. |
-| Where maps are stored | `<data dir>/mindmaps/<cid>/<id>.json` | Decided, forced. `read_resources` (`crates/opennotebook_server/src/pipeline.rs:305`) ingests every file in the staging directory, so a map stored there would become a source of the build. |
-| Rendering | Plain SVG from Dioxus, laid out by a pure Rust function. No D3, no markmap. | Decided. The UI is offline first and has no JavaScript dependencies today. The layout NotebookLM uses is small enough to write and test in Rust. |
+| Where maps are stored | `<data dir>/mindmaps/<cid>/<id>.json` | Decided, forced. The Rust server's `read_resources` ingested every file in the staging directory, so a map stored there would have become a source of the build. The new server keeps maps in the `mindmaps` table (`MindMap` in `server/opennotebook/db/models.py`). |
+| Rendering | Plain SVG from React, laid out by a pure TypeScript function (`layout` in `web/src/ui/mindmapLayout.ts`). No D3, no markmap. | Decided. The UI is offline first and takes no drawing library. The layout NotebookLM uses is small enough to write and test in TypeScript. |
 | Editing | Not in v1 | Decided. NotebookLM has none either. See section 9. |
 
 ## 1. What NotebookLM does
@@ -70,22 +70,29 @@ Only the direct parent is named, not the path. Clicking the label always asks, a
 
 ## 2. What the studio already has
 
-- **The tile.** The Studio panel already lists Mind Map as "soon" (`crates/opennotebook_ui/src/main.rs:1816`).
+- **The tile.** The Studio panel already lists Mind Map as "soon". It is now a working output in `web/src/ui/collection/Studio.tsx`.
 - **The sources.** One Markdown file per source in `<data dir>/staging/<cid>/`, written by the `sources` domain.
 - **The id.** The draft's sid is the session's sid after the build, so a map stored under it still belongs to the session later.
-- **Retrieval without a build.** `grounding::excerpts()` cuts documents into paragraph pieces, drops navigation, and keeps the pieces sharing the most words with a query. It returns text only; section 5 needs it to say which document a piece came from.
-- **Word matching.** `grounding::terms()` lowercases a query, keeps words of three letters or more and drops common ones. Section 3's grounding check reuses it.
-- **A tolerant outline parser.** `parse_plan` in `generate.rs` already reads a model's decorated outline. Section 3's parser follows its approach.
-- **The language rule.** `settings::language_rule()` is what every other prompt appends.
+- **Retrieval without a build.** `grounding.excerpts()` cuts documents into paragraph pieces, drops navigation, and keeps the pieces sharing the most words with a query. It returns text only; section 5 needs it to say which document a piece came from.
+- **Word matching.** `grounding.terms()` lowercases a query, keeps words of three letters or more and drops common ones. Section 3's grounding check reuses it.
+- **A tolerant outline parser.** `parse_plan` in `server/opennotebook/script/generate.py` already reads a model's decorated outline. Section 3's parser follows its approach.
+- **The language rule.** `settings.language_rule()` is what every other prompt appends.
 
 What is missing: nothing on the Create page answers a question from the sources. The chat agent has `web_search`, `deep_research`, `add_sources` and `start_build`, and none of them reads what was gathered.
 
 ## 3. Generation
 
-A new module, `crates/opennotebook_script/src/mindmap.rs`, with one public function:
+A new module, `server/opennotebook/script/mindmap.py`, with one public function:
 
-```rust
-pub async fn generate(sources: &[NamedDoc], focus: Option<&str>, language: &str) -> Result<MindMap, ScriptError>
+```python
+async def generate_map(
+    sources: list[NamedDoc],
+    root_hint: str,
+    focus: str | None,
+    *,
+    model: str,
+    language_rule: str,
+) -> MindMap
 ```
 
 **The prompt.** System, in the studio's voice:
@@ -105,7 +112,7 @@ User: each source as `SOURCE <n>: <title>` followed by its text, then the focus 
 
 **The clean up, in this order.**
 
-1. Drop empty labels and fit each label to 48 characters with `budget::fit`.
+1. Drop empty labels and fit each label to 48 characters with `budget.fit`.
 2. Merge siblings whose labels are equal ignoring case and punctuation, keeping the first and appending the second's children.
 3. Cut everything below depth 4.
 4. The grounding check: a node is kept when at least one of its `terms()`, or that term's stem (`costs` also matches `cost`), appears in the lowercased source text. A node with no terms at all (every word short or common) is kept. A node is dropped only when it and everything under it is unmentioned: "Key ideas" over two real topics is an organising heading, not an invention. The root is never dropped. The count of dropped nodes is stored.
@@ -120,7 +127,7 @@ A reply cut off at the model's token ceiling is kept up to the cut, because a ma
 
 ## 4. Storage and API
 
-A new oschema domain, `crates/opennotebook_api/oschema/mindmap/mindmap.oschema`, served at `/api/mindmap/rpc`. The chat agent and any JSON-RPC client call the same methods, so the comments are written for an agent.
+A new JSON-RPC domain, the `mindmap` methods in `server/opennotebook/api/rpc_methods.py`, served at `/api/mindmap/rpc`. The chat agent and any JSON-RPC client call the same methods, so the comments are written for an agent.
 
 ```
 MindNode = {
@@ -252,7 +259,7 @@ fn layout(root: &MindNode, open: &HashSet<Path>, measure: &dyn Fn(&str) -> f32) 
 - Drag pans. Wheel and pinch zoom around the pointer, clamped to 0.1x to 50x.
 - Clicking a node animates the view to fit it and its children, over 300 ms.
 - Toolbar: expand all, collapse all, zoom in, zoom out, fit, and export.
-- Colours: `--mm-depth-0` to `--mm-depth-4` and `--mm-link`, defined for light and dark, readable at WCAG AA, held there by a test the way `kits.rs` holds its palettes.
+- Colours: `--mm-depth-0` to `--mm-depth-4` and `--mm-link`, defined for light and dark, readable at WCAG AA, held there by a test the way `test_every_kit_is_readable` in `server/tests/builds/test_slides.py` holds the kits' palettes.
 
 ### Keyboard and screen readers
 
@@ -326,7 +333,7 @@ Each of these is a test, written before the code it guards.
 
 ## 11. Sequence, for building
 
-1. `mindmap.rs`: prompt, parser, clean up, grounding check, and the section 10 parser tests.
+1. `server/opennotebook/script/mindmap.py`: prompt, parser, clean up, grounding check, and the section 10 parser tests.
 2. Find out whether the oschema macro takes a recursive `MindNode`. Then the `mindmap` domain, the on-disk store, and the staging directory test.
 3. `excerpts_from()`, `source_ask`, citation parsing and renumbering, their tests, and the `ask_sources` agent tool.
 4. The layout function and its tests.
@@ -342,7 +349,7 @@ Each of these is a test, written before the code it guards.
 
 ### 2026-10-02, step 1 built
 
-`crates/opennotebook_script/src/mindmap.rs`: the prompt, the parser, the clean up and the grounding check, with 18 tests. The model call goes through a new `generate::send()`, split out of `complete_with()` so the map can use its own model setting, `OPENNOTEBOOK_MINDMAP_MODEL`, which is on the Models tab. Building it settled three things section 3 had not: an organising label over real topics is kept, the check is skipped for a map that is not in English, and a reply cut at the token ceiling is kept. Section 3 now says so. Nothing has called a real model yet; that is step 6.
+`server/opennotebook/script/mindmap.py`: the prompt, the parser, the clean up and the grounding check. Its tests are in `server/tests/test_mindmap.py`. The model call goes through `generate.send()` in `server/opennotebook/script/generate.py`, so the map can use its own model setting, `OPENNOTEBOOK_MINDMAP_MODEL`, which is on the Models tab. Building it settled three things section 3 had not: an organising label over real topics is kept, the check is skipped for a map that is not in English, and a reply cut at the token ceiling is kept. Section 3 now says so. Nothing has called a real model yet; that is step 6.
 
 
 ### 2026-10-02, step 2 built
@@ -351,9 +358,9 @@ The `mindmap` domain is served at `/api/mindmap/rpc` with all four methods, and 
 
 ### 2026-10-02, step 3 built
 
-`source_ask` is on the sources domain and `ask_sources` is a tool of the chat agent. The prompt and the citation parser are `crates/opennotebook_script/src/cite.rs`, with 7 tests. Retrieval is a new `grounding::excerpts_from()`, which is `excerpts()` plus the index of the source each passage came from. Reading a draft's sources moved into `sources_impl::read_docs()`, shared by `source_ask` and `mindmap_create`.
+`source_ask` is on the sources domain and `ask_sources` is a tool of the chat agent. The prompt and the citation parser are `server/opennotebook/script/cite.py`, tested in `server/tests/test_ask.py`. Retrieval is `grounding.excerpts_from()`, which is `excerpts()` plus the index of the source each passage came from. Reading a collection's sources is `read_docs()` in `server/opennotebook/domain/reading.py`, shared by ask, mind maps and study notes.
 
-The answer uses the agent's model, through a new `settings::agent_model()`, rather than `chat_model()`, which falls back to the script model, too small to follow the citation rule. The agent's own copy of that default is gone.
+The answer uses the agent's model, the `CHAT_MODEL_KEY` setting in `server/opennotebook/domain/settings.py`, whose default is `AGENT_MODEL_DEFAULT`, rather than the script model, too small to follow the citation rule.
 
 `ask_sources` ends the agent's turn. Its answer goes to the person as the reply, with a `citations` field on the `reply` event, instead of going back to the model. Handed back, it would come out paraphrased, and a paraphrase drops the markers.
 
@@ -361,14 +368,14 @@ Measured on the 5,495 byte draft: NotebookLM's click sentence for "Inner Monolog
 
 ### 2026-10-02, step 4 built
 
-The layout is `crates/opennotebook_sdk/src/mindmap_layout.rs`, in the SDK rather than the UI crate for the reason `styles` is: it is the one crate the wasm app depends on that also builds natively, so it is tested with `cargo test`. It takes the wire `MindNode` directly. Beside it, because they are pure too: `question_for()`, NotebookLM's click sentence, `bounds_of()` for fitting the view to a clicked node, and the Markdown and OPML exports. 9 tests, covering every layout and click assertion in section 10.
+The layout is `layout()` in `web/src/ui/mindmapLayout.ts`, kept apart from the React view so it is tested on its own, in `web/src/ui/mindmapLayout.test.ts`. It takes the wire `MindNode` directly. Beside it, because they are pure too: `questionFor()`, NotebookLM's click sentence, `boundsOf()` for fitting the view to a clicked node, and the Markdown and OPML exports (`toMarkdown()`, `toOpml()`). The tests cover every layout and click assertion in section 10.
 
 Sizes differ slightly from section 6 and are constants at the top of the file: rows 44px apart, boxes 32px tall with 14px either side of the label, 22px more on a branch for its open and close circle, 15px labels.
 
 
 ### 2026-10-02, step 5 built
 
-The tile, the viewer, the click into the chat and the citation chips are `crates/opennotebook_ui/src/mindmap.rs`, wired into the Create page in `main.rs`. Checked in a real browser, not only compiled:
+The viewer, the click into the chat and the citation chips are `MindMapView` in `web/src/ui/mindmap.tsx`; the tile is in `web/src/ui/collection/Studio.tsx`. Checked in a real browser, not only compiled:
 
 - The tile makes a map on a fresh draft, and the map opens on its root and children, 5 nodes.
 - Expand all shows all 24 nodes.

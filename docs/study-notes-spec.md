@@ -34,13 +34,13 @@ Google has published no prompt or design for NotebookLM's reports. What follows 
 
 ## 3. Where it lives
 
-- `crates/opennotebook_script/src/notes.rs`: the prompt, the citation check, the section reader and the Markdown export, with their tests.
-- `crates/opennotebook_script/src/grounding.rs`: `passages()`, every prose passage of every source with its source index.
-- `crates/opennotebook_api/oschema/notes/notes.oschema`: the `notes` domain at `/api/notes/rpc`: `notes_create`, `notes_estimate`, `notes_list`, `notes_list_all`, `notes_get`, `notes_delete`.
-- `crates/opennotebook_server/src/notes_impl.rs`: the domain and the store.
-- `crates/opennotebook_ui/src/notes.rs`: the list under the sources, the home card and the viewer. Citation chips are the chat's own (`mindmap::with_chips`).
-- `crates/opennotebook_ui/src/main.rs`: Study Notes as the third output, with its own addresses `/ui/new-study-notes` and `/ui/study-notes/<sid>/<id>`, its home filter and section.
-- `crates/opennotebook_server/src/agent.rs`: on a notes page the agent has no `start_build` and points at Create study notes.
+- `server/opennotebook/script/notes.py`: the prompt, the citation check (`check_citations`), the section reader (`parse_sections`) and the Markdown export (`StudyNotes.to_markdown`). Their tests are `server/tests/test_notes.py`.
+- `server/opennotebook/script/grounding.py`: `passages()`, every prose passage of every source with its source index.
+- `server/opennotebook/api/rpc_methods.py`: the `notes` domain at `/api/notes/rpc`: `notes_create`, `notes_estimate`, `notes_list`, `notes_list_all`, `notes_get`, `notes_delete`.
+- `server/opennotebook/api/notes.py`: the REST routes under `/api/collections/{cid}/notes` and the store, the `study_notes` table (`StudyNotes` in `server/opennotebook/db/models.py`).
+- `web/src/ui/notes.tsx`: the notes' state and the viewer, `NotesView`. Citation chips are the chat's own (`withChips` in `web/src/ui/markdown.ts`).
+- `web/src/ui/collection/Studio.tsx` and `web/src/ui/collection/OutputsList.tsx`: Study Notes as an output and its row. `web/src/ui/routes.ts` gives notes their address, `/ui/c/<cid>/study-notes/<id>`, and still reads the old `/ui/new-study-notes` and `/ui/study-notes/<sid>/<id>`. The home card counts them (`web/src/ui/home.tsx`).
+- `server/opennotebook/agent/loop.py`: the agent's `start_build` can make study notes, as one of its four kinds.
 
 ## 4. Measured
 

@@ -38,7 +38,7 @@ The retrieval service shipped seventeen, and reading all seventeen descriptions 
 
 A listener in a narrated session asks what this is, how it works, and why it matters. That is the third family. The set is `architecture`, `technology`, `product`, plus `business` carried up from the second family, because a user who drops in a pitch deck or a strategy memo has material the other three cannot see. `api` is dropped: signatures and call patterns are reference-doc territory, too fine-grained to narrate.
 
-**The honest caveat.** None of the seventeen is a general "explanatory content" dimension. They were written for one corpus and a learning studio ingests arbitrary material, so these four are the best available fit rather than a designed one. If retrieval feels thin in phase 2, the answer is more likely a new dimension than a different pick from these. (`opennotebook_memory` carries the four over, and a dimension is now a name and a description in `qa.rs`.)
+**The honest caveat.** None of the seventeen is a general "explanatory content" dimension. They were written for one corpus and a learning studio ingests arbitrary material, so these four are the best available fit rather than a designed one. If retrieval feels thin in phase 2, the answer is more likely a new dimension than a different pick from these. (`server/opennotebook/memory/qa.py` carries the four over as `DIMENSIONS`, and a dimension is now a name and a description, `dimension_description()`.)
 
 **Cost.** Measured 8.6 s for two small fixtures at two dimensions, and 23.8 s for three files at two dimensions in phase 0, so roughly linear in files times dimensions at about 4 s each. Going from two dimensions to four doubles it. Ten source documents at four dimensions is therefore around 2 to 3 minutes, which is why `qa_extract` now appears in section 3's prep budget.
 
@@ -64,7 +64,7 @@ ingest_resources(session_sid, files[]) -> IngestResult
 
 ### The sequence
 
-1. **Convert, verbatim only.** Each file through `opennotebook_convert` (`pdf.rs`, `docx.rs`, `pptx.rs`, `xlsx.rs`) to Markdown. Bytes in, model out, no network.
+1. **Convert, verbatim only.** Each file through `server/opennotebook/convert` (`pdf.py`, `docx.py`, `pptx.py`, `xlsx.py`) to Markdown. Bytes in, model out, no network.
 2. **Refuse what cannot be extracted.** A PDF whose pages fall under the 80 byte selectable-text threshold has no text layer. Refuse it with a clear message. Do not OCR and do not flag-and-continue: nothing downstream in phase 1 reads the flag, and OCR in the grounding store will be quoted back as if it were the document.
 3. **Write to the session directory.** Materialise the Markdown into the session's directory with a `.collection` marker.
 4. **`collection_import`** that directory.
@@ -232,7 +232,7 @@ The studio holds the playhead. It plays `NarrationLine` audio in order, advances
 
 ### Where the bytes come from
 
-**Bytes ride `/api/`, beside the JSON-RPC routes, on the one address the server listens on.** The studio serves narration audio from `/api/session/audio`, slide HTML from `/api/session/slide`, and section 4's event stream from `/api/session/events`. When this was written the studio sat behind a router on a Unix socket, and the survey had claimed that bytes and long-lived streams needed a socket of their own; executed on 2026-09-09, that was wrong, and byte routes and SSE served correctly next to JSON-RPC. Today the question does not arise: the server is one TCP listener (`127.0.0.1:7878` by default) serving the API, the byte routes and the web app (`crates/opennotebook_server/src/serve.rs`).
+**Bytes ride `/api/`, beside the JSON-RPC routes, on the one address the server listens on.** The studio serves narration audio from `/api/session/audio`, slide HTML from `/api/session/slide`, and section 4's event stream from `/api/session/events`. When this was written the studio sat behind a router on a Unix socket, and the survey had claimed that bytes and long-lived streams needed a socket of their own; executed on 2026-09-09, that was wrong, and byte routes and SSE served correctly next to JSON-RPC. Today the question does not arise: the FastAPI app in `server/opennotebook/main.py` serves the API and the byte routes (`server/opennotebook/api/media.py`) on one address, `:8000` in development, and the Vite dev server passes `/api` through to it (`web/vite.config.ts`).
 
 ### The change source, decided
 
@@ -359,11 +359,11 @@ Newest first. Each entry says what changed and what forced it, so a correction i
 
 *A prep submitted after an install could not start at all.* `dispatch::exe` takes the child's path from `current_exe`, which on Linux reads `/proc/self/exe` — and the kernel renders that as `/home/…/opennotebook_server (deleted)` once the file at that path has been replaced, which reinstalling the binary under a running server does every time. At the time the path went unquoted into a shell script, and bash answered `` syntax error near unexpected token `deleted' ``. The suffix is stripped now. The dispatched child is therefore the binary now at that path, which after an install is the new build rather than this process's own — the better of the two, since a prep should run the code that is installed.
 
-*The bookend had no budget.* `script_one` spends the slide's 650 characters and then `generate_script` prepends up to two intro lines of up to `LINE` each, counted by nothing: a first slide could carry 1,290 characters, twice the thirty seconds of audio section 3 budgets. It went unseen because the bookend was being dropped for the `host_id` reason above — a limit nobody enforces is discovered by whatever stops hiding it. `budget::BOOKEND_NARRATION` is 320, enforced on the way out like every other budget here, and a bookend is now the only thing a first or last slide may carry beyond its own.
+*The bookend had no budget.* `script_one` spends the slide's 650 characters and then `generate_script` prepends up to two intro lines of up to `LINE` each, counted by nothing: a first slide could carry 1,290 characters, twice the thirty seconds of audio section 3 budgets. It went unseen because the bookend was being dropped for the `host_id` reason above — a limit nobody enforces is discovered by whatever stops hiding it. `budget.BOOKEND_NARRATION` is 320, enforced on the way out like every other budget here, and a bookend is now the only thing a first or last slide may carry beyond its own.
 
-*A spent budget was emitting fragments.* With a few characters left, the loop fitted the line to what remained and kept it. A real run ended a slide on the spoken line "Moshi util" — not a shortened line, a destroyed one, synthesised and played. `budget::room` returns `None` below `MIN_LINE` and the line is dropped instead.
+*A spent budget was emitting fragments.* With a few characters left, the loop fitted the line to what remained and kept it. A real run ended a slide on the spoken line "Moshi util" — not a shortened line, a destroyed one, synthesised and played. `budget.room` returns `None` below `MIN_LINE` and the line is dropped instead.
 
-**The web bundle has its own build.** `crates/opennotebook_ui` is its own workspace, deliberately, because a wasm crate cannot share a target dir with the native crates, so a plain cargo build of the workspace does not build it. It builds and installs with `crates/opennotebook_ui/install.sh`, which `make build-ui` runs.
+**The web bundle has its own build.** `web/` is a Vite project with its own `package.json`. `pnpm build` there builds it, and `make check-web` runs it after the lint and the tests.
 
 
 ### 2026-09-14, the stale basis under the audio engine lock
@@ -409,11 +409,11 @@ So the lock is now held by sovereignty rather than by adequacy, which is a weake
 
 **The pause seam is built, and it is the one piece of section 5 that belongs in phase 1.** `Playhead.offset_ms` is a free millisecond inside the current line, never rounded to a boundary, and pause records whatever the browser reports. Proven over the public domain: paused at 4137 ms mid-line, resumed there. Retrofitting this would have been a rewrite; building it now was a parameter.
 
-**Three decisions flagged, not buried.** The playhead lives in memory rather than the store, because section 0 fixes the audience at one listener and a playhead is worthless once the page is gone. The player is one HTML document served from a route rather than a Dioxus/WASM bundle, because section 4 asks for "a plain browser page" and the bundle needs a build step. And `prep.progress` is a sixth event beyond section 4's five, because none of the five can carry a stage name.
+**Three decisions flagged, not buried.** The playhead lives in memory rather than the store, because section 0 fixes the audience at one listener and a playhead is worthless once the page is gone. The player is one HTML document served from a route rather than part of the app bundle, because section 4 asks for "a plain browser page" and the bundle needs a build step. The React app now draws it as one of its pages, `web/src/ui/player.tsx`. And `prep.progress` is a sixth event beyond section 4's five, because none of the five can carry a stage name.
 
 ### 2026-09-10, the seams slice
 
-**Section 3's prep job is one row, created by the server and adopted by the child, never two.** The service slice had left two: one the studio made itself, and one the job supervisor actually executed, so a player reading `Session.prep_job_sid` for progress could read the row nobody was running. The supervisor of the time imposed several undocumented rules on how a job could be created and how per-run data reached the child; that plumbing is gone. Today [`submit`](../crates/opennotebook_build/src/job.rs) writes one row to the SQLite `jobs` table and spawns `opennotebook_server prep --spec <file> --job <id>`, the child adopts that row by id with `PrepJob::adopt`, and there is no constructor that makes a row of its own.
+**Section 3's prep job is one row, created by the server and adopted by the child, never two.** The service slice had left two: one the studio made itself, and one the job supervisor actually executed, so a player reading `Session.prep_job_sid` for progress could read the row nobody was running. The supervisor of the time imposed several undocumented rules on how a job could be created and how per-run data reached the child; that plumbing is gone. Today the server writes one row to the Postgres `jobs` table with `jobs.create` and queues the `prep` task for it with `jobs.defer` (`server/opennotebook/jobs/__init__.py`), in the same transaction. The worker runs `prep` in `server/opennotebook/jobs/tasks.py` with that row's `job_id` in its arguments, and the task makes no row of its own.
 
 **Section 4 gains "Where the bytes come from".** The survey's claim that bytes and streams need a socket of their own was read, never executed, and is wrong. Recorded in the spec rather than in a slice report because section 4 builds on it.
 

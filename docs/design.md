@@ -1,6 +1,6 @@
 # OpenNotebook design
 
-How the studio looks, and why. The tokens are `crates/opennotebook_sdk/assets/theme.css`, the icons are `crates/opennotebook_sdk/src/icons.rs`, the app's rules are `crates/opennotebook_ui/src/style.css`, and the player's are in its own page. This file is the reasoning those files follow.
+How the studio looks, and why. The tokens are `web/src/styles/theme.css`, the icons are `web/src/ui/icons.ts`, the app's rules are `web/src/styles/style.css`, and the player's are `web/src/styles/player.css`. This file is the reasoning those files follow.
 
 ## Which world this is
 
@@ -70,7 +70,6 @@ Light mode keeps the roles and inverts the values: white cards on a near-white p
 
 ## How it is held
 
-- `theme.rs` tests read `theme.css` and check every pairing the app uses, in both themes. Text pairs must reach 4.5:1; focus rings, voice rules and map links must reach 3:1. They also check that light is only ever chosen, never taken from the device, and that both themes set the same tokens.
-- `look_tests` in the app check four things: every icon it names exists (each Settings tab's glyph included), the index page applies the theme before it paints, `style.css` has no hex colours of its own, and none of its functional colours but the listed veils over media.
-- `look_tests` in the server check that every icon the player names is in the sprite it is served with, and that the page fills its theme placeholders.
-- `every_map_colour_is_a_theme_token` checks that the mind map draws only with theme tokens.
+- Text pairs must reach 4.5:1; focus rings, voice rules and map links must reach 3:1. No test in the web app checks contrast yet. `web/index.html` applies light before the first paint, and only when it was chosen, never taken from the device.
+- `web/src/ui/player.test.tsx` checks that every icon the player names is in `icons.ts`, and that the player's page and `player.css` hold no emoji and nothing from a CDN. `web/src/ui/share.test.ts` and `web/src/ui/discover-items.test.tsx` check the icons the share dialog and Discover name.
+- `uses only theme tokens for its colours`, in `web/src/ui/mindmapLayout.test.ts`, checks that the mind map draws only with tokens `theme.css` sets in both themes.

@@ -93,8 +93,9 @@ web/        Vite + React + TS app (player included, as a route)
 server/     Python package `opennotebook` (api, worker, domain, migrations)
 deploy/     compose.yaml, Caddyfile, .env.example
 docs/
-crates/     the Rust system, kept running until cutover, then deleted
 ```
+
+The Rust system that was in `crates/` was deleted on 2026-10-06 (phase 5).
 
 ## 3. The web app
 
@@ -464,3 +465,11 @@ It passed the PDF verbatim test, the scan, tracked changes, text boxes, lists an
 - **Speed:** indexes on the queries every page runs (migration 0008), lists paged with defaults, rows read in batches, settings cached for five seconds, and mind maps and study notes made as jobs (the request answers 202). Finished work is tidied hourly. Migrations are applied with `alembic upgrade heads`.
 - **Gates:** 733 server tests, 179 web tests and the Playwright flows pass. The first screen is 109.6 KB gzipped.
 - **Still to do:** the web app asks only for the first page of each list; mind maps and study notes are not yet in the collection's event stream.
+
+### 2026-10-06: real models, and the Rust system removed
+
+- **A real run passed.** On OpenRouter with the default models, Ask, a mind map, study notes, a four-slide narrated deck ($0.059, 80 s) and a short audio overview ($0.017, 30 s) were made, each inside its estimate. The spend recorded in `usage_events` matched OpenRouter's own figure to the cent.
+- **Phase 4, side by side.** The same source through the old JSON-RPC methods on both stacks: Ask gave the same answer and citation, the mind maps had the same 17 nodes, and the study notes matched in shape. The Rust app spent $0.076 on a deck and then failed for want of a local speech server; the new stack made it for $0.056 with Microsoft's voices.
+- **Fixed on the way:** cited paragraphs in the source drawer were squeezed to a letter a line by the logo's `.mark` rule; a note's title could be its heading twice; the api waited forever on open live streams when asked to stop; Ask searched the web for questions its sources answered; work that stopped without a reason now always says one.
+- **Phase 5.** `crates/`, the Cargo files, the Rust toolchain file and the scripts that served it are gone, and the Makefile is the new stack's alone.
+

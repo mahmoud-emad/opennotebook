@@ -36,15 +36,15 @@ It is modelled on NotebookLM's Audio Overview. Where this spec copies NotebookLM
 
 ## 3. Where it lives
 
-- `crates/opennotebook_session/src/model.rs`: `AudioSpec`, `AudioFormat`, `AudioLength`, with each format's voices, lengths, minutes and chapters.
-- `crates/opennotebook_api/oschema/session/session.oschema`: `audio_format`, `audio_length` and `focus` on `SessionBuildReq` and `SessionPrepareReq`; `audio` on `Session`; `kind`, `audio_format` and `duration_ms` on `SessionSummary`; a chapter's `title` on `SessionSlide`.
-- `crates/opennotebook_script/src/generate.rs`: `ScriptSpec::audio`, `adapt`, `format_rules`, `outline_shape`, the format-specific host roles in `dialogue`, and the per-format closing.
-- `crates/opennotebook_build/src/prep.rs`: `write_slides: false` narrates and validates without a deck.
-- `crates/opennotebook_build/src/wav.rs`: `join`, the episode as one WAV.
-- `crates/opennotebook_server/src/main.rs`: `GET /api/session/episode?session=`.
-- `crates/opennotebook_server/src/player.html`: the audio stage, speed and download.
-- `crates/opennotebook_server/src/ask.rs`: the answer prompt says "listening" and "chapter" for an audio overview.
-- `crates/opennotebook_ui/src/main.rs`: Audio Overview as an output at `/ui/new-audio-overview`, the format cards, length and focus, the Audio overviews filter and the waveform card.
+- `server/opennotebook/domain/sessions.py`: `AudioSpec` and `audio_spec()`, with each format's voices (`format_speakers`), lengths (`format_lengths`), minutes and chapters.
+- `server/opennotebook/api/sessions.py`: `audio_format`, `audio_length` and `focus` on `BuildReq`; `audio` on `SessionDetail`; `kind`, `audio_format` and `duration_ms` on `SessionSummary`. A chapter's `title` is on each stored part (`Part` in `domain/sessions.py`). The JSON-RPC wire keeps `SessionBuildReq` and `SessionPrepareReq` with the same three fields, in `server/opennotebook/api/rpc_methods.py`.
+- `server/opennotebook/script/generate.py`: the `audio` field of `ScriptSpec`, `ScriptSpec.adapt`, `format_rules`, `outline_shape`, the format-specific host roles in `dialogue`, and the per-format closing (`_AUDIO_CLOSE`).
+- `server/opennotebook/build/pipeline.py`: an audio overview is narrated and validated with no deck written.
+- `server/opennotebook/build/wav.py`: `join` and `episode_plan`, the episode as one WAV.
+- `server/opennotebook/api/media.py`: `GET /api/sessions/{sid}/episode`.
+- `web/src/ui/player.tsx`: the audio stage, speed and download.
+- `server/opennotebook/domain/voice.py`: `context_for` says "listening" and "chapter" in the answer prompt for an audio overview.
+- `web/src/ui/collection/Studio.tsx`: the format cards, length and focus. `web/src/ui/routes.ts` still reads the old `/ui/new-audio-overview` address, `web/src/ui/share.tsx` has the Audio overviews filter, and `web/src/ui/outputs.tsx` draws the output's row with the soundwave icon.
 
 ## 4. Measured
 
