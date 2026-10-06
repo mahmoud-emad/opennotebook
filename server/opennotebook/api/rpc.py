@@ -1,13 +1,12 @@
 """DEPRECATED: the old JSON-RPC 2.0 API, kept for one release after cutover.
 
 `POST /api/{session,sources,mindmap,notes,settings}/rpc` answer the 47
-methods of the Rust server's `oschema/` with the same framing it had
-(`crates/opennotebook_api/src/jsonrpc.rs`), so agents written against it
-keep working while they move to REST. Each method forwards to the REST
-handler that does the same work (`rpc_methods.py`). Every response carries a
-`Deprecation` header. The release after cutover deletes this file,
-`rpc_methods.py`, `rpc_openrpc/` and the line in `main.py` that includes the
-router (docs/stack-migration-plan.md §4).
+methods of the old Rust server with the same framing it had, so agents
+written against it keep working while they move to REST. Each method
+forwards to the REST handler that does the same work (`rpc_methods.py`).
+Every response carries a `Deprecation` header. The release after cutover
+deletes this file, `rpc_methods.py`, `rpc_openrpc/` and the line in
+`main.py` that includes the router (docs/stack-migration-plan.md §4).
 
 The wire, as before: `{"jsonrpc": "2.0", "id": 1, "method": "notes_get",
 "params": {"req": {...}}}`. Params are an object keyed by parameter name (an

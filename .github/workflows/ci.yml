@@ -1,7 +1,6 @@
 # The checks `make check` runs, on every push and pull request: the server
 # (format, lint, types, tests against Postgres with pgvector) and the web app
-# (lint, tests, the build with its first-screen size budget). The Rust system
-# in crates/ is not built here; it is on its way out.
+# (lint, tests, the build with its first-screen size budget).
 #
 # The end-to-end suite (web/e2e, `make e2e`) is not run here yet: it needs the
 # whole stack up. See docs/stack-migration-plan.md, phase 4.

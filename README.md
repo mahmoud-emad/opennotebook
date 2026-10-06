@@ -7,7 +7,6 @@ A social learning studio, in the spirit of NotebookLM. Gather sources into a col
 - **server/**: FastAPI on Python 3.14, Postgres 18 with pgvector, background jobs on Procrastinate. All the work happens here, model calls included.
 - **web/**: a React and TypeScript app served at `/ui/`. It is only a client of the server's REST API.
 - **deploy/**: Docker Compose with Caddy, Postgres and an optional speech server.
-- **crates/**: the original Rust implementation, kept as the reference until the new stack replaces it ([migration plan](docs/stack-migration-plan.md)).
 
 ## Run it
 

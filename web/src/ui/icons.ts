@@ -1,5 +1,5 @@
 // The studio's icons: a vendored subset of Bootstrap Icons 1.11.3, as inline SVG,
-// generated from crates/opennotebook_sdk/src/icons.rs (the same table the old app drew from).
+// generated from the table the old app drew from.
 //
 // Bootstrap Icons, Copyright (c) 2019-2024 The Bootstrap Authors, MIT License,
 // https://github.com/twbs/icons/blob/main/LICENSE

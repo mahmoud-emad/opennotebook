@@ -1,5 +1,5 @@
 """The deprecated JSON-RPC adapter (api/rpc.py): the framing ported from
-`crates/opennotebook_api/src/tests.rs`, and each of the 47 old methods
+the old Rust server's tests, and each of the 47 old methods
 against the real domain, with the model and the build's services stood in.
 Delete with the adapter."""
 
