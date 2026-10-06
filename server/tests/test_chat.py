@@ -89,6 +89,16 @@ def test_the_agent_knows_everything_it_can_make() -> None:
     assert "read-only copy" in loop.system_prompt([], True, "", "", read_only=True)
 
 
+def test_a_question_goes_to_the_sources_before_the_web() -> None:
+    """A question the sources may answer is asked of them first; the web is
+    searched only when they do not cover it, never answered from alone."""
+    p = loop.system_prompt(["vaccines.md"], True, "", "")
+    assert "a question goes to ask_sources first" in p
+    assert "only when ask_sources says the sources do not cover it" in p
+    assert "never answer from search results alone" in p
+    assert "the sources do not cover it, find the material yourself" in p
+
+
 def test_a_kind_maps_to_what_the_page_knows_it_by() -> None:
     assert loop.wire_kind("mindmap", "session") == "mindmap"
     assert loop.wire_kind("slides", "audio") == "session"

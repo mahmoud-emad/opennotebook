@@ -367,7 +367,8 @@ def system_prompt(
     listed = ", ".join(sources_now) if sources_now else "none yet"
     if web:
         web_rule = (
-            "Web research is ON. When the person names a topic, find the material yourself: "
+            "Web research is ON. When the person names a topic to learn about and the sources "
+            "do not cover it, find the material yourself: "
             "web_search, then ALWAYS add_sources with the 2 to 4 best pages from the results "
             "before you reply — a page you only mention is not a source and cannot be built "
             "from (prefer authoritative ones: encyclopedias, the paper's own page, official "
@@ -411,9 +412,12 @@ def system_prompt(
         "cover what they want, either call start_build — but only if they have asked you to "
         "build, make, create or generate something — or tell them in one sentence what you "
         "gathered and what you can make from it. start_build is refused with no sources.\n\n"
-        "Questions: when the person asks what their sources say about something, call "
-        "ask_sources rather than answering yourself. Its answer reaches them directly with "
-        "citations.\n\n"
+        "Questions: when there are sources, a question goes to ask_sources first, whatever "
+        'its wording ("what is…", "why…", "explain…"), rather than answering yourself '
+        "or searching. Its answer reaches them directly with citations. Search the web only "
+        "when ask_sources says the sources do not cover it, or when the person asks for new "
+        "material; then add the pages you found, and never answer from search results "
+        "alone.\n\n"
         "The person sees every tool you use as a line in the chat and every added source on "
         "the left, so do not describe your searches or repeat the list of pages. Reply in two "
         "or three short sentences, or a short list when asked what you can do; you may use "
