@@ -16,7 +16,8 @@ describe("sources", () => {
   });
 
   it("turns what an add answered into a row", () => {
-    const ok = srcFrom({ ok: true, url: "https://x.org/p", title: "", chars: 600, name: "x.md" });
+    // The line under its name is the server's.
+    const ok = srcFrom({ ok: true, url: "https://x.org/p", title: "", detail: "x.org · 100 words", name: "x.md" });
     expect(ok).toMatchObject({ ok: true, name: "https://x.org/p", detail: "x.org · 100 words", file: "x.md" });
     const bad = srcFrom({ ok: false, url: "https://x.org/p", error: "" });
     expect(bad.ok).toBe(false);

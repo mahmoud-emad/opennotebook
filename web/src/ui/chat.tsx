@@ -18,7 +18,7 @@ import { str } from "./helpers";
 import { Icon } from "./Icon";
 import { citeFrom, citeGroups, type Cite } from "./cite";
 import { mdToHtml, withChips } from "./markdown";
-import { SettingsLink, keys, useSettings } from "./settings";
+import { SettingsLink } from "./settings";
 import { OUTPUTS, focusId, report, type Output } from "./shell";
 import { srcFrom, type Src } from "./sources";
 import { store, useStore, type Store } from "./store";
@@ -489,7 +489,16 @@ const Message = memo(function Message({ m }: { m: Msg }) {
 });
 
 /** The Ask tab: the conversation, then the box to say something in. */
-export function AskTab({ st, onSend }: { st: ChatState; onSend: (t: string) => void }) {
+export function AskTab({
+  st,
+  onSend,
+  note,
+}: {
+  st: ChatState;
+  onSend: (t: string) => void;
+  /** Who answers, as the server words it from the settings; null until read. */
+  note: string | null;
+}) {
   const msgs = useStore(st.msgs);
   const talking = useStore(st.talking);
   const thinking = useStore(st.thinking);
@@ -503,10 +512,6 @@ export function AskTab({ st, onSend }: { st: ChatState; onSend: (t: string) => v
     const t = setTimeout(() => st.stick.get() && threadToBottom(), 0);
     return () => clearTimeout(t);
   }, [st, msgs.length, last?.note, last?.status, last?.text, thinking]);
-  // Which language and model answer, from the settings, once they are read.
-  const cfg = useSettings();
-  const lang = cfg.get(keys.LANGUAGE);
-  const model = cfg.shown(keys.CHAT_MODEL);
   return (
     <>
       <div
@@ -563,9 +568,9 @@ export function AskTab({ st, onSend }: { st: ChatState; onSend: (t: string) => v
       <div className="composer">
         <ChatInput onSend={onSend} />
         <p className="chat-foot">
-          {lang !== undefined && model !== undefined && (
+          {note !== null && (
             <>
-              <span>{`Answers in ${lang} with ${model}. `}</span>
+              <span>{`${note} `}</span>
               <SettingsLink tab="models" />
             </>
           )}

@@ -8,9 +8,10 @@ need not translate:
 - `session.state` — `preparing | ready | failed | idle | playing | paused |
   finished`. `failed` is there because a prep screen that cannot say "this
   failed" would spin forever on an output that is never coming.
-- `prep.progress` — the step a build is on and how far: `step`,
-  `steps_done`, `steps_total`. A job row with `steps_total` 0 does not
-  report, so it is not forwarded: a bar drawn from it would be a lie.
+- `prep.progress` — the step a build is on and how far: `step`, `label`
+  (the step as a person reads it), `steps_done`, `steps_total`. A job row
+  with `steps_total` 0 does not report, so it is not forwarded: a bar drawn
+  from it would be a lie.
 - `prep.waiting` — `waiting`: a sentence while the build is queued and no
   worker is running to start it, null once one is.
 - `slide.enter`, `line.start`, `line.end`, `playhead` — playback, derived
@@ -28,6 +29,7 @@ from typing import Any
 
 from sqlalchemy import select
 
+from opennotebook.build import phases
 from opennotebook.db.models import Playback, Session
 from opennotebook.db.session import sessionmaker
 from opennotebook.domain import sessions
@@ -219,7 +221,15 @@ async def stream(owner: uuid.UUID, sid: uuid.UUID) -> AsyncGenerator[Event | Non
             if o.state == "preparing" and progress is not None and progress != last_progress:
                 step, done, total = progress
                 out.append(
-                    ("prep.progress", {"step": step, "steps_done": done, "steps_total": total})
+                    (
+                        "prep.progress",
+                        {
+                            "step": step,
+                            "label": phases.label(step),
+                            "steps_done": done,
+                            "steps_total": total,
+                        },
+                    )
                 )
                 last_progress = progress
             # Queued with no worker to run it: said, so the page does not

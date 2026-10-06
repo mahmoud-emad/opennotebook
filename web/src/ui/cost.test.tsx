@@ -1,7 +1,7 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import { EstimateBanner } from "./cost";
-import { CostDialog, type Estimate } from "./dialogs";
+import { CostDialog, LimitNote, type Estimate } from "./dialogs";
 
 // A map's estimate as the server sends it: in a build's itemised shape, with
 // its facts worded there.
@@ -41,6 +41,7 @@ const e: Estimate = {
   minutes: 0,
   limit_usd: 0.5,
   over_limit: false,
+  limit_note: null,
   model: "google/gemini-2.5-flash-lite",
   facts: ["3 sources · 48,000 characters", "by Gemini 2.5 Flash Lite"],
 };
@@ -69,7 +70,6 @@ describe("the cost of a tool", () => {
     const { container } = render(
       <CostDialog
         est={e}
-        audio={false}
         verb="Make"
         loading={false}
         err=""
@@ -81,6 +81,14 @@ describe("the cost of a tool", () => {
     const facts = [...container.querySelectorAll(".est-fact")].map((f) => f.textContent);
     expect(facts).toEqual(["3 sources · 48,000 characters", "by Gemini 2.5 Flash Lite"]);
     expect(screen.getByText("Draw the mind map")).toBeTruthy();
+  });
+
+  it("says over the limit in the server's words, with Settings as a link", () => {
+    const note =
+      "This could cost up to $0.81, over your $0.50 limit. Use fewer sources, or raise the limit in Settings › Costs & limits.";
+    render(<LimitNote e={{ ...e, over_limit: true, limit_note: note }} className="opt-err" />);
+    expect(screen.getByRole("alert").textContent).toBe(note);
+    expect(screen.getByRole("button", { name: "Settings › Costs & limits" })).toBeTruthy();
   });
 
   it("marks a model with no price rather than failing the estimate", () => {

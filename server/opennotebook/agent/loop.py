@@ -480,6 +480,9 @@ class Fetched:
         return cls(url=url or src.url, ok=True, title=src.title, chars=src.chars, name=src.name)
 
     def as_json(self) -> dict[str, Any]:
+        """As a `source` event says it: with the line under its name, as the
+        sources list words it, or why it could not be read."""
+        _, detail, icon = sources.described(self.name, self.url, self.chars)
         return {
             "url": self.url,
             "ok": self.ok,
@@ -487,7 +490,8 @@ class Fetched:
             "chars": self.chars,
             "error": self.error,
             "name": self.name,
-            "icon": "",
+            "detail": detail if self.ok else self.error,
+            "icon": icon if self.ok else "",
         }
 
 

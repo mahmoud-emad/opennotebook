@@ -31,6 +31,7 @@ const opts: StudioOptions = {
   deck_summary: "8 slides · about 5 min · Ava and Andrew",
   language_note: "Writing in French.",
   build_language_note: "Writing in French · voices are English.",
+  ask_note: "Answers in French with Claude Haiku 4.5.",
   show_cost: false,
   research: { label: "Quick research", takes: "about a minute" },
   upload: {

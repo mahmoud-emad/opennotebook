@@ -86,6 +86,7 @@ function estimateOf(v: Record<string, unknown>): Estimate {
     minutes: num(v.minutes),
     limit_usd: num(v.limit_usd),
     over_limit: v.over_limit === true,
+    limit_note: typeof v.limit_note === "string" ? v.limit_note : null,
     model: str(v.model),
     facts: Array.isArray(v.facts) ? v.facts.map(str) : [],
   };

@@ -366,8 +366,15 @@ export async function getCollection(
   }
 }
 
-/** How far an output being made is, as a collection's stream says it. */
-export type OutputProgress = { session_id: string; step: string; steps_done: number; steps_total: number };
+/** How far an output being made is, as a collection's stream says it: the
+ * step, and `label`, the step as a person reads it. */
+export type OutputProgress = {
+  session_id: string;
+  step: string;
+  label: string;
+  steps_done: number;
+  steps_total: number;
+};
 
 /** A map's or notes' job that ended, as a collection's stream says it. */
 export type JobEnded = { job_id: string; error: string | null };
@@ -486,6 +493,8 @@ export type Fetched = {
   error: string;
   name: string;
   icon: string;
+  /** The line under its name, as the server words it; empty when not added. */
+  detail: string;
 };
 
 function fetchedOf(r: Rest.AddResult): Fetched {
@@ -496,7 +505,8 @@ function fetchedOf(r: Rest.AddResult): Fetched {
     chars: r.source?.chars ?? 0,
     error: r.error,
     name: r.source?.name ?? "",
-    icon: "",
+    icon: r.source?.icon ?? "",
+    detail: r.source?.detail ?? "",
   };
 }
 

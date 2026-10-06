@@ -11,6 +11,7 @@ from opennotebook.api.deps import Db, Me
 from opennotebook.db.session import release
 from opennotebook.domain import collections, settings, styles
 from opennotebook.domain import sessions as sess
+from opennotebook.domain import sessions_estimate as est
 from opennotebook.domain import sources as sources_domain
 from opennotebook.domain.settings import TAB_INFO, Current
 from opennotebook.domain.styles import STYLES, SlideStyle
@@ -212,6 +213,10 @@ class StudioOptions(BaseModel):
         description="The same for a deck or an audio overview, saying when the voices keep "
         "their English accent"
     )
+    ask_note: str = Field(
+        description="Who answers in Ask, in the words of Settings: "
+        "`Answers in English with Gemini 2.5 Flash Lite.`"
+    )
     show_cost: bool = Field(description="Say what a tool costs before it is made")
     research: ResearchHint
     upload: UploadRules
@@ -221,6 +226,18 @@ def _style_choice(st: SlideStyle) -> StyleChoice:
     return StyleChoice(
         id=st.id, label=st.label, blurb=st.blurb, thumbnail=f"{THUMBNAILS}/{st.id}.jpg"
     )
+
+
+def _shown(key: str, value: str) -> str:
+    """A setting's value as the Settings page shows it: its option's label,
+    a model's name, or the value itself."""
+    d = settings.find(key)
+    if d is None:
+        return value
+    label = next((label for v, label in d.kind.options if v == value), None)
+    if label is not None:
+        return label
+    return est.model_name(value) if d.kind.name == "model" and value else value
 
 
 def studio_options(v: dict[str, str], sources: int) -> StudioOptions:
@@ -276,6 +293,8 @@ def studio_options(v: dict[str, str], sources: int) -> StudioOptions:
         )
         if other
         else None,
+        ask_note=f"Answers in {_shown(settings.LANGUAGE_KEY, language or 'English')} with "
+        f"{_shown(settings.CHAT_MODEL_KEY, v[settings.CHAT_MODEL_KEY].strip())}.",
         show_cost=v[settings.SHOW_COST_KEY].strip() != "off",
         research=ResearchHint(
             label="Quick research" if quick else "Standard research",

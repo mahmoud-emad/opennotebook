@@ -144,10 +144,13 @@ export const refreshCover = <ThrowOnError extends boolean = false>(options: Opti
  *
  * Server-sent events while a collection is open: `collection` (its
  * summary, as the list has it), `outputs` (its decks and audio overviews),
- * `progress` (`session_id`, `step`, `steps_done`, `steps_total` of one being
- * made), `sources` (its sources), each when the stream starts and again when
- * it changes, and `gone` once it is deleted. A page follows this rather than
- * reading the collection again on a timer.
+ * `progress` (`session_id`, `step`, `label` (the step as a person reads
+ * it), `steps_done`, `steps_total` of one being made), `sources` (its
+ * sources), `mindmaps` and `notes` (as their lists have them, those being
+ * made included), each when the stream starts and again when it changes;
+ * `ended` (`job_id`, and `error`: why it was not made, or null) once a map
+ * or notes being made is done; and `gone` once it is deleted. A page
+ * follows this rather than reading the collection again on a timer.
  */
 export const collectionEvents = <ThrowOnError extends boolean = false>(options: Options<CollectionEventsData, ThrowOnError, unknown>): Promise<ServerSentEventsResult<CollectionEventsResponses>> => (options.client ?? client).sse.get<CollectionEventsResponses, CollectionEventsErrors, ThrowOnError>({ url: '/api/collections/{cid}/events', ...options });
 
@@ -358,7 +361,7 @@ export const setPlayback = <ThrowOnError extends boolean = false>(options: Optio
  * Session Events
  *
  * Server-sent events while an output is made and played:
- * `session.state`, `prep.progress` (step, steps_done, steps_total), and
+ * `session.state`, `prep.progress` (step, label, steps_done, steps_total), and
  * the playback events `slide.enter`, `line.start`, `line.end`, `playhead`.
  * The current state comes first, so a client that connects late misses
  * nothing.

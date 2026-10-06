@@ -38,11 +38,6 @@ export function countShort(n: number): string {
   return String(n);
 }
 
-/** Money rounded up to the next whole cent, for an amount stated against a limit. */
-export function usdUp(x: number): string {
-  return `$${(Math.ceil(x * 100 - 1e-6) / 100).toFixed(2)}`;
-}
-
 /** One step of a build's estimate, as the server itemises it. */
 export type CostLine = {
   group: string;
@@ -82,6 +77,10 @@ export type Estimate = {
   minutes: number;
   limit_usd: number;
   over_limit: boolean;
+  /** Over the limit, the server's sentence: why it would be refused, what
+   * to change, and where the limit is set ("…in Settings › Costs & limits.");
+   * null within it. */
+  limit_note: string | null;
   /** The model that does most of the writing. */
   model: string;
   /** What it is made of, in the server's words: "5 slides", "2 voices"… */
@@ -91,28 +90,24 @@ export type Estimate = {
 /** Whether a step's model has no price in the catalog. */
 export const anyUnpriced = (e: Estimate) => e.lines.some((l) => l.unpriced);
 
-/** Why a build over the spending limit would be refused, and what to change. */
-export function limitLead(e: Estimate, audio: boolean, fix?: string): string {
-  const fewer = fix ?? (audio ? "a shorter length" : "fewer slides, a shorter length");
-  return `This could cost up to ${usdUp(e.total_high_usd)}, over your ${usd(e.limit_usd)} limit. Use ${fewer}, or raise the limit in `;
-}
+/** Where the server's limit sentence names the Settings tab ("Settings ›
+ * Costs & limits."): drawn as the link that opens it. */
+const IN_SETTINGS = /Settings › [^.]+\.$/;
 
-export function LimitNote({
-  e,
-  audio,
-  className,
-  fix,
-}: {
-  e: Estimate;
-  audio: boolean;
-  className: string;
-  /** What to change instead of the build's own advice: "fewer sources". */
-  fix?: string;
-}) {
+/** Why something over the spending limit would be refused and what to
+ * change, as the server says it, with Settings as a link. */
+export function LimitNote({ e, className }: { e: Estimate; className: string }) {
+  const note = e.limit_note ?? "";
   return (
     <div className={className} role="alert">
-      {limitLead(e, audio, fix)}
-      <SettingsLink tab="costs" />.
+      {IN_SETTINGS.test(note) ? (
+        <>
+          {note.replace(IN_SETTINGS, "")}
+          <SettingsLink tab="costs" />.
+        </>
+      ) : (
+        note
+      )}
     </div>
   );
 }
@@ -120,7 +115,6 @@ export function LimitNote({
 /** Every step of a build and what it costs, before it runs. */
 export function CostDialog({
   est,
-  audio,
   loading,
   err,
   onClose,
@@ -129,8 +123,6 @@ export function CostDialog({
   verb = "Build",
 }: {
   est: Estimate | null;
-  /** An audio overview: over the limit, a shorter length is the advice. */
-  audio: boolean;
   loading: boolean;
   err: string;
   onClose: () => void;
@@ -208,7 +200,7 @@ export function CostDialog({
                 ))}
               </div>
               {est.over_limit ? (
-                <LimitNote e={est} audio={audio} className="set-note err est-limit" />
+                <LimitNote e={est} className="set-note err est-limit" />
               ) : est.limit_usd > 0 ? (
                 <div className="est-fine est-limit">
                   Within your {usd(est.limit_usd)} limit per output. <SettingsLink tab="costs" />

@@ -577,7 +577,7 @@
           "collections"
         ],
         "summary": "Collection Events",
-        "description": "Server-sent events while a collection is open: `collection` (its\nsummary, as the list has it), `outputs` (its decks and audio overviews),\n`progress` (`session_id`, `step`, `steps_done`, `steps_total` of one being\nmade), `sources` (its sources), each when the stream starts and again when\nit changes, and `gone` once it is deleted. A page follows this rather than\nreading the collection again on a timer.",
+        "description": "Server-sent events while a collection is open: `collection` (its\nsummary, as the list has it), `outputs` (its decks and audio overviews),\n`progress` (`session_id`, `step`, `label` (the step as a person reads\nit), `steps_done`, `steps_total` of one being made), `sources` (its\nsources), `mindmaps` and `notes` (as their lists have them, those being\nmade included), each when the stream starts and again when it changes;\n`ended` (`job_id`, and `error`: why it was not made, or null) once a map\nor notes being made is done; and `gone` once it is deleted. A page\nfollows this rather than reading the collection again on a timer.",
         "operationId": "collection_events",
         "parameters": [
           {
@@ -1518,7 +1518,7 @@
           "outputs"
         ],
         "summary": "Session Events",
-        "description": "Server-sent events while an output is made and played:\n`session.state`, `prep.progress` (step, steps_done, steps_total), and\nthe playback events `slide.enter`, `line.start`, `line.end`, `playhead`.\nThe current state comes first, so a client that connects late misses\nnothing.",
+        "description": "Server-sent events while an output is made and played:\n`session.state`, `prep.progress` (step, label, steps_done, steps_total), and\nthe playback events `slide.enter`, `line.start`, `line.end`, `playhead`.\nThe current state comes first, so a client that connects late misses\nnothing.",
         "operationId": "session_events",
         "parameters": [
           {
@@ -6027,6 +6027,18 @@
             "title": "Over Limit",
             "description": "The high estimate is over the limit: a build is refused"
           },
+          "limit_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Limit Note",
+            "description": "Over the limit: why it would be refused and what to change, ending with where the limit is set (`Settings \u203a Costs & limits.`), as a refusal says it. Null when it is within the limit"
+          },
           "model": {
             "type": "string",
             "title": "Model",
@@ -7266,6 +7278,11 @@
             "title": "Build Language Note",
             "description": "The same for a deck or an audio overview, saying when the voices keep their English accent"
           },
+          "ask_note": {
+            "type": "string",
+            "title": "Ask Note",
+            "description": "Who answers in Ask, in the words of Settings: `Answers in English with Gemini 2.5 Flash Lite.`"
+          },
           "show_cost": {
             "type": "boolean",
             "title": "Show Cost",
@@ -7288,6 +7305,7 @@
           "deck_summary",
           "language_note",
           "build_language_note",
+          "ask_note",
           "show_cost",
           "research",
           "upload"

@@ -425,7 +425,8 @@ async def test_a_build_is_estimated_started_and_followed(
         )
     ).json()
     # The old shape, without what the REST API added since.
-    assert set(est) == set(rest) - {"model", "facts"} and est["lines"] == rest["lines"]
+    assert set(est) == set(rest) - {"model", "facts", "limit_note"}
+    assert est["lines"] == rest["lines"]
 
     built = await ok(client, "session", "session_build", {"req": req})
     assert built["accepted"] and built["sid"] != cid

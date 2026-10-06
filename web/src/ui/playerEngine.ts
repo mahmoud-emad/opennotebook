@@ -45,7 +45,6 @@ import {
   type Playhead,
   type Source,
 } from "./playerApi";
-import { phaseLabel } from "./phases";
 import { sseFrames } from "./sse";
 import { Mic, makeSink, startRecognition, type Sink } from "./playerVoice";
 import { go, type View } from "./routes";
@@ -386,11 +385,11 @@ export class PlayerEngine {
       this.es = es;
       const onProg = (e: MessageEvent<string>) => {
         try {
-          const p = JSON.parse(e.data) as { step?: string; steps_done?: number; steps_total?: number };
+          const p = JSON.parse(e.data) as { label?: string; steps_done?: number; steps_total?: number };
           const known = (p.steps_total ?? 0) > 0;
           // Said in the card's lower case, as its other lines are.
-          const label = phaseLabel(p.step ?? "");
-          this.v.stageName = label ? label[0]!.toLowerCase() + label.slice(1) : p.step || "starting";
+          const label = p.label || "Starting";
+          this.v.stageName = label[0]!.toLowerCase() + label.slice(1);
           this.v.barIdle = !known;
           this.v.prepSub = known ? `step ${p.steps_done} of ${p.steps_total}` : "";
           this.v.fill = known ? `${(100 * (p.steps_done ?? 0)) / (p.steps_total ?? 1)}%` : "";

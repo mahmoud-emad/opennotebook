@@ -51,8 +51,6 @@ export function shortHost(url: string): string {
   return (rest.split("/")[0] ?? rest).replace(/^(www\.)+/, "");
 }
 
-const words = (chars: number) => Math.floor(chars / 6);
-
 /** A source the server holds, as the row the sources panel shows: the line
  * under its name and its icon as the server words them. */
 export function srcOfServer(s: ServerSource): Src {
@@ -71,21 +69,19 @@ export const srcKey = (s: Src) => s.key ?? `file:${s.file}`;
 
 /** A source row from the server's `Fetched` shape, or from a source the chat
  * agent read. */
+const UNREAD = "It could not be read. Try a direct link, or paste the text in.";
+
 export function srcFrom(g: Record<string, unknown>): Src {
   // A source the agent read may come as the stored source itself, which has
   // no `ok`: it is there, so it arrived.
   const ok = typeof g.ok === "boolean" ? g.ok : "name" in g && !("error" in g);
   const url = str(g.url);
   const name = str(g.title);
-  const chars = typeof g.chars === "number" ? g.chars : 0;
   return {
     icon: str(g.icon),
     name: name || url,
-    detail: !ok
-      ? str(g.error) || "It could not be read. Try a direct link, or paste the text in."
-      : url === ""
-        ? `note · ${words(chars)} words`
-        : `${shortHost(url)} · ${words(chars)} words`,
+    // The line under its name as the server words it, or why it was not read.
+    detail: str(g.detail) || str(g.error) || UNREAD,
     ok,
     url,
     // The stored name, when the reply carries it; the list read back from

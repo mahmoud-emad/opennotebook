@@ -21,6 +21,7 @@ from opennotebook.api.notes import notes_of
 from opennotebook.api.sessions import SessionSummary, summaries_and_jobs, summaries_of
 from opennotebook.api.sources import SourceOut, listed
 from opennotebook.auth import current_user
+from opennotebook.build import phases
 from opennotebook.cover import Theme
 from opennotebook.db.models import Job, Source
 from opennotebook.db.session import release, sessionmaker
@@ -293,6 +294,7 @@ def _progress(made: list[Job]) -> dict[str, dict[str, Any]]:
         str(j.session_id): {
             "session_id": str(j.session_id),
             "step": j.step,
+            "label": phases.label(j.step),
             "steps_done": j.steps_done,
             "steps_total": j.steps_total,
         }
@@ -391,7 +393,8 @@ async def _frames(owner: uuid.UUID, cid: uuid.UUID) -> AsyncIterator[str]:
 async def collection_events(cid: uuid.UUID, request: Request) -> StreamingResponse:
     """Server-sent events while a collection is open: `collection` (its
     summary, as the list has it), `outputs` (its decks and audio overviews),
-    `progress` (`session_id`, `step`, `steps_done`, `steps_total` of one being made), `sources` (its
+    `progress` (`session_id`, `step`, `label` (the step as a person reads
+    it), `steps_done`, `steps_total` of one being made), `sources` (its
     sources), `mindmaps` and `notes` (as their lists have them, those being
     made included), each when the stream starts and again when it changes;
     `ended` (`job_id`, and `error`: why it was not made, or null) once a map

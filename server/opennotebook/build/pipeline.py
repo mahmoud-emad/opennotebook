@@ -42,6 +42,7 @@ from opennotebook.ai import ledger
 from opennotebook.ai.errors import AiError
 from opennotebook.build import kits, narrate, slides, validate
 from opennotebook.build.errors import Abandoned, BuildError
+from opennotebook.build.phases import PHASES
 from opennotebook.db.models import Chunk, QaPair, Session, Source
 from opennotebook.db.session import sessionmaker
 from opennotebook.domain import collections, styles
@@ -62,13 +63,6 @@ from opennotebook.script.generate import ScriptSpec, generate_script
 from opennotebook.script.retrieval import Scope
 
 log = logging.getLogger(__name__)
-
-# Every phase of a prep, in order, and the number a progress bar is drawn
-# against. They are one list because they are one job: reporting only the
-# last few left `steps_total` at 0 through ingest and the script, which is the
-# job row's way of saying "this job does not report". Research is always a
-# phase, run or not, so the bar has the same steps whichever way it was asked.
-PHASES = ("research", "ingest", "script", "deck", "validate")
 
 
 class PrepSpec(BaseModel):

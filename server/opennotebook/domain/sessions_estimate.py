@@ -714,12 +714,19 @@ def cent_up(x: float) -> float:
     return math.ceil(x * 100.0 - 1e-6) / 100.0
 
 
-def over_limit_message(high: float, limit: float, audio: bool) -> str:
-    """Why a build was refused, with what would bring it under the limit."""
-    fewer = "a shorter length" if audio else "fewer slides, a shorter length"
+# What to change to come under the spending limit, by what is being made.
+FEWER_SLIDES = "fewer slides, a shorter length"
+SHORTER = "a shorter length"
+FEWER_SOURCES = "fewer sources"
+
+
+def over_limit_message(high: float, limit: float, fix: str) -> str:
+    """Why something over the limit is refused, with what would bring it
+    under (`fix`) and where the limit is set. The estimate says the same
+    before anything is asked for."""
     return (
         f"This could cost up to ${cent_up(high):.2f}, over your ${limit:.2f} limit. "
-        f"Use {fewer}, or raise the limit in Settings › Costs & limits."
+        f"Use {fix}, or raise the limit in Settings › Costs & limits."
     )
 
 
@@ -746,5 +753,9 @@ async def refuse_over_limit(
     except NoPrices:
         return None
     if live.over_limit:
-        return over_limit_message(live.estimate.total[2], live.limit_usd, sh.audio is not None)
+        return over_limit_message(
+            live.estimate.total[2],
+            live.limit_usd,
+            SHORTER if sh.audio is not None else FEWER_SLIDES,
+        )
     return None

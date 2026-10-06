@@ -16,9 +16,10 @@ describe("what is on its way, said where it happens", () => {
   });
 
   it("shows the step and how far, as the collection's stream says it", () => {
-    const at = { session_id: "s1", step: "script", steps_done: 2, steps_total: 5 };
+    const at = { session_id: "s1", step: "script", label: "Writing the script", steps_done: 2, steps_total: 5 };
     const { container } = render(<Progress at={at} waiting="Waiting for a worker." />);
-    expect(container.textContent).toContain(" · 2/5");
+    // The step in the server's words.
+    expect(container.textContent).toContain("Writing the script · 2/5");
     // Started: the waiting line is no longer true.
     expect(container.textContent).not.toContain("Waiting");
     expect(screen.getByRole("progressbar").getAttribute("aria-valuenow")).toBe("40");

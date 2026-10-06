@@ -1542,6 +1542,12 @@ export type SessionEstimate = {
      */
     over_limit: boolean;
     /**
+     * Limit Note
+     *
+     * Over the limit: why it would be refused and what to change, ending with where the limit is set (`Settings › Costs & limits.`), as a refusal says it. Null when it is within the limit
+     */
+    limit_note?: string | null;
+    /**
      * Model
      *
      * The model that does most of the writing: the script's, or the one that makes a mind map or study notes
@@ -2450,6 +2456,12 @@ export type StudioOptions = {
      * The same for a deck or an audio overview, saying when the voices keep their English accent
      */
     build_language_note: string | null;
+    /**
+     * Ask Note
+     *
+     * Who answers in Ask, in the words of Settings: `Answers in English with Gemini 2.5 Flash Lite.`
+     */
+    ask_note: string;
     /**
      * Show Cost
      *

@@ -20,7 +20,6 @@ import { CardMenu } from "./CardMenu";
 import { RowErr } from "./common";
 import { askConfirm, askPrompt, usd } from "./dialogs";
 import { Icon } from "./Icon";
-import { phaseLabel } from "./phases";
 import { mmss, when } from "./shell";
 
 /** One thing made from the collection, for the outputs list: every kind in one
@@ -412,7 +411,7 @@ export function Progress({ at, waiting = "" }: { at: OutputProgress | null; wait
   const step = at?.step ?? "";
   const done = at?.steps_done ?? 0;
   const total = at?.steps_total ?? 0;
-  const label = phaseLabel(step) ?? "Starting";
+  const label = at?.label || "Starting";
   const pct = total > 0 ? Math.floor((done * 100) / total) : 0;
   return (
     <>

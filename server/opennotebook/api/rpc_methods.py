@@ -401,7 +401,7 @@ async def session_estimate(c: Ctx, p: SessionBuildIn) -> dict[str, Any]:
     cid = _build_target(p.req.sid, p.req.collection)
     est = await sessions_api.estimate(cid, _build_of(p.req), c.s, c.me)
     # The old shape: the model and the facts came later, with the REST API.
-    return est.model_dump(mode="json", exclude={"model", "facts"})
+    return est.model_dump(mode="json", exclude={"model", "facts", "limit_note"})
 
 
 @method("session", "session_prepare", SessionPrepareIn)
@@ -1004,7 +1004,7 @@ async def mindmap_estimate(c: Ctx, p: SidParam) -> dict[str, Any]:
     cid = _id(p.sid, "That collection")
     # The old shape: the limit fields came later, with the REST API.
     return (await mindmaps_api.one_call(c.s, c.me.id, cid)).model_dump(
-        exclude={"limit_usd", "over_limit"}
+        exclude={"limit_usd", "over_limit", "limit_note"}
     )
 
 
@@ -1112,7 +1112,7 @@ async def notes_estimate(c: Ctx, p: SidParam) -> dict[str, Any]:
     cid = _id(p.sid, "That collection")
     # The old shape: the limit fields came later, with the REST API.
     return (await notes_api.one_call(c.s, c.me.id, cid)).model_dump(
-        exclude={"limit_usd", "over_limit"}
+        exclude={"limit_usd", "over_limit", "limit_note"}
     )
 
 

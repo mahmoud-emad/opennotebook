@@ -212,14 +212,14 @@ def test_the_three_note_collection_is_priced_near_what_such_builds_cost() -> Non
 
 
 def test_the_limit_message_points_at_the_settings_tab() -> None:
-    m = over_limit_message(0.81, 0.5, False)
+    m = over_limit_message(0.81, 0.5, e.FEWER_SLIDES)
     assert "$0.81" in m and "$0.50" in m, m
     assert "Settings › Costs & limits" in m, m
-    assert "shorter length" in over_limit_message(1.0, 0.5, True)
+    assert "shorter length" in over_limit_message(1.0, 0.5, e.SHORTER)
 
 
 def test_an_amount_over_the_limit_never_reads_as_the_limit() -> None:
-    m = over_limit_message(0.2525, 0.25, False)
+    m = over_limit_message(0.2525, 0.25, e.FEWER_SLIDES)
     assert "up to $0.26, over your $0.25" in m, m
     assert cent_up(0.81) == 0.81
     assert cent_up(0.8100000001) == 0.81

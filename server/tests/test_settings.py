@@ -453,6 +453,8 @@ async def test_the_create_panel_offers_what_the_settings_say(client: AsyncClient
     assert " and " not in o["deck_summary"].split(" · ")[2]
     assert o["deck_summary"].startswith("5 slides · about 5 min · ")
     assert o["language_note"] is None and o["build_language_note"] is None
+    # Who answers in Ask, named as Settings names the model.
+    assert o["ask_note"] == "Answers in English with Gemini 2.5 Flash Lite."
     assert o["show_cost"]
     assert o["research"] == {"label": "Standard research", "takes": "a few minutes"}
     up = o["upload"]
@@ -487,6 +489,7 @@ async def test_the_create_panel_follows_a_change_of_settings(client: AsyncClient
         "Voices: Ava and Andrew."
     )
     assert o["language_note"] == "Writing in French."
+    assert o["ask_note"].startswith("Answers in French with ")
     assert o["build_language_note"] in (
         "Writing in French.",
         "Writing in French · voices are English.",

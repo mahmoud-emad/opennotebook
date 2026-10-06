@@ -233,6 +233,12 @@ class SessionEstimate(BaseModel):
     minutes: int
     limit_usd: float = Field(description="The spending limit; 0 is none")
     over_limit: bool = Field(description="The high estimate is over the limit: a build is refused")
+    limit_note: str | None = Field(
+        default=None,
+        description="Over the limit: why it would be refused and what to change, ending with "
+        "where the limit is set (`Settings › Costs & limits.`), as a refusal says it. Null "
+        "when it is within the limit",
+    )
     model: str = Field(
         description="The model that does most of the writing: the script's, or the one that "
         "makes a mind map or study notes"
@@ -271,6 +277,11 @@ class SessionEstimate(BaseModel):
             minutes=i.minutes,
             limit_usd=live.limit_usd,
             over_limit=live.over_limit,
+            limit_note=est.over_limit_message(
+                e.total[2], live.limit_usd, est.SHORTER if i.audio else est.FEWER_SLIDES
+            )
+            if live.over_limit
+            else None,
             model=i.script_model,
             facts=facts,
         )
@@ -332,6 +343,9 @@ class SessionEstimate(BaseModel):
             minutes=0,
             limit_usd=q.limit_usd,
             over_limit=q.over_limit,
+            limit_note=est.over_limit_message(q.cost_high_usd, q.limit_usd, est.FEWER_SOURCES)
+            if q.over_limit
+            else None,
             model=q.model,
             facts=[
                 f"{est.sources_said(q.sources)} · {est.grouped(q.chars)} characters",
@@ -751,7 +765,7 @@ async def _frames(owner: uuid.UUID, sid: uuid.UUID) -> AsyncIterator[str]:
 )
 async def session_events(sid: uuid.UUID, request: Request) -> StreamingResponse:
     """Server-sent events while an output is made and played:
-    `session.state`, `prep.progress` (step, steps_done, steps_total), and
+    `session.state`, `prep.progress` (step, label, steps_done, steps_total), and
     the playback events `slide.enter`, `line.start`, `line.end`, `playhead`.
     The current state comes first, so a client that connects late misses
     nothing."""

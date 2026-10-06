@@ -413,13 +413,16 @@ async def test_the_spending_limit_is_checked_before_any_model_call(
     monkeypatch.setenv("OPENNOTEBOOK_MAX_BUILD_USD", "0.0000001")
     e = (await client.get(f"/api/collections/{cid}/mindmaps/estimate")).json()
     assert e["limit_usd"] == pytest.approx(0.0000001) and e["over_limit"]
+    assert e["limit_note"].endswith(
+        "Use fewer sources, or raise the limit in Settings › Costs & limits."
+    )
     r = await client.post(f"/api/collections/{cid}/mindmaps", json={})
     assert r.status_code == 422
     assert r.json()["detail"].startswith("A mind map of these sources could cost up to $")
     assert "Settings › Costs & limits" in r.json()["detail"]
     monkeypatch.setenv("OPENNOTEBOOK_MAX_BUILD_USD", "5")
     e = (await client.get(f"/api/collections/{cid}/mindmaps/estimate")).json()
-    assert e["limit_usd"] == 5 and not e["over_limit"]
+    assert e["limit_usd"] == 5 and not e["over_limit"] and e["limit_note"] is None
 
 
 async def test_a_model_with_no_price_is_estimated_and_marked_unpriced(

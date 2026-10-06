@@ -39,6 +39,7 @@ ESTIMATE_KEYS = {
     "minutes",
     "limit_usd",
     "over_limit",
+    "limit_note",
     "model",
     "facts",
 }
@@ -100,7 +101,7 @@ async def test_the_estimate_is_the_shape_the_web_app_reads(
     assert e["total_low_usd"] <= e["total_typical_usd"] <= e["total_high_usd"]
     assert re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ", e["priced_at"])
     # The default limit is $0.50, and a small deck is well under it.
-    assert (e["limit_usd"], e["over_limit"]) == (0.5, False)
+    assert (e["limit_usd"], e["over_limit"], e["limit_note"]) == (0.5, False, None)
     assert any(ln["group"] == "Designing the slides" for ln in e["lines"])
     priced = next(ln for ln in e["lines"] if ln["step"] == "Outline")
     assert priced["price_in_per_million"] == pytest.approx(1.0)
@@ -160,6 +161,12 @@ async def test_a_build_over_the_limit_is_refused_and_leaves_nothing(
         await client.post(f"/api/collections/{cid}/outputs/estimate", json={"kind": "slides"})
     ).json()
     assert e["over_limit"] and e["limit_usd"] == 0.01
+    # Said before the click as the refusal says it, with what to change.
+    assert e["limit_note"].startswith("This could cost up to $")
+    assert e["limit_note"].endswith(
+        "over your $0.01 limit. Use fewer slides, a shorter length, or raise the limit in "
+        "Settings › Costs & limits."
+    )
     r = await client.post(f"/api/collections/{cid}/outputs", json={"kind": "slides"})
     assert r.status_code == 422
     said = r.json()["detail"]
@@ -395,7 +402,10 @@ async def test_the_event_stream_follows_progress_through_notify(
     assert first == ("session.state", {"state": "preparing"})
     # Queued, with its steps known from the start.
     second = await asyncio.wait_for(anext(stream), 5)
-    assert second == ("prep.progress", {"step": "", "steps_done": 0, "steps_total": 5})
+    assert second == (
+        "prep.progress",
+        {"step": "", "label": "Starting", "steps_done": 0, "steps_total": 5},
+    )
     # No worker is running here, and the stream says so.
     third = await asyncio.wait_for(anext(stream), 5)
     assert third is not None and third[0] == "prep.waiting"
@@ -406,7 +416,11 @@ async def test_the_event_stream_follows_progress_through_notify(
     # Once the build runs it is no longer waiting, and its step comes through.
     seen = [await asyncio.wait_for(anext(stream), 5) for _ in range(2)]
     assert ("prep.waiting", {"waiting": None}) in seen
-    assert ("prep.progress", {"step": "ingest", "steps_done": 0, "steps_total": 5}) in seen
+    # The step in a person's words, as the player says it.
+    assert (
+        "prep.progress",
+        {"step": "ingest", "label": "Reading your sources", "steps_done": 0, "steps_total": 5},
+    ) in seen
     # Playback is announced too.
     r = await client.put(
         f"/api/sessions/{sid}/playback",

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { usd, usdRange, usdRangeSpoken, usdUp } from "./dialogs";
+import { usd, usdRange, usdRangeSpoken } from "./dialogs";
 
 // Ported from the old app's cost_format_tests.
 describe("money", () => {
@@ -15,10 +15,5 @@ describe("money", () => {
     expect(usdRange(0.4, 0.5)).toBe("about $0.45");
     expect(usdRange(0.4, 1.6)).toBe("$0.40 – $1.60");
     expect(usdRangeSpoken(0.4, 1.6)).toBe("between $0.40 and $1.60");
-  });
-  it("rounds an amount over a limit up to the cent", () => {
-    expect(usdUp(0.2525)).toBe("$0.26");
-    expect(usdUp(0.25)).toBe("$0.25");
-    expect(usdUp(0.8100000001)).toBe("$0.81");
   });
 });

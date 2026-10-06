@@ -305,7 +305,7 @@ function Options({
       {/* Over the limit is said whether or not costs are shown: it is not a
           note about cost but the reason Generate is off. */}
       {shownEst?.over_limit && (
-        <LimitNote e={shownEst} audio={k === "audio"} fix={build ? undefined : "fewer sources"} className="opt-err" />
+        <LimitNote e={shownEst} className="opt-err" />
       )}
       {genErr !== "" && (
         <div className="opt-err" role="alert">
@@ -352,7 +352,6 @@ export function CostDialogs({ S, A, cid }: { S: PageState; A: PageActions; cid: 
       <CostDialog
         est={q}
         verb="Make"
-        audio={false}
         loading={loading}
         err={loading || q !== null ? "" : failed}
         onClose={close}
@@ -369,7 +368,6 @@ export function CostDialogs({ S, A, cid }: { S: PageState; A: PageActions; cid: 
   return (
     <CostDialog
       est={est}
-      audio={kindNow === "audio"}
       loading={estLoading}
       err={estErr}
       onClose={close}

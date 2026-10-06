@@ -46,6 +46,7 @@ export function CollectionPage(props: CollectionPageProps) {
   // A copy whose author did not allow edits: read, asked and played, never
   // changed or shared.
   const ro = useStoreSel(S.summary, (s) => !!s?.read_only);
+  const opts = useStore(S.opts);
   const title = useStoreSel(S.summary, (s) => s?.title ?? "");
 
   // The latest props, for work that finishes later: a map made in the
@@ -113,7 +114,7 @@ export function CollectionPage(props: CollectionPageProps) {
               <OutputsList S={S} A={A} ro={ro} open={open} onOpen={onOpen} />
             </div>
           ) : (
-            <AskTab st={chat} onSend={(t) => void A.sendChat(t)} />
+            <AskTab st={chat} onSend={(t) => void A.sendChat(t)} note={opts?.ask_note ?? null} />
           )}
         </section>
 
