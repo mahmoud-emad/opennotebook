@@ -80,7 +80,7 @@ export async function recheck(m: MakingState, signal?: AbortSignal): Promise<voi
       try {
         const j = await getJob(id, signal);
         if (j.status === "done") jobEnded(m, id, null);
-        else if (j.status === "failed" || j.status === "cancelled") jobEnded(m, id, j.error ?? STOPPED);
+        else if (j.status === "failed" || j.status === "cancelled") jobEnded(m, id, j.error ?? "");
       } catch {
         // Asked again the next time the stream is down.
       }
@@ -88,7 +88,6 @@ export async function recheck(m: MakingState, signal?: AbortSignal): Promise<voi
   );
 }
 
-const STOPPED = "It stopped before it finished. Try again.";
 
 /** Ask for one and wait until the worker has made it. Its id, or the
  * sentence that says why it was not made. */

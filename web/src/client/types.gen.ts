@@ -583,7 +583,7 @@ export type JobOut = {
     /**
      * Error
      *
-     * Why it failed or stopped; null unless it did
+     * Why it failed or stopped, always said when it did; null otherwise
      */
     error: string | null;
     /**

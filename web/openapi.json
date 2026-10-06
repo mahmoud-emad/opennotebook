@@ -4591,7 +4591,7 @@
               }
             ],
             "title": "Error",
-            "description": "Why it failed or stopped; null unless it did"
+            "description": "Why it failed or stopped, always said when it did; null otherwise"
           },
           "session_id": {
             "anyOf": [

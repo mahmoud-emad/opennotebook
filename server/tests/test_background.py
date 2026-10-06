@@ -115,6 +115,15 @@ async def test_the_collection_stream_follows_a_map_and_says_how_its_making_ended
         await hub.close()
 
 
+async def test_work_that_ended_without_a_reason_still_says_one(client: AsyncClient) -> None:
+    cid = await _collection(client)
+    job = (await client.post(f"/api/collections/{cid}/notes", json={})).json()["job"]
+    await _sql("UPDATE jobs SET status = 'failed', error = NULL WHERE id = :j", j=job["id"])
+    got = (await client.get(f"/api/jobs/{job['id']}")).json()
+    assert got["status"] == "failed"
+    assert got["error"] == "This was stopped before it finished. Start it again to make it."
+
+
 async def test_notes_being_written_are_stopped_when_deleted(client: AsyncClient) -> None:
     cid = await _collection(client)
     r = await client.post(f"/api/collections/{cid}/notes", json={})

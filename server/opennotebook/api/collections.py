@@ -13,7 +13,7 @@ from fastapi.responses import HTMLResponse, StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 
-from opennotebook import storage
+from opennotebook import jobs, storage
 from opennotebook.api import paging
 from opennotebook.api.deps import SANDBOXED, Db, Me
 from opennotebook.api.mindmaps import maps_of
@@ -311,10 +311,6 @@ async def _progress_of(owner: uuid.UUID, job_ids: list[uuid.UUID]) -> dict[str, 
         return _progress(list(made))
 
 
-# Why a map or notes job ended without a reason of its own.
-STOPPED = "It stopped before it finished. Try again."
-
-
 async def _ended(owner: uuid.UUID, job_ids: set[uuid.UUID]) -> dict[uuid.UUID, str | None]:
     """The jobs of `job_ids` that have ended, each with why it failed or
     stopped, or None when it made what it was making."""
@@ -326,7 +322,7 @@ async def _ended(owner: uuid.UUID, job_ids: set[uuid.UUID]) -> dict[uuid.UUID, s
                 Job.status.in_(("done", "failed", "cancelled")),
             )
         )
-        return {i: None if st == "done" else (err or STOPPED) for i, st, err in rows}
+        return {i: None if st == "done" else (err or jobs.STOPPED) for i, st, err in rows}
 
 
 async def events_of(owner: uuid.UUID, cid: uuid.UUID) -> AsyncGenerator[Event | None]:

@@ -411,13 +411,13 @@ export function Progress({ at, waiting = "" }: { at: OutputProgress | null; wait
   const step = at?.step ?? "";
   const done = at?.steps_done ?? 0;
   const total = at?.steps_total ?? 0;
-  const label = at?.label || "Starting";
+  const label = at?.label ?? "";
   const pct = total > 0 ? Math.floor((done * 100) / total) : 0;
   return (
     <>
       <span className="out-d num">
         <span className="badge preparing">Preparing</span>
-        {` ${label}`}
+        {label !== "" && ` ${label}`}
         {total > 0 && ` · ${done}/${total}`}
       </span>
       {waiting !== "" && step === "" && <span className="out-d">{waiting}</span>}

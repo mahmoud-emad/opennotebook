@@ -351,7 +351,7 @@ export async function followJob(
     }
     if (j.status === "done") return null;
     if (j.status === "failed" || j.status === "cancelled")
-      return j.error ?? "It stopped before it finished. Try again.";
+      return j.error ?? "";
     const said = j.waiting ?? j.step;
     if (said !== last) onSaid((last = said));
   }

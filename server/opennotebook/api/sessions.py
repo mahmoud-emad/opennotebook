@@ -363,7 +363,9 @@ class JobOut(BaseModel):
     step: str = Field(description="What it is doing now; empty before it starts")
     steps_done: int
     steps_total: int = Field(description="0 when the work does not report its steps")
-    error: str | None = Field(description="Why it failed or stopped; null unless it did")
+    error: str | None = Field(
+        description="Why it failed or stopped, always said when it did; null otherwise"
+    )
     session_id: uuid.UUID | None
     collection_id: uuid.UUID | None
     created_at: datetime
@@ -375,7 +377,12 @@ class JobOut(BaseModel):
 
     @classmethod
     def of(cls, j: Job) -> JobOut:
-        return cls.model_validate(j, from_attributes=True)
+        out = cls.model_validate(j, from_attributes=True)
+        # Work stopped from outside, or before it could say why, still says
+        # something a person can act on.
+        if out.status in ("failed", "cancelled") and not out.error:
+            out.error = jobs.STOPPED
+        return out
 
 
 # ── reading ──────────────────────────────────────────────────────────────────
