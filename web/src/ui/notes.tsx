@@ -22,7 +22,7 @@ import { Icon } from "./Icon";
 import { citeGroups, type Cite } from "./cite";
 import { mdToHtml, withChips } from "./markdown";
 import { download, fileStem } from "./common";
-import { madeBy, newMaking, sorted, type MakingState } from "./making";
+import { jobEnded, madeBy, newMaking, sorted, type MakingState } from "./making";
 import { covering } from "./mindmap";
 import { keepSame } from "./helpers";
 import { store, type Store } from "./store";
@@ -69,24 +69,14 @@ export function newNotesState(): NotesState {
 
 /** The collection's notes, newest first. Notes being written are not
  * listed: the list says "Writing study notes…" while the server writes
- * them, and reads the notes again once they are done. */
+ * them, and the collection's stream brings the notes again once they are
+ * done. */
 export async function loadNotes(cid: string, st: NotesState, signal?: AbortSignal): Promise<void> {
   const my = ++st.seq.load;
   try {
     const list = await notesList(cid, signal);
     if (my !== st.seq.load) return;
-    const { ready, making } = sorted(
-      list,
-      st.mk,
-      (why) => {
-        if (why !== null) st.err.set(why);
-        void loadNotes(cid, st, signal);
-      },
-      signal,
-    );
-    st.notes.set((was) => keepSame(was, ready, (x) => x.id));
-    st.making.set(making);
-    st.loadErr.set("");
+    applyNotes(st, list);
   } catch (e) {
     if (isAbort(e) || my !== st.seq.load) return;
     st.loadErr.set(errText(e));
@@ -94,6 +84,24 @@ export async function loadNotes(cid: string, st: NotesState, signal?: AbortSigna
     st.making.set(st.mk.asked > 0);
   }
   st.loaded.set(true);
+}
+
+/** The notes as the server listed them, by a read or on the stream. */
+export function applyNotes(st: NotesState, list: StudyNotesSummary[]): void {
+  // Newer than any read already on its way.
+  ++st.seq.load;
+  const { ready, making } = sorted(list, st.mk);
+  st.notes.set((was) => keepSame(was, ready, (x) => x.id));
+  st.making.set(making);
+  st.loadErr.set("");
+  st.loaded.set(true);
+}
+
+/** The stream said a notes job ended: a failure nobody here asked for is
+ * said all the same. */
+export function notesEnded(st: NotesState, job: string, why: string | null): void {
+  const shown = jobEnded(st.mk, job, why);
+  if (shown !== null) st.err.set(shown);
 }
 
 /** What notes of the collection would cost. */

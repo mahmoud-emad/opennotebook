@@ -16,6 +16,8 @@ from sqlalchemy import select
 from opennotebook import storage
 from opennotebook.api import paging
 from opennotebook.api.deps import SANDBOXED, Db, Me
+from opennotebook.api.mindmaps import maps_of
+from opennotebook.api.notes import notes_of
 from opennotebook.api.sessions import SessionSummary, summaries_and_jobs, summaries_of
 from opennotebook.api.sources import SourceOut, listed
 from opennotebook.auth import current_user
@@ -249,8 +251,9 @@ Event = tuple[str, Any]
 
 async def _read(owner: uuid.UUID, cid: uuid.UUID) -> dict[str, Any] | None:
     """The collection as the page shows it now: its summary, its decks and
-    audio overviews, the progress of those being made, and its sources. None
-    once it is gone."""
+    audio overviews, the progress of those being made, its sources, and its
+    mind maps and study notes with the jobs of those being made. None once
+    it is gone."""
     async with sessionmaker()() as s, s.begin():
         try:
             summary = await collections.summary(s, owner, cid)
@@ -266,12 +269,20 @@ async def _read(owner: uuid.UUID, cid: uuid.UUID) -> dict[str, Any] | None:
             .where(Source.collection_id == cid, Source.owner_id == owner)
             .order_by(Source.created_at)
         )
+        maps = await maps_of(s, owner, cid)
+        notes = await notes_of(s, owner, cid)
+        made = [x.job_id for x in (*maps, *notes) if x.state == "making" and x.job_id is not None]
+        for job_id in made:
+            hub.follow_job(job_id, cid)
         return {
             "collection": CollectionSummary.of(summary).model_dump(mode="json"),
             "outputs": [o.model_dump(mode="json") for o in outputs],
             "sources": [SourceOut.of(r).model_dump(mode="json") for r in rows],
             "progress": progress,
             "jobs": [j.id for j in making.values()],
+            "mindmaps": [m.model_dump(mode="json") for m in maps],
+            "notes": [n.model_dump(mode="json") for n in notes],
+            "made": made,
         }
 
 
@@ -298,6 +309,24 @@ async def _progress_of(owner: uuid.UUID, job_ids: list[uuid.UUID]) -> dict[str, 
         return _progress(list(made))
 
 
+# Why a map or notes job ended without a reason of its own.
+STOPPED = "It stopped before it finished. Try again."
+
+
+async def _ended(owner: uuid.UUID, job_ids: set[uuid.UUID]) -> dict[uuid.UUID, str | None]:
+    """The jobs of `job_ids` that have ended, each with why it failed or
+    stopped, or None when it made what it was making."""
+    async with sessionmaker()() as s:
+        rows = await s.execute(
+            select(Job.id, Job.status, Job.error).where(
+                Job.id.in_(job_ids),
+                Job.owner_id == owner,
+                Job.status.in_(("done", "failed", "cancelled")),
+            )
+        )
+        return {i: None if st == "done" else (err or STOPPED) for i, st, err in rows}
+
+
 async def events_of(owner: uuid.UUID, cid: uuid.UUID) -> AsyncGenerator[Event | None]:
     """A collection's events as they happen; None is a keep-alive. Each part
     is sent when the stream starts and again whenever it changes, so a page
@@ -307,10 +336,17 @@ async def events_of(owner: uuid.UUID, cid: uuid.UUID) -> AsyncGenerator[Event | 
     sent: dict[str, Any] = {}
     # The jobs of the outputs being made, as the last whole read found them.
     jobs: list[uuid.UUID] = []
+    # The jobs of the maps and notes being made that have not been told
+    # ended yet.
+    made: set[uuid.UUID] = set()
     async with hub.subscribe(cid) as woken:
         while True:
             why = woken.clear()
-            if why == {JOB} and jobs:
+            # Asked before the lists are read: a map or notes are written
+            # before their job ends, so a page hears of the list first and
+            # of the end after.
+            done = await _ended(owner, made) if made else {}
+            if why == {JOB} and jobs and not done:
                 # Only a job reported: its progress is all that can have
                 # moved. Its outcome comes with a change to the collection.
                 progress = await _progress_of(owner, jobs)
@@ -319,15 +355,19 @@ async def events_of(owner: uuid.UUID, cid: uuid.UUID) -> AsyncGenerator[Event | 
                 if now is None:
                     yield ("gone", {"collection_id": str(cid)})
                     return
-                for part in ("collection", "outputs", "sources"):
+                for part in ("collection", "outputs", "sources", "mindmaps", "notes"):
                     if last.get(part) != now[part]:
                         yield (part, now[part])
                         last[part] = now[part]
                 progress, jobs = now["progress"], now["jobs"]
+                made.update(now["made"])
             for sid, p in progress.items():
                 if sent.get(sid) != p:
                     yield ("progress", p)
                     sent[sid] = p
+            for job_id, error in done.items():
+                made.discard(job_id)
+                yield ("ended", {"job_id": str(job_id), "error": error})
             wait = BUSY_REREAD_SECONDS if last["collection"]["busy"] else REREAD_SECONDS
             try:
                 async with asyncio.timeout(wait):
@@ -351,10 +391,12 @@ async def _frames(owner: uuid.UUID, cid: uuid.UUID) -> AsyncIterator[str]:
 async def collection_events(cid: uuid.UUID, request: Request) -> StreamingResponse:
     """Server-sent events while a collection is open: `collection` (its
     summary, as the list has it), `outputs` (its decks and audio overviews),
-    `progress` (`session_id`, `step`, `steps_done`, `steps_total` of one being
-    made), `sources` (its sources), each when the stream starts and again when
-    it changes, and `gone` once it is deleted. A page follows this rather than
-    reading the collection again on a timer."""
+    `progress` (`session_id`, `step`, `steps_done`, `steps_total` of one being made), `sources` (its
+    sources), `mindmaps` and `notes` (as their lists have them, those being
+    made included), each when the stream starts and again when it changes;
+    `ended` (`job_id`, and `error`: why it was not made, or null) once a map
+    or notes being made is done; and `gone` once it is deleted. A page
+    follows this rather than reading the collection again on a timer."""
     # Signed in and checked on a session of its own, closed before the
     # stream starts: a stream lasts as long as the page, and holds no
     # transaction.

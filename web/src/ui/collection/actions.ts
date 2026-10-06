@@ -2,7 +2,8 @@
 // Made once per page over its stores (`state.ts`); nothing here waits on a
 // build. A deck or an audio overview prepares in the background for minutes,
 // and the page follows the collection's event stream, where the server says
-// what changed: its summary, its outputs and their progress, its sources.
+// what changed: its summary, its outputs and their progress, its sources,
+// its mind maps and study notes, and how each one being made ended.
 
 import {
   collectionRetitle,
@@ -22,6 +23,8 @@ import {
   buildOutput,
   estimateOutput,
   followJob,
+  mapSummaryOf,
+  notesSummaryOf,
   researchTopic,
   studioOptions,
   type BuildReq,
@@ -29,8 +32,9 @@ import {
 } from "../api-studio";
 import { keepSame, sameOr } from "../helpers";
 import { askSources, send, type ChatMade, type ChatState } from "../chat";
-import { loadMaps, makeMap } from "../mindmap";
-import { loadNotes, makeNotes } from "../notes";
+import { recheck } from "../making";
+import { applyMaps, loadMaps, makeMap, mapEnded } from "../mindmap";
+import { applyNotes, loadNotes, makeNotes, notesEnded } from "../notes";
 import { deleteOutput, retitle, type Target } from "../outputs";
 import type { Open } from "../routes";
 import { isBuild, outputLabel, report, type Output } from "../shell";
@@ -129,9 +133,13 @@ export function pageActions(cid: string, S: PageState, chat: ChatState) {
     }
   };
 
+  // Ask how the maps and notes this page waits on ended, when the stream
+  // may have missed saying it.
+  const recheckMade = () => Promise.all([recheck(S.mm.mk, signal()), recheck(S.nt.mk, signal())]);
+
   // Follow the collection on the server's event stream: its summary, its
-  // decks and audio overviews with their progress, and its sources, as they
-  // change. Only while the stream is down is the collection read again, and
+  // decks and audio overviews with their progress, its sources, and its maps
+  // and notes, as they change. Only while the stream is down is the collection read again, and
   // then slowly. Returns what stops it.
   const follow = () => {
     let up = true;
@@ -151,8 +159,17 @@ export function pageActions(cid: string, S: PageState, chat: ChatState) {
         ++srcGen;
         applySources(list.map(srcOfServer));
       },
+      mindmaps: (list) => applyMaps(S.mm, list.map(mapSummaryOf)),
+      notes: (list) => applyNotes(S.nt, list.map(notesSummaryOf)),
+      // Which of the two the job made is told by whose wait or list has it.
+      ended: ({ job_id, error }) => {
+        mapEnded(S.mm, job_id, error);
+        notesEnded(S.nt, job_id, error);
+      },
       gone: () => S.missing.set(true),
       up: (ok) => {
+        // Back after a drop: a job that ended meanwhile was never said.
+        if (ok && !up) void recheckMade();
         up = ok;
       },
     });
@@ -162,6 +179,9 @@ export function pageActions(cid: string, S: PageState, chat: ChatState) {
         if (stop.signal.aborted || up || S.missing.get()) continue;
         await load();
         await loadSources();
+        await loadMaps(cid, S.mm, signal());
+        await loadNotes(cid, S.nt, signal());
+        await recheckMade();
       }
     })();
     return () => {

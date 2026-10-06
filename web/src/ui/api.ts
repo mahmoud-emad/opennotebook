@@ -369,6 +369,9 @@ export async function getCollection(
 /** How far an output being made is, as a collection's stream says it. */
 export type OutputProgress = { session_id: string; step: string; steps_done: number; steps_total: number };
 
+/** A map's or notes' job that ended, as a collection's stream says it. */
+export type JobEnded = { job_id: string; error: string | null };
+
 /** What a collection's event stream says (`GET /api/collections/{cid}/events`),
  * each part when the stream opens and again when it changes. */
 export type CollectionEvents = {
@@ -376,6 +379,12 @@ export type CollectionEvents = {
   outputs?: (o: SessionSummary[]) => void;
   progress?: (p: OutputProgress) => void;
   sources?: (s: ServerSource[]) => void;
+  /** Its mind maps and study notes, those being made included. */
+  mindmaps?: (m: Rest.MindMapSummary[]) => void;
+  notes?: (n: Rest.NotesSummary[]) => void;
+  /** A map or notes being made is done: `error` says why it was not made,
+   * null when it was. */
+  ended?: (e: JobEnded) => void;
   /** The collection was deleted. */
   gone?: () => void;
   /** Whether the stream is up: false when it dropped (the browser connects
@@ -407,6 +416,9 @@ export function followCollection(cid: string, on: CollectionEvents): () => void 
   listen<Rest.SessionSummary[]>("outputs", (v) => on.outputs?.(v.map(sessionOf)));
   listen<OutputProgress>("progress", (v) => on.progress?.(v));
   listen<Rest.SourceOut[]>("sources", (v) => on.sources?.(v.map(serverSourceOf)));
+  listen<Rest.MindMapSummary[]>("mindmaps", (v) => on.mindmaps?.(v));
+  listen<Rest.NotesSummary[]>("notes", (v) => on.notes?.(v));
+  listen<JobEnded>("ended", (v) => on.ended?.(v));
   listen<unknown>("gone", () => {
     es.close();
     on.gone?.();

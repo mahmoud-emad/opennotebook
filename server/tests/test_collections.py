@@ -145,11 +145,11 @@ async def test_a_collection_is_followed_as_it_changes_until_it_is_gone(
     cid = (await client.post("/api/collections", json={"title": "Reefs"})).json()["id"]
     ev = events_of(owner, uuid.UUID(cid))
     try:
-        first = [await _next(ev) for _ in range(3)]
+        first = [await _next(ev) for _ in range(5)]
         # Everything when it starts, so a page that connects late misses nothing.
-        assert [n for n, _ in first] == ["collection", "outputs", "sources"]
+        assert [n for n, _ in first] == ["collection", "outputs", "sources", "mindmaps", "notes"]
         assert first[0][1]["display_title"] == "Reefs"
-        assert (first[1][1], first[2][1]) == ([], [])
+        assert [d for _, d in first[1:]] == [[], [], [], []]
 
         await add_note(client, cid, "Coral reefs are built by polyps. " * 10, title="Polyps")
         got: dict[str, Any] = {}

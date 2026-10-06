@@ -165,7 +165,7 @@ export type Started<T> = { job: Rest.JobOut; made: T };
 
 export type MindMap = MindMapSummary & { dropped: number; excerpted: boolean; root: MindNode };
 
-function mapSummaryOf(m: Rest.MindMapSummary): MindMapSummary {
+export function mapSummaryOf(m: Rest.MindMapSummary): MindMapSummary {
   return {
     id: m.id,
     title: m.title,
@@ -247,7 +247,7 @@ export type StudyNotes = {
   markdown: string;
 };
 
-function notesSummaryOf(n: Rest.NotesSummary): StudyNotesSummary {
+export function notesSummaryOf(n: Rest.NotesSummary): StudyNotesSummary {
   return {
     id: n.id,
     title: n.title,

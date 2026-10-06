@@ -20,6 +20,7 @@ from sqlalchemy import (
     select,
     text,
 )
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import defer
 
 from opennotebook import jobs
@@ -193,10 +194,16 @@ async def _one(s: Db, owner: uuid.UUID, cid: uuid.UUID, nid: uuid.UUID) -> Study
 async def list_notes(cid: uuid.UUID, s: Db, me: Me) -> list[NotesSummary]:
     """A collection's study notes, newest first."""
     await collections.owned(s, me.id, cid)
+    return await notes_of(s, me.id, cid)
+
+
+async def notes_of(s: AsyncSession, owner: uuid.UUID, cid: uuid.UUID) -> list[NotesSummary]:
+    """A collection's study notes, newest first, as its list and its event
+    stream give them."""
     rows = list(
         await s.execute(
             listed()
-            .where(StudyNotes.collection_id == cid, StudyNotes.owner_id == me.id)
+            .where(StudyNotes.collection_id == cid, StudyNotes.owner_id == owner)
             .order_by(StudyNotes.created_at.desc())
         )
     )

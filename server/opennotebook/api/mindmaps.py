@@ -9,6 +9,7 @@ from typing import Any, Literal
 from fastapi import APIRouter
 from pydantic import BaseModel, Field, computed_field, field_validator
 from sqlalchemy import delete, select
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import defer
 
 from opennotebook import jobs
@@ -112,12 +113,17 @@ async def _one(s: Db, owner: uuid.UUID, cid: uuid.UUID, mid: uuid.UUID) -> MindM
 async def list_mindmaps(cid: uuid.UUID, s: Db, me: Me) -> list[MindMapSummary]:
     """A collection's mind maps, newest first."""
     await collections.owned(s, me.id, cid)
-    # Without their trees: a list shows each map's outline (`shape`), never
-    # its nodes.
+    return await maps_of(s, me.id, cid)
+
+
+async def maps_of(s: AsyncSession, owner: uuid.UUID, cid: uuid.UUID) -> list[MindMapSummary]:
+    """A collection's mind maps, newest first, as its list and its event
+    stream give them. Without their trees: a list shows each map's outline
+    (`shape`), never its nodes."""
     rows = await s.scalars(
         select(MindMap)
         .options(defer(MindMap.root, raiseload=True))
-        .where(MindMap.collection_id == cid, MindMap.owner_id == me.id)
+        .where(MindMap.collection_id == cid, MindMap.owner_id == owner)
         .order_by(MindMap.created_at.desc())
     )
     listed = await making.settle(s, list(rows))

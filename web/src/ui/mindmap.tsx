@@ -44,7 +44,7 @@ import {
 } from "./mindmapLayout";
 import { download, fileStem, saveBlob } from "./common";
 import { keepSame } from "./helpers";
-import { madeBy, newMaking, sorted, type MakingState } from "./making";
+import { jobEnded, madeBy, newMaking, sorted, type MakingState } from "./making";
 import { store, type Store } from "./store";
 
 // ── making one ───────────────────────────────────────────────────────────────
@@ -88,25 +88,14 @@ export function newMapState(): MapState {
 }
 
 /** The collection's maps, newest first. One being made is not listed: the
- * list says "Making a mind map…" while the server makes it, and reads the
- * maps again once it is done. */
+ * list says "Making a mind map…" while the server makes it, and the
+ * collection's stream brings the maps again once it is done. */
 export async function loadMaps(cid: string, st: MapState, signal?: AbortSignal): Promise<void> {
   const my = ++st.seq.load;
   try {
     const list = await mindmapList(cid, signal);
     if (my !== st.seq.load) return;
-    const { ready, making } = sorted(
-      list,
-      st.mk,
-      (why) => {
-        if (why !== null) st.err.set(why);
-        void loadMaps(cid, st, signal);
-      },
-      signal,
-    );
-    st.maps.set((was) => keepSame(was, ready, (x) => x.id));
-    st.making.set(making);
-    st.loadErr.set("");
+    applyMaps(st, list);
   } catch (e) {
     if (isAbort(e) || my !== st.seq.load) return;
     st.loadErr.set(errText(e));
@@ -114,6 +103,24 @@ export async function loadMaps(cid: string, st: MapState, signal?: AbortSignal):
     st.making.set(st.mk.asked > 0);
   }
   st.loaded.set(true);
+}
+
+/** The maps as the server listed them, by a read or on the stream. */
+export function applyMaps(st: MapState, list: MindMapSummary[]): void {
+  // Newer than any read already on its way.
+  ++st.seq.load;
+  const { ready, making } = sorted(list, st.mk);
+  st.maps.set((was) => keepSame(was, ready, (x) => x.id));
+  st.making.set(making);
+  st.loadErr.set("");
+  st.loaded.set(true);
+}
+
+/** The stream said a map's job ended: a failure nobody here asked for (a
+ * map being made in another tab) is said all the same. */
+export function mapEnded(st: MapState, job: string, why: string | null): void {
+  const shown = jobEnded(st.mk, job, why);
+  if (shown !== null) st.err.set(shown);
 }
 
 /** What a map of the collection would cost. */

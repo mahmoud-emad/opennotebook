@@ -1,49 +1,94 @@
 // Mind maps and study notes are made by the server's worker: asking answers
 // at once, the row is listed as "making" until its job has made it, and one
-// whose job fails is removed, the job saying why. This is how a page follows
-// those jobs, whether it asked for them or found them being made when it
-// opened (another tab, a reload), so "Making…" always says what the server
-// says.
+// whose job fails is removed, the job saying why. The collection's event
+// stream says both: the lists as they change, and each job's end with why it
+// failed (`ended`). This is how a page keeps track of those jobs, whether it
+// asked for them or found them being made when it opened (another tab, a
+// reload), so "Making…" always says what the server says.
 
-import { followJob, type MadeState } from "./api-studio";
-
-/** How often a job being made is asked about. */
-export const FOLLOW_MS = 1000;
+import { getJob, type MadeState } from "./api-studio";
 
 /** Something the worker makes. */
 export type Makeable = { id: string; state: MadeState; job_id: string | null };
 
+/** How a job ended: null when it made what it was making, else why not. */
+type Why = string | null;
+
 /** What a page keeps while things are made: how many of its own asks are on
- * their way, and which jobs it already follows. */
-export type MakingState = { asked: number; following: Set<string> };
+ * their way, the jobs it waits on, the ends heard before anyone waited, and
+ * the jobs a list showed being made whose end has not been heard (a failed
+ * row leaves the list before its job ends). */
+export type MakingState = {
+  asked: number;
+  waiting: Map<string, (why: Why) => void>;
+  ended: Map<string, Why>;
+  listed: Set<string>;
+};
+
+/** How many ends nobody waited on are kept, the oldest forgotten first. */
+const ENDED_MAX = 64;
 
 export function newMaking(): MakingState {
-  return { asked: 0, following: new Set() };
+  return { asked: 0, waiting: new Map(), ended: new Map(), listed: new Set() };
 }
 
-/** The ready ones of a list, and whether any is still being made. Each job
- * being made that this page does not follow yet is followed; once it ends,
- * `ended` is told why it failed, or null when it made what it was making. */
-export function sorted<T extends Makeable>(
-  list: T[],
-  m: MakingState,
-  ended: (why: string | null) => void,
-  signal?: AbortSignal,
-): { ready: T[]; making: boolean } {
-  for (const x of list) {
-    const id = x.job_id;
-    if (x.state !== "making" || id === null || m.following.has(id)) continue;
-    m.following.add(id);
-    void followJob(id, () => {}, signal, FOLLOW_MS).then((why) => {
-      m.following.delete(id);
-      if (!signal?.aborted) ended(why);
-    });
-  }
+/** The ready ones of a list, and whether any is still being made. */
+export function sorted<T extends Makeable>(list: T[], m: MakingState): { ready: T[]; making: boolean } {
+  const making = list.flatMap((x) => (x.state === "making" && x.job_id !== null ? [x.job_id] : []));
+  for (const id of making) m.listed.add(id);
   return {
     ready: list.filter((x) => x.state !== "making"),
-    making: m.asked > 0 || list.some((x) => x.state === "making"),
+    making: m.asked > 0 || making.length > 0,
   };
 }
+
+/** The server said a job ended. An ask of this page waiting on it is told;
+ * else the end is kept for an ask still on its way. Returns why it failed
+ * when no ask waited but the list showed it being made (another tab, a
+ * reload), for the page to say; null otherwise. */
+export function jobEnded(m: MakingState, id: string, why: Why): Why {
+  const shown = m.listed.delete(id);
+  const waiter = m.waiting.get(id);
+  if (waiter) {
+    m.waiting.delete(id);
+    waiter(why);
+    return null;
+  }
+  m.ended.set(id, why);
+  for (const old of m.ended.keys()) {
+    if (m.ended.size <= ENDED_MAX) break;
+    m.ended.delete(old);
+  }
+  return shown ? why : null;
+}
+
+/** How the job `id` ends, as the stream says it. */
+function endOf(m: MakingState, id: string): Promise<Why> {
+  if (m.ended.has(id)) {
+    const why = m.ended.get(id) ?? null;
+    m.ended.delete(id);
+    return Promise.resolve(why);
+  }
+  return new Promise((resolve) => m.waiting.set(id, resolve));
+}
+
+/** Ask the server once how each job this page waits on stands: for a stream
+ * that was down while one ended, so its end was never said. */
+export async function recheck(m: MakingState, signal?: AbortSignal): Promise<void> {
+  await Promise.all(
+    [...m.waiting.keys()].map(async (id) => {
+      try {
+        const j = await getJob(id, signal);
+        if (j.status === "done") jobEnded(m, id, null);
+        else if (j.status === "failed" || j.status === "cancelled") jobEnded(m, id, j.error ?? STOPPED);
+      } catch {
+        // Asked again the next time the stream is down.
+      }
+    }),
+  );
+}
+
+const STOPPED = "It stopped before it finished. Try again.";
 
 /** Ask for one and wait until the worker has made it. Its id, or the
  * sentence that says why it was not made. */
@@ -52,11 +97,6 @@ export async function madeBy(
   ask: () => Promise<{ job: { id: string }; made: { id: string } }>,
 ): Promise<{ id: string } | { why: string }> {
   const { job, made } = await ask();
-  m.following.add(job.id);
-  try {
-    const why = await followJob(job.id, () => {}, undefined, FOLLOW_MS);
-    return why === null ? { id: made.id } : { why };
-  } finally {
-    m.following.delete(job.id);
-  }
+  const why = await endOf(m, job.id);
+  return why === null ? { id: made.id } : { why };
 }

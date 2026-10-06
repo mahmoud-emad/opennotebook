@@ -4,6 +4,8 @@ saying why. And the queue tidies what finished long ago, never the spend
 ledger."""
 
 import json
+import uuid
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -11,10 +13,12 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy import text
 
+from opennotebook.api.collections import events_of
 from opennotebook.db.session import engine
 from opennotebook.jobs import background
 from opennotebook.jobs.app import app
-from tests.model import add_note, install, run_work, says
+from opennotebook.jobs.events import hub
+from tests.model import add_note, fails, install, run_work, says
 from tests.test_mindmap import OUTLINE, REEFS
 
 
@@ -57,6 +61,58 @@ async def test_a_map_is_listed_as_being_made_until_the_worker_draws_it(
     assert m["state"] == "ready" and m["root"]["name"] == "Coral reefs"
     state = (await client.get(f"/api/collections/{cid}/share")).json()
     assert f"mindmap:{row['id']}" in [i["key"] for i in state["items"]]
+
+
+async def test_the_collection_stream_follows_a_map_and_says_how_its_making_ended(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from tests.test_collections import _next  # pyright: ignore[reportPrivateUsage]
+
+    model = install(monkeypatch)
+    owner = uuid.UUID((await client.get("/api/me")).json()["id"])
+    cid = await _collection(client)
+    ev = events_of(owner, uuid.UUID(cid))
+
+    def anything(_: Any) -> bool:
+        return True
+
+    async def until(name: str, ok: Callable[[Any], bool] = anything) -> Any:
+        while True:
+            got, data = await _next(ev)
+            if got == name and ok(data):
+                return data
+
+    try:
+        assert await until("mindmaps") == []
+        model.answers(says(OUTLINE))
+        r = await client.post(f"/api/collections/{cid}/mindmaps", json={})
+        job, row = r.json()["job"], r.json()["mindmap"]
+        listed = await until("mindmaps", lambda d: d != [])
+        assert [(m["id"], m["state"], m["job_id"]) for m in listed] == [
+            (row["id"], "making", job["id"])
+        ]
+        await run_work()
+        # The list first, drawn; then the job's end, with nothing wrong.
+        listed = await until("mindmaps", lambda d: d[0]["state"] == "ready")
+        assert [m["id"] for m in listed] == [row["id"]]
+        assert await until("ended") == {"job_id": job["id"], "error": None}
+
+        model.answers(fails(401, "No auth credentials found"))
+        r = await client.post(f"/api/collections/{cid}/notes", json={})
+        job = r.json()["job"]
+        await until("notes", lambda d: d != [])
+        await run_work()
+        seen: dict[str, Any] = {}
+        while "ended" not in seen:
+            got, data = await _next(ev)
+            seen[got] = data
+        assert seen["ended"]["job_id"] == job["id"]
+        assert isinstance(seen["ended"]["error"], str) and seen["ended"]["error"].endswith(".")
+        # The notes that were not made left the list before their job ended.
+        assert seen["notes"] == []
+    finally:
+        await ev.aclose()
+        await hub.close()
 
 
 async def test_notes_being_written_are_stopped_when_deleted(client: AsyncClient) -> None:

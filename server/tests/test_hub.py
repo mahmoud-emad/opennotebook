@@ -117,9 +117,16 @@ async def test_a_jobs_report_reads_only_the_job_again(client: AsyncClient) -> No
     owner, cid, _, job = await _making(client)
     it = events_of(uuid.UUID(owner), uuid.UUID(cid))
     try:
-        first = [await _next(it) for _ in range(4)]
-        assert [n for n, _ in first] == ["collection", "outputs", "sources", "progress"]
-        assert first[3][1]["steps_done"] == 1
+        first = [await _next(it) for _ in range(6)]
+        assert [n for n, _ in first] == [
+            "collection",
+            "outputs",
+            "sources",
+            "mindmaps",
+            "notes",
+            "progress",
+        ]
+        assert first[5][1]["steps_done"] == 1
         await _sql("UPDATE jobs SET steps_done = 2, step = 'Voicing' WHERE id = :j", j=job)
         with recorded() as q:
             hub.wake(uuid.UUID(cid), JOB)
