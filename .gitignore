@@ -9,3 +9,5 @@ web/dist/
 .env
 web/test-results/
 web/playwright-report/
+# Files the dev server stores (OPENNOTEBOOK_FILES_DIR defaults to ./data/files).
+server/data/
