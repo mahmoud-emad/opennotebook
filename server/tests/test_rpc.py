@@ -759,7 +759,7 @@ async def test_settings_and_styles_read_in_the_old_shape(client: AsyncClient) ->
     got = await ok(client, "settings", "settings_get")
     assert got["tabs"] and set(got["tabs"][0]) == {"id", "label", "note", "advanced"}
     rest = (await client.get("/api/settings")).json()
-    assert len(got["settings"]) == len(rest["settings"]) == 32
+    assert len(got["settings"]) == len(rest["settings"]) == 33
     for old in got["settings"]:
         assert "suggestions" not in old and "scope" not in old
         assert ("min" in old) == (old["kind"] == "number"), old["key"]

@@ -30,7 +30,7 @@ import numpy as np
 import skia
 
 from opennotebook.build.whiteboard import theme as th
-from opennotebook.build.whiteboard.compile import H, Piece, W, compile_scene
+from opennotebook.build.whiteboard.compile import H, Piece, W, compile_illustrated, compile_scene
 from opennotebook.build.whiteboard.scene import Beat, Scene
 
 FPS = 30
@@ -61,6 +61,9 @@ class Segment:
     still: str = ""
     # The theme it is drawn in, by id (`theme.py`).
     theme: str = th.DEFAULT
+    # An illustrated scene's picture: a PNG at the video's size, shown with a
+    # slow push-in under the scene's words on cards (`illustrate.py`).
+    picture: str = ""
 
 
 def when_of(seg: Segment) -> Any:
@@ -228,6 +231,9 @@ def draw_piece(c: skia.Canvas, p: Piece, f: float) -> tuple[float, float] | None
     if p.kind == "fill" and p.shape is not None:
         _fill(c, p, min(f, 1.0))
         return None
+    if p.kind == "card":
+        _card(c, p, min(f, 1.0))
+        return None
     if look.ghost is not None and p.kind in ("line", "text"):
         # The second impression, out of register: in the ghost ink, or for
         # what is printed in that ink already, in the blue.
@@ -238,6 +244,22 @@ def draw_piece(c: skia.Canvas, p: Piece, f: float) -> tuple[float, float] | None
                            box=p.box, width=p.width), f, 0.32)  # fmt: skip
         c.restore()
     return _draw_ink(c, p, f, 1.0)
+
+
+def _card(c: skia.Canvas, p: Piece, f: float) -> None:
+    """A card of paper under words on a picture, laid down with its shadow."""
+    x0, y0, x1, y1 = p.box
+    rect = skia.RRect.MakeRectXY(skia.Rect.MakeLTRB(x0, y0, x1, y1), 14, 14)
+    blur = skia.MaskFilter.MakeBlur(skia.kNormal_BlurStyle, 10)
+    shadow = skia.Paint(AntiAlias=True, MaskFilter=blur)
+    shadow.setColor(skia.Color4f(0, 0, 0, 0.22 * f).toColor())
+    c.save()
+    c.translate(0, 4)
+    c.drawRRect(rect, shadow)
+    c.restore()
+    paint = skia.Paint(AntiAlias=True, Color=skia.ColorSetRGB(*p.color))
+    paint.setAlphaf(0.92 * f)
+    c.drawRRect(rect, paint)
 
 
 def _fill(c: skia.Canvas, p: Piece, f: float) -> None:
@@ -430,6 +452,52 @@ def _still_frames(seg: Segment) -> Iterator[tuple[bytes, bool]]:
         yield pixels, True
 
 
+# How much an illustrated scene's picture is pushed in over the scene, and
+# how long it fades in from the paper.
+PUSH_IN = 0.06
+FADE_IN_MS = 400
+
+
+def _illustrated_frames(seg: Segment) -> Iterator[tuple[bytes, bool]]:
+    """An illustrated scene: its picture, pushed in slowly toward a point of
+    its own, with the scene's words laid on cards as they are said. Every
+    frame differs (the picture moves), so none is held."""
+    look = th.theme_of(seg.theme)
+    with th.using(look):
+        drawing = compile_illustrated(
+            Scene.model_validate(seg.scene), when_of(seg), seg.start_ms, seg.end_ms
+        )
+    pieces = sorted(drawing.pieces, key=lambda p: p.start_ms)
+    img = skia.Image.open(seg.picture)
+    rnd = np.random.default_rng(seg.first_frame)
+    fx, fy = float(rnd.uniform(0.3, 0.7)) * W, float(rnd.uniform(0.25, 0.6)) * H
+    info = skia.ImageInfo.Make(W, H, skia.kRGBA_8888_ColorType, skia.kPremul_AlphaType)
+    frame = skia.Surface.MakeRaster(info)
+    span = max(seg.end_ms - seg.start_ms, 1.0)
+    sampling = skia.SamplingOptions(skia.FilterMode.kLinear)
+    for i in range(seg.frames):
+        t = (seg.first_frame + i) * 1000 / FPS
+        c = frame.getCanvas()
+        with th.using(look):
+            paper(c)
+            zoom = 1.0 + PUSH_IN * min(max((t - seg.start_ms) / span, 0.0), 1.0)
+            c.save()
+            c.translate(fx, fy)
+            c.scale(zoom, zoom)
+            c.translate(-fx, -fy)
+            c.drawImageRect(img, skia.Rect.MakeWH(W, H), sampling)
+            c.restore()
+            for p in pieces:
+                if p.start_ms >= t:
+                    break
+                draw_piece(c, p, (t - p.start_ms) / max(p.end_ms - p.start_ms, 1.0))
+            if t - seg.start_ms < FADE_IN_MS:
+                _wipe(c, 1 - (t - seg.start_ms) / FADE_IN_MS)
+            if seg.wipe and t > seg.end_ms - WIPE_MS:
+                _wipe(c, (t - (seg.end_ms - WIPE_MS)) / WIPE_MS)
+        yield frame.makeImageSnapshot().tobytes(), True
+
+
 def frames(seg: Segment) -> Iterator[tuple[bytes, bool]]:
     """The segment's frames as raw RGBA, each with whether it differs from
     the one before. A board holding still repeats the same bytes, without
@@ -438,6 +506,9 @@ def frames(seg: Segment) -> Iterator[tuple[bytes, bool]]:
     whoever reads the frames."""
     if seg.still:
         yield from _still_frames(seg)
+        return
+    if seg.picture:
+        yield from _illustrated_frames(seg)
         return
     look = th.theme_of(seg.theme)
     drawing = compile_scene(

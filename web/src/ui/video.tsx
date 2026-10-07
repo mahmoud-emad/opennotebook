@@ -36,6 +36,10 @@ const THEME_LABEL: Record<string, string> = {
   blueprint: "Blueprint",
   retro: "Retro Print",
   papercraft: "Paper-craft",
+  watercolor: "Watercolor",
+  anime: "Anime",
+  heritage: "Heritage",
+  kawaii: "Kawaii",
 };
 
 export function themeLabel(id: string | null | undefined): string | null {

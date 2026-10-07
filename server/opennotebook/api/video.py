@@ -48,7 +48,10 @@ Style = Literal["slides", "whiteboard"]
 StyleQuery = Annotated[Style, Query(description="The video's style")]
 # A whiteboard's look (build/whiteboard/theme.py): one per theme the studio
 # has, kept in step with it by a test.
-ThemeId = Literal["whiteboard", "notebook", "chalkboard", "blueprint", "retro", "papercraft"]
+ThemeId = Literal[
+    "whiteboard", "notebook", "chalkboard", "blueprint", "retro", "papercraft",
+    "watercolor", "anime", "heritage", "kawaii",
+]  # fmt: skip
 
 NOT_READY = "This output is still being made. Make its video once it is ready."
 NO_VIDEO = "This output has no video in that style yet. Make one first."
@@ -113,6 +116,13 @@ class VideoState(BaseModel):
     rendered_at: datetime | None = None
     theme: str | None = Field(
         default=None, description="A whiteboard's theme; null for slides and older videos"
+    )
+    illustrated: int = Field(
+        default=0, description="An illustrated theme's scenes shown as their picture"
+    )
+    fallback: int = Field(
+        default=0,
+        description="An illustrated theme's scenes drawn in its drawn twin, for want of a picture",
     )
     playable: bool = Field(
         default=False,

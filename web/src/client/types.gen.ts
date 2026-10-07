@@ -495,6 +495,18 @@ export type CollectionVideo = {
      */
     theme?: string | null;
     /**
+     * Illustrated
+     *
+     * An illustrated theme's scenes shown as their picture
+     */
+    illustrated?: number;
+    /**
+     * Fallback
+     *
+     * An illustrated theme's scenes drawn in its drawn twin, for want of a picture
+     */
+    fallback?: number;
+    /**
      * Playable
      *
      * A video can be played now: this one, or while a new one is made or after it failed, the one made before it
@@ -1381,7 +1393,7 @@ export type OverviewReq = {
      *
      * A whiteboard's look
      */
-    theme?: 'whiteboard' | 'notebook' | 'chalkboard' | 'blueprint' | 'retro' | 'papercraft';
+    theme?: 'whiteboard' | 'notebook' | 'chalkboard' | 'blueprint' | 'retro' | 'papercraft' | 'watercolor' | 'anime' | 'heritage' | 'kawaii';
 };
 
 /**
@@ -2918,7 +2930,7 @@ export type VideoReq = {
      *
      * A whiteboard's look
      */
-    theme?: 'whiteboard' | 'notebook' | 'chalkboard' | 'blueprint' | 'retro' | 'papercraft';
+    theme?: 'whiteboard' | 'notebook' | 'chalkboard' | 'blueprint' | 'retro' | 'papercraft' | 'watercolor' | 'anime' | 'heritage' | 'kawaii';
 };
 
 /**
@@ -3081,6 +3093,18 @@ export type VideoState = {
      * A whiteboard's theme; null for slides and older videos
      */
     theme?: string | null;
+    /**
+     * Illustrated
+     *
+     * An illustrated theme's scenes shown as their picture
+     */
+    illustrated?: number;
+    /**
+     * Fallback
+     *
+     * An illustrated theme's scenes drawn in its drawn twin, for want of a picture
+     */
+    fallback?: number;
     /**
      * Playable
      *

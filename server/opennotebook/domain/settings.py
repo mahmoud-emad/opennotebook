@@ -94,6 +94,10 @@ VIDEO_CHECK_MODEL_KEY = "OPENNOTEBOOK_VIDEO_CHECK_MODEL"
 VIDEO_CHECK_MODEL_DEFAULT = "anthropic/claude-haiku-4.5"
 VIDEO_ESCALATE_MODEL_KEY = "OPENNOTEBOOK_VIDEO_ESCALATE_MODEL"
 VIDEO_ESCALATE_MODEL_DEFAULT = "anthropic/claude-opus-5.5"
+# The image model that paints an illustrated theme's pictures, one a scene
+# (docs/plans/video-themes.md, phase 4).
+VIDEO_IMAGE_MODEL_KEY = "OPENNOTEBOOK_VIDEO_IMAGE_MODEL"
+VIDEO_IMAGE_MODEL_DEFAULT = "google/gemini-3.1-flash-image"
 
 # Perplexity's Sonar does a real web search behind a chat completion and
 # returns the pages it found.
@@ -111,6 +115,11 @@ type Pairs = tuple[tuple[str, str], ...]
 VIDEO_ESCALATE_MODELS: Pairs = (
     ("anthropic/claude-opus-5.5", "Claude Opus 5.5"),
     ("anthropic/claude-sonnet-5.5", "Claude Sonnet 5.5"),
+)
+VIDEO_IMAGE_MODELS: Pairs = (
+    ("google/gemini-3.1-flash-image", "Gemini 3.1 Flash Image"),
+    ("google/gemini-2.5-flash-image", "Gemini 2.5 Flash Image (Nano Banana)"),
+    ("google/gemini-3-pro-image", "Gemini 3 Pro Image"),
 )
 SLIDE_MODELS: Pairs = (
     ("anthropic/claude-haiku-4.5", "Claude Haiku 4.5"),
@@ -593,6 +602,15 @@ CATALOGUE: tuple[Def, ...] = (
         "video at most.",
         VIDEO_ESCALATE_MODELS,
         VIDEO_ESCALATE_MODEL_DEFAULT,
+        WRITING,
+    ),
+    _model(
+        VIDEO_IMAGE_MODEL_KEY,
+        "Illustrated video image model",
+        "Paints a picture for each scene of a video in an illustrated theme (Watercolor, "
+        "Anime, Heritage, Kawaii), at a few cents a picture.",
+        VIDEO_IMAGE_MODELS,
+        VIDEO_IMAGE_MODEL_DEFAULT,
         WRITING,
     ),
     _model(

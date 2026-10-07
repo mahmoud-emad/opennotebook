@@ -181,7 +181,9 @@ def test_each_theme_starts_on_its_paper_and_draws_the_same_every_time(
     assert len(set(a)) > 5, "the board changes as it is drawn"
 
 
-@pytest.mark.parametrize("theme_id", [t for t in th.THEMES if t != "whiteboard"])
+@pytest.mark.parametrize(
+    "theme_id", [t.id for t in th.THEMES.values() if t.family == "drawn" and t.id != "whiteboard"]
+)
 def test_each_drawn_theme_looks_as_designed(tmp_path: Path, theme_id: str) -> None:
     """A still of the test scene in each theme, against its golden image:
     regenerate on purpose with UPDATE_GOLDEN=1."""
@@ -221,3 +223,44 @@ def test_a_filled_theme_fills_its_shapes_and_cut_paper_has_no_outline() -> None:
     assert kinds("papercraft", "k")[0] == "fill" and "line" not in kinds("papercraft", "k")
     # An icon on cut paper sits on a disc of its own.
     assert kinds("papercraft", "cpu")[0] == "fill" and "fill" not in kinds("retro", "cpu")
+
+
+# ── the illustrated themes ───────────────────────────────────────────────────
+
+
+def test_a_picture_is_asked_for_by_its_brief_never_its_words() -> None:
+    from opennotebook.build.whiteboard import illustrate
+    from opennotebook.build.whiteboard.scene import PlannedScene
+
+    ps = PlannedScene(lines=["l0"], title="The kernel", brief="A kernel between programs and a CPU",
+                      concepts=["kernel", "CPU"])  # fmt: skip
+    ask = illustrate.prompt(th.THEMES["watercolor"], ps)
+    assert "watercolour" in ask and "A kernel between programs and a CPU" in ask
+    assert "No text, letters, numbers" in ask
+    # A custom style is the person's own words, cut to length, the rules kept.
+    custom = illustrate.prompt(th.THEMES["watercolor"], ps, "x" * 500)
+    assert (
+        "x" * illustrate.CUSTOM_CHARS in custom
+        and "x" * (illustrate.CUSTOM_CHARS + 1) not in custom
+    )
+    assert "No text, letters, numbers" in custom
+
+
+def test_an_illustrated_scene_sets_its_words_on_cards_at_its_foot() -> None:
+    from opennotebook.build.whiteboard.compile import CARD_BAND, compile_illustrated
+
+    with th.using("watercolor"):
+        d = compile_illustrated(_scene(), _when, 0, 6000)
+    cards = [p for p in d.pieces if p.kind == "card" and p.element != "title"]
+    said = [p.said for p in d.pieces if p.kind == "text" and p.element != "title"]
+    assert said == ["processor", "kernel", "kernel runs processor"]
+    assert all(CARD_BAND[0] <= c.box[1] and c.box[3] <= CARD_BAND[1] for c in cards)
+    assert not [p for p in d.pieces if p.kind == "line"], "nothing is drawn over a picture"
+
+
+@pytest.mark.parametrize(
+    "theme_id", [t.id for t in th.THEMES.values() if t.family == "illustrated"]
+)
+def test_an_illustrated_theme_falls_back_to_a_drawn_one(theme_id: str) -> None:
+    t = th.THEMES[theme_id]
+    assert t.style and th.THEMES[t.twin].family == "drawn"

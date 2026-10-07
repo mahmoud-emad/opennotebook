@@ -512,6 +512,8 @@ class Models:
     write: str = ""
     check: str = ""
     escalate: str = ""
+    # Who paints an illustrated theme's pictures (`illustrate.py`).
+    image: str = ""
 
 
 async def render(
@@ -692,6 +694,10 @@ async def _whiteboard(
     spans_of = write.windows(plan, timing)
     n = len(plan.scenes)
     writing, drawing = asyncio.Semaphore(write.PARALLEL), asyncio.Semaphore(SCENE_PROCESSES)
+    # An illustrated theme: a picture per written scene, a few at a time.
+    look = th.current()
+    painting = asyncio.Semaphore(PICTURES_AT_ONCE)
+    pictures = {"illustrated": 0, "fallback": 0}
     written = 0
     built: list[Any] = [None] * n
     segs: list[draw.Segment] = []
@@ -731,6 +737,8 @@ async def _whiteboard(
         seg = dataclasses.replace(
             segs[i], scene=b.scene.model_dump(mode="json", by_alias=True), still=path
         )
+        if look.family == "illustrated" and not path:
+            seg = await _illustrate(work, i, seg, look, ps, models, painting, pictures)
         segs[i] = seg
         spec = work / f"scene-{i:03d}.json"
         await asyncio.to_thread(spec.write_text, draw.to_json(seg), "utf-8")
@@ -779,6 +787,9 @@ async def _whiteboard(
         "claims": sum(b.claims for b in built),
         "supported": sum(b.supported for b in built),
         "unchecked": sum(1 for b in built if not b.checked and not b.plain) if models.check else 0,
+        # An illustrated theme's scenes shown as their picture, and those drawn
+        # in its drawn twin instead.
+        **(pictures if look.family == "illustrated" else {}),
         # Not a state field: render keeps it in the video's script.
         "board": [
             {
@@ -792,6 +803,31 @@ async def _whiteboard(
             for i, b in enumerate(built)
         ],
     }
+
+
+# Pictures made at once for an illustrated theme.
+PICTURES_AT_ONCE = 4
+
+
+async def _illustrate(
+    work: Path, i: int, seg: Any, look: Any, ps: Any, models: Models,
+    painting: asyncio.Semaphore, counts: dict[str, int],
+) -> Any:  # fmt: skip
+    """A written scene's segment with its picture, or, without one, drawn in
+    the theme's drawn twin: a video never fails for a picture."""
+    from opennotebook.build.whiteboard import illustrate
+
+    pic = None
+    if models.image:
+        async with painting:
+            pic = await illustrate.picture(models.image, models.check, look, ps)
+    if pic is not None and pic.png is not None:
+        art = work / f"art-{i:03d}.png"
+        await asyncio.to_thread(art.write_bytes, pic.png)
+        counts["illustrated"] += 1
+        return dataclasses.replace(seg, picture=str(art))
+    counts["fallback"] += 1
+    return dataclasses.replace(seg, theme=look.twin)
 
 
 def _first_line(parts: list[Part], ordinal: int) -> str:

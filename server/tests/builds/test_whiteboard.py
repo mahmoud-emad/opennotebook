@@ -777,3 +777,41 @@ async def test_a_video_is_made_in_the_theme_asked_for(
         )
     ).stdout  # fmt: skip
     assert sum(rgb) / len(rgb) < 110, "the board is dark"
+
+
+@needs_ffmpeg
+async def test_an_illustrated_video_paints_its_scenes_and_draws_one_it_cannot(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch, files: Path
+) -> None:
+    studio, _ = install(monkeypatch, files)
+    sid = await _ready(client)
+
+    async def make() -> dict[str, Any]:
+        r = await client.post(
+            f"/api/sessions/{sid}/video", json={"style": "whiteboard", "theme": "watercolor"}
+        )
+        assert r.status_code == 202, r.text
+        await drain("render")
+        states = {v["style"]: v for v in (await client.get(f"/api/sessions/{sid}/videos")).json()}
+        return states["whiteboard"]
+
+    st = await make()
+    assert st["state"] == "ready", st["failure"]
+    assert st["theme"] == "watercolor"
+    written = st["scenes"] - FRAME
+    assert studio.asked.count("video_picture") == written
+    assert studio.asked.count("video_picture_check") == written
+    assert (st["illustrated"], st["fallback"]) == (written, 0)
+    # Every picture made at 4 cents is on the render's bill.
+    assert st["spent_usd"] >= 0.04 * written
+    pictures = [b for b in studio.bodies if "image" in (b.get("modalities") or [])]
+    assert all(b["image_config"] == {"aspect_ratio": "16:9"} for b in pictures)
+
+    # Pictures with lettering are made once more, then the scene is drawn in
+    # the theme's drawn twin: the video is made all the same.
+    studio.picture_lettering = True
+    studio.asked.clear()
+    st = await make()
+    assert st["state"] == "ready", st["failure"]
+    assert studio.asked.count("video_picture") == 2 * written
+    assert (st["illustrated"], st["fallback"]) == (0, written)

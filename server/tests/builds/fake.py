@@ -9,6 +9,7 @@ batches run side by side.
 
 import asyncio
 import base64
+import functools
 import json
 import re
 from pathlib import Path
@@ -60,6 +61,22 @@ def _lines(ids: list[str], n: int, about: str) -> str:
     return "\n".join(f"{ids[i % len(ids)]}: {said[i % len(said)]}" for i in range(n))
 
 
+@functools.cache
+def _picture() -> bytes:
+    """A small painted picture, as an image model sends one: two soft bands."""
+    import skia
+
+    surface = skia.Surface(320, 180)
+    c = surface.getCanvas()
+    c.clear(skia.ColorSetRGB(0xE8, 0xEE, 0xF4))
+    c.drawRect(
+        skia.Rect.MakeXYWH(0, 90, 320, 90), skia.Paint(Color=skia.ColorSetRGB(0xB7, 0xCF, 0xE3))
+    )
+    data = surface.makeImageSnapshot().encodeToData()
+    assert data is not None
+    return bytes(data)
+
+
 class Studio:
     """The model. Counts what it was asked, by kind, and can be told to
     wait or fail at a step."""
@@ -80,6 +97,8 @@ class Studio:
         # passes, and whether the checker answers at all.
         self.check_fail = 0
         self.check_down = False
+        # An illustrated theme: whether the picture check finds lettering.
+        self.picture_lettering = False
         self._checks: dict[str, int] = {}
         self._scene_tries: dict[str, int] = {}
         self.running = 0
@@ -87,6 +106,14 @@ class Studio:
 
     def kind_of(self, body: dict[str, Any]) -> str:
         msgs = body.get("messages") or []
+        # An illustrated theme's picture, and its check (a picture, no system).
+        if "image" in (body.get("modalities") or []):
+            return "video_picture"
+        first = next((m["content"] for m in msgs if m["role"] == "user"), "")
+        if isinstance(first, list) and any(
+            str(p.get("text", "")).startswith("You check a picture made") for p in first
+        ):
+            return "video_picture_check"
         system = next((m["content"] for m in msgs if m["role"] == "system"), "")
         user = next((m["content"] for m in msgs if m["role"] == "user"), "")
         # Markers that survive an audio overview's rewording of the prompts.
@@ -292,6 +319,31 @@ class Studio:
                 await self.hold[kind].wait()
             if kind in self.fail:
                 return httpx2.Response(self.fail[kind], json={"error": {"message": "down"}})
+            if kind == "video_picture":
+                url = "data:image/png;base64," + base64.b64encode(_picture()).decode()
+                message = {
+                    "content": "",
+                    "images": [{"type": "image_url", "image_url": {"url": url}}],
+                }
+                return httpx2.Response(
+                    200,
+                    json={
+                        "model": body.get("model", ""),
+                        "choices": [{"message": message, "finish_reason": "stop"}],
+                        "usage": {"prompt_tokens": 100, "completion_tokens": 1290, "cost": 0.04},
+                    },
+                )
+            if kind == "video_picture_check":
+                verdict = {"lettering": self.picture_lettering, "contradicts": False, "why": ""}
+                return httpx2.Response(
+                    200,
+                    json={
+                        "model": body.get("model", ""),
+                        "choices": [{"message": {"content": json.dumps(verdict)},
+                                     "finish_reason": "stop"}],
+                        "usage": {"prompt_tokens": 100, "completion_tokens": 20, "cost": 0.001},
+                    },
+                )  # fmt: skip
             _, r = self.reply(body)
             return httpx2.Response(
                 200,

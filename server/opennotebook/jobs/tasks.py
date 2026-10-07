@@ -176,6 +176,7 @@ async def render_video(**spec: object) -> None:
                 write=str(values[st.VIDEO_MODEL_KEY]),
                 check=str(values[st.VIDEO_CHECK_MODEL_KEY]),
                 escalate=str(values[st.VIDEO_ESCALATE_MODEL_KEY]),
+                image=str(values[st.VIDEO_IMAGE_MODEL_KEY]),
             )
         async with ledger.spending(
             owner, "video", collection_id=cid, session_id=r.session_id, job_id=r.job_id

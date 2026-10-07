@@ -14,6 +14,7 @@ data, named by its `id`, so a drawing process is told the id and looks it
 up.
 """
 
+import dataclasses
 from collections.abc import Generator
 from contextlib import contextmanager
 from contextvars import ContextVar
@@ -91,6 +92,11 @@ class Theme:
     title_size: float = 64
     label_size: float = 50
     slides: Slides = field(default_factory=Slides)
+    # An illustrated theme: how its pictures are painted (`illustrate.py`),
+    # and the drawn theme a scene falls back to when its picture cannot be
+    # made or does not pass its check.
+    style: str = ""
+    twin: str = "whiteboard"
 
 
 WHITEBOARD = Theme(id="whiteboard", label="Whiteboard")
@@ -258,8 +264,65 @@ PAPER_CRAFT = Theme(
     ),
 )  # fmt: skip
 
-THEMES: dict[str, Theme] = {
+# ── illustrated: a picture per scene, under the studio's own labels ─────────
+#
+# The picture is painted by an image model in the theme's style, from the
+# scene's brief and concepts, never its words; the labels are the studio's,
+# checked as a drawn scene's are, set on cards over the picture. The paper and
+# inks are the cards' and the slides'.
+
+
+def _illustrated(
+    id: str, label: str, style: str, twin: str, paper: RGB, accent: str,
+    ink: dict[str, RGB] | None = None, highlight: RGB | None = None,
+) -> Theme:  # fmt: skip
+    base = THEMES_DRAWN[twin]
+    return dataclasses.replace(
+        base, id=id, label=label, family="illustrated", style=style, twin=twin, paper=paper,
+        background="plain", pen="craft", fill="none", outline=True, shadow=False, ghost=None,
+        ink=ink or base.ink, highlight=highlight or base.highlight,
+        slides=dataclasses.replace(base.slides, accent=accent),
+    )  # fmt: skip
+
+
+THEMES_DRAWN: dict[str, Theme] = {
     t.id: t for t in (WHITEBOARD, NOTEBOOK, CHALKBOARD, BLUEPRINT, RETRO_PRINT, PAPER_CRAFT)
+}
+
+WATERCOLOR = _illustrated(
+    "watercolor", "Watercolor",
+    "Soft watercolour washes on textured cold-press paper, loose ink outlines, muted natural "
+    "palette, gentle light, lots of white space.",
+    "notebook", (0xFB, 0xF8, 0xF1), "#3b6ea8",
+)  # fmt: skip
+ANIME = _illustrated(
+    "anime", "Anime",
+    "Clean cel-shaded anime illustration, crisp line art, bright but soft colours, simple "
+    "backgrounds, a friendly educational tone.",
+    "whiteboard", (0xF7, 0xF8, 0xFC), "#e0457b",
+    # The whiteboard's amber and green are too light for words on a card.
+    ink={
+        "ink": (0x1F, 0x29, 0x37), "blue": (0x1D, 0x4E, 0xD8), "red": (0xB9, 0x1C, 0x1C),
+        "amber": (0xB4, 0x53, 0x09), "green": (0x15, 0x80, 0x3D),
+    },
+    highlight=(0xFE, 0xF0, 0x8A),
+)  # fmt: skip
+HERITAGE = _illustrated(
+    "heritage", "Heritage",
+    "A vintage engraved textbook plate: fine cross-hatched lines, sepia ink on aged cream "
+    "paper, careful scientific illustration.",
+    "retro", (0xF3, 0xEA, 0xD3), "#8a5a2b",
+)  # fmt: skip
+KAWAII = _illustrated(
+    "kawaii", "Kawaii",
+    "Cute kawaii illustration: rounded friendly shapes, pastel colours, simple smiling "
+    "characters, soft shading, a calm plain background.",
+    "papercraft", (0xFD, 0xF6, 0xF9), "#d9467a",
+)  # fmt: skip
+
+THEMES: dict[str, Theme] = {
+    **THEMES_DRAWN,
+    **{t.id: t for t in (WATERCOLOR, ANIME, HERITAGE, KAWAII)},
 }
 DEFAULT = WHITEBOARD.id
 

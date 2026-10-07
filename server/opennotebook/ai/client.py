@@ -16,6 +16,8 @@ places the SDK's models do not name.
 """
 
 import asyncio
+import base64
+import binascii
 import json
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
@@ -58,6 +60,8 @@ class Completion:
     # The response body as it came, for what a provider puts where the SDK's
     # models do not name it: Sonar's `citations`, say.
     raw: dict[str, Any] = field(default_factory=dict[str, Any])
+    # Pictures an image model made, as their encoded bytes (PNG or JPEG).
+    images: list[bytes] = field(default_factory=list[bytes])
 
 
 @dataclass
@@ -111,6 +115,21 @@ def _arguments(s: Any) -> dict[str, Any]:
     return v if isinstance(v, dict) else {}
 
 
+def _images(msg: dict[str, Any]) -> list[bytes]:
+    """An image model's pictures: OpenRouter puts them beside the text, in
+    `message.images[].image_url.url`, as data URLs."""
+    out: list[bytes] = []
+    for item in msg.get("images") or []:
+        url = str(((item or {}).get("image_url") or {}).get("url") or "")
+        head, _, data = url.partition(",")
+        if head.startswith("data:image/") and head.endswith(";base64") and data:
+            try:
+                out.append(base64.b64decode(data, validate=True))
+            except binascii.Error:
+                continue
+    return out
+
+
 def parse_response(raw: dict[str, Any]) -> Completion:
     """A finished completion from its JSON body."""
     choices = raw.get("choices")
@@ -139,6 +158,7 @@ def parse_response(raw: dict[str, Any]) -> Completion:
         if isinstance(c, dict)
     ]
     return Completion(
+        images=_images(msg),
         text=text,
         tool_calls=calls,
         usage=_usage(raw.get("usage")),
@@ -205,11 +225,14 @@ class Ai:
                 body["tool_choice"] = tool_choice
         return body
 
-    async def _post(self, body: dict[str, Any], *, stream: bool) -> Any:
+    async def _post(
+        self, body: dict[str, Any], *, stream: bool, more: dict[str, Any] | None = None
+    ) -> Any:
         """One request through the SDK, with the retries a busy or unreachable
-        provider is worth. Returns the raw HTTP response."""
+        provider is worth. Returns the raw HTTP response. `more` goes in the
+        body as it is, for what the SDK has no parameter for."""
         # OpenRouter: report cost in `usage.cost`. Ignored elsewhere.
-        extra: dict[str, Any] = {"usage": {"include": True}}
+        extra: dict[str, Any] = {"usage": {"include": True}, **(more or {})}
         if stream:
             extra["stream_options"] = {"include_usage": True}
         attempt = 0
@@ -237,8 +260,13 @@ class Ai:
         json_schema: tuple[str, dict[str, Any]] | None = None,
         tools: list[dict[str, Any]] | None = None,
         tool_choice: str | dict[str, Any] | None = None,
+        image_aspect: str | None = None,
     ) -> Completion:
-        """Send and wait for the whole answer."""
+        """Send and wait for the whole answer. With `image_aspect` ("16:9"),
+        ask an image model for a picture of that shape (`Completion.images`)."""
+        more: dict[str, Any] = {}
+        if image_aspect is not None:
+            more = {"modalities": ["image", "text"], "image_config": {"aspect_ratio": image_aspect}}
         body = self._body(
             model,
             messages,
@@ -250,7 +278,7 @@ class Ai:
         )
         try:
             async with asyncio.timeout(self._timeout):
-                resp = await self._post(body, stream=False)
+                resp = await self._post(body, stream=False, more=more)
                 try:
                     raw = json.loads(resp.http_response.text)
                 except ValueError as e:

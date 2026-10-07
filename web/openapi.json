@@ -5175,6 +5175,18 @@
             "title": "Theme",
             "description": "A whiteboard's theme; null for slides and older videos"
           },
+          "illustrated": {
+            "type": "integer",
+            "title": "Illustrated",
+            "description": "An illustrated theme's scenes shown as their picture",
+            "default": 0
+          },
+          "fallback": {
+            "type": "integer",
+            "title": "Fallback",
+            "description": "An illustrated theme's scenes drawn in its drawn twin, for want of a picture",
+            "default": 0
+          },
           "playable": {
             "type": "boolean",
             "title": "Playable",
@@ -6469,7 +6481,11 @@
               "chalkboard",
               "blueprint",
               "retro",
-              "papercraft"
+              "papercraft",
+              "watercolor",
+              "anime",
+              "heritage",
+              "kawaii"
             ],
             "title": "Theme",
             "description": "A whiteboard's look",
@@ -8617,7 +8633,11 @@
               "chalkboard",
               "blueprint",
               "retro",
-              "papercraft"
+              "papercraft",
+              "watercolor",
+              "anime",
+              "heritage",
+              "kawaii"
             ],
             "title": "Theme",
             "description": "A whiteboard's look",
@@ -8847,6 +8867,18 @@
             ],
             "title": "Theme",
             "description": "A whiteboard's theme; null for slides and older videos"
+          },
+          "illustrated": {
+            "type": "integer",
+            "title": "Illustrated",
+            "description": "An illustrated theme's scenes shown as their picture",
+            "default": 0
+          },
+          "fallback": {
+            "type": "integer",
+            "title": "Fallback",
+            "description": "An illustrated theme's scenes drawn in its drawn twin, for want of a picture",
+            "default": 0
           },
           "playable": {
             "type": "boolean",

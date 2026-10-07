@@ -63,7 +63,7 @@ class Piece:
     in (`shape`, a closed path) where a theme fills its boxes."""
 
     element: str
-    kind: Literal["line", "text", "wash", "fill"]
+    kind: Literal["line", "text", "wash", "fill", "card"]
     color: tuple[int, int, int]
     start_ms: float = 0.0
     end_ms: float = 0.0
@@ -402,6 +402,94 @@ def compile_scene(
             )
     joins = {e.id for e in elements if e.kind in ("arrow", "line")}
     return Drawing(timed, boxes, notes, joins)
+
+
+# ── an illustrated scene: its labels on cards over its picture ───────────────
+
+# The band the cards sit in, where the picture was asked to stay calm.
+CARD_BAND = (760.0, 1010.0)
+CARD_PAD = (20.0, 12.0)
+CARD_GAP = 14.0
+CARD_SIZES = (40.0, 34.0, 28.0)
+
+
+def _card_texts(sc: Scene) -> list[tuple[Element, str]]:
+    """What an illustrated scene writes: each element's words, and each arrow
+    as the relation it asserts, in the order they are said."""
+    names = {e.id: (e.label or e.text or "") for e in sc.elements if e.id}
+    out: list[tuple[Element, str]] = []
+    for e in sc.elements:
+        if e.kind in ("arrow", "line"):
+            a, b = names.get(e.source or "", ""), names.get(e.target or "", "")
+            if a and b:
+                verb = f" {e.label} " if e.label else (" → " if e.kind == "arrow" else " — ")
+                out.append((e, f"{a}{verb}{b}"))
+        elif e.kind == "number" and e.text:
+            out.append((e, f"{e.text} {e.label}".strip()))
+        elif e.label or e.text:
+            out.append((e, e.label or e.text))
+    return out
+
+
+def compile_illustrated(
+    sc: Scene, when: Callable[[Beat], float], start_ms: float, end_ms: float
+) -> Drawing:
+    """An illustrated scene placed and timed: the picture is the board; the
+    scene's own words are cards in the calm band at its foot, each laid down
+    on the word that names it, and its title on a card at the top."""
+    look = th.current()
+    texts = _card_texts(sc)
+    rows: list[list[tuple[Element, str, g.Text]]] = []
+    size = CARD_SIZES[-1]
+    for size in CARD_SIZES:
+        rows = [[]]
+        width = 0.0
+        for e, s in texts:
+            t = fit_text(s, SAFE[2] - SAFE[0] - 2 * CARD_PAD[0], size)[0]
+            w = t.width + 2 * CARD_PAD[0]
+            if rows[-1] and width + CARD_GAP + w > SAFE[2] - SAFE[0]:
+                rows.append([])
+                width = 0.0
+            rows[-1].append((e, s, t))
+            width += (CARD_GAP if width else 0) + w
+        line_h = size * 1.15 + 2 * CARD_PAD[1]
+        if len(rows) * (line_h + CARD_GAP) <= CARD_BAND[1] - CARD_BAND[0]:
+            break
+    line_h = size * 1.15 + 2 * CARD_PAD[1]
+    top = CARD_BAND[1] - len(rows) * (line_h + CARD_GAP)
+    groups: list[tuple[float, int, list[Piece]]] = []
+    k = 0
+    for r, row in enumerate(rows):
+        widths = [t.width + 2 * CARD_PAD[0] for _, _, t in row]
+        x = (SAFE[0] + SAFE[2]) / 2 - (sum(widths) + CARD_GAP * (len(row) - 1)) / 2
+        y = top + r * (line_h + CARD_GAP)
+        for (e, said, t), w in zip(row, widths, strict=True):
+            box = (x, y, x + w, y + line_h)
+            base = y + CARD_PAD[1] + (size * 1.15 - (t.ascent + t.descent)) / 2 + t.ascent
+            card = Piece(e.id or f"_c{k}", "card", look.paper, box=box)
+            word = Piece(
+                e.id or f"_c{k}", "text", look.ink[e.tone], text=t, at=(x + CARD_PAD[0], base),
+                said=said,
+                box=(x + CARD_PAD[0], base - t.ascent, x + CARD_PAD[0] + t.width, base + t.descent),
+            )  # fmt: skip
+            groups.append((when(e.beat), k, [card, word]))
+            x += w + CARD_GAP
+            k += 1
+    title: list[Piece] = []
+    if sc.title:
+        t = fit_text(sc.title, SAFE[2] - SAFE[0] - 2 * CARD_PAD[0], look.title_size * 0.85)[0]
+        x0, y0 = SAFE[0] - CARD_PAD[0], 64.0
+        h = t.ascent + t.descent + 2 * CARD_PAD[1]
+        x1 = x0 + t.width + 2 * CARD_PAD[0]
+        title = [
+            Piece("title", "card", look.paper, box=(x0, y0, x1, y0 + h)),
+            Piece(
+                "title", "text", look.ink["ink"], text=t, at=(SAFE[0], y0 + CARD_PAD[1] + t.ascent),
+                said=sc.title, box=(SAFE[0], y0, SAFE[0] + t.width, y0 + h),
+            ),
+        ]  # fmt: skip
+    groups.sort(key=lambda x: (x[0], x[1]))
+    return Drawing(_schedule(title, groups, start_ms, end_ms), {}, [], set())
 
 
 def _schedule(

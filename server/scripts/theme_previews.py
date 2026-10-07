@@ -12,7 +12,7 @@ import skia
 
 from opennotebook.build.whiteboard import draw
 from opennotebook.build.whiteboard import theme as th
-from opennotebook.build.whiteboard.compile import compile_scene
+from opennotebook.build.whiteboard.compile import compile_illustrated, compile_scene
 from opennotebook.build.whiteboard.scene import Scene
 
 OUT = Path(__file__).resolve().parents[2] / "web" / "public" / "themes"
@@ -37,7 +37,36 @@ SAMPLE = Scene.model_validate(
 )  # fmt: skip
 
 
+def _wash(c: skia.Canvas, look: th.Theme) -> None:
+    """An illustrated theme's stand-in picture: soft blots of its inks, as a
+    painting is suggested before it is made. Real sample pictures can take
+    its place once made by the image model."""
+    blur = skia.MaskFilter.MakeBlur(skia.kNormal_BlurStyle, 70)
+    tones = list(look.ink.values())
+    spots = [(420, 360, 330), (980, 300, 300), (1500, 420, 340), (760, 640, 260), (1260, 680, 240)]
+    for i, (x, y, r) in enumerate(spots):
+        paint = skia.Paint(AntiAlias=True, MaskFilter=blur)
+        paint.setColor(
+            skia.Color4f.FromColor(skia.ColorSetRGB(*tones[(i + 1) % len(tones)]))
+            .makeOpaque()
+            .toColor()
+        )
+        paint.setAlphaf(0.28)
+        c.drawCircle(x, y, r, paint)
+
+
 def render(theme_id: str) -> skia.Image:
+    look = th.THEMES[theme_id]
+    if look.family == "illustrated":
+        with th.using(look):
+            d = compile_illustrated(SAMPLE, lambda b: b.word * 400.0, 0, 4000)
+            surface = skia.Surface(1920, 1080)
+            c = surface.getCanvas()
+            draw.paper(c)
+            _wash(c, look)
+            for p in sorted(d.pieces, key=lambda p: p.start_ms):
+                draw.draw_piece(c, p, 1.0)
+            return surface.makeImageSnapshot().resize(*SIZE)
     with th.using(theme_id):
         d = compile_scene(SAMPLE, lambda b: b.word * 400.0, 0, 4000)
         surface = skia.Surface(1920, 1080)

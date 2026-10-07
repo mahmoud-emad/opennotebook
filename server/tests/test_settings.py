@@ -57,7 +57,7 @@ def test_keys_are_unique_and_namespaced() -> None:
 
 
 def test_there_are_29_settings_and_no_secret_among_them() -> None:
-    assert len(st.CATALOGUE) == 32
+    assert len(st.CATALOGUE) == 33
     # The AI key comes from the environment only, never from a settings row.
     for d in st.CATALOGUE:
         assert "KEY" not in d.key and "SECRET" not in d.key, d.key
