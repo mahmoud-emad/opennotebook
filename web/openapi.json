@@ -8343,6 +8343,34 @@
         ],
         "title": "SourceText"
       },
+      "SpeakerChoice": {
+        "properties": {
+          "count": {
+            "type": "integer",
+            "maximum": 2.0,
+            "minimum": 1.0,
+            "title": "Count"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label",
+            "description": "`One` or `Two`"
+          },
+          "voices": {
+            "type": "string",
+            "title": "Voices",
+            "description": "Who reads it, in a sentence: `Voices: Ava and Andrew.`"
+          }
+        },
+        "type": "object",
+        "required": [
+          "count",
+          "label",
+          "voices"
+        ],
+        "title": "SpeakerChoice",
+        "description": "How many voices read a deck, as the Create panel offers it."
+      },
       "StudioOptions": {
         "properties": {
           "styles": {
@@ -8374,7 +8402,20 @@
           "deck_summary": {
             "type": "string",
             "title": "Deck Summary",
-            "description": "What a deck of this collection is made with: `5 slides \u00b7 about 5 min \u00b7 Host and Expert`"
+            "description": "What a deck of this collection is made with: `5 slides \u00b7 about 5 min`"
+          },
+          "deck_speakers": {
+            "items": {
+              "$ref": "#/components/schemas/SpeakerChoice"
+            },
+            "type": "array",
+            "title": "Deck Speakers",
+            "description": "A deck's speaker counts to choose from, one and two, with their voices"
+          },
+          "default_deck_speakers": {
+            "type": "integer",
+            "title": "Default Deck Speakers",
+            "description": "The count a deck of this collection starts on, as Settings \u203a Voices decide: Automatic is two from two sources on"
           },
           "language_note": {
             "anyOf": [
@@ -8425,6 +8466,8 @@
           "default_audio_format",
           "default_audio_length",
           "deck_summary",
+          "deck_speakers",
+          "default_deck_speakers",
           "language_note",
           "build_language_note",
           "ask_note",

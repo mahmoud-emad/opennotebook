@@ -2716,6 +2716,30 @@ export type SourceText = {
 };
 
 /**
+ * SpeakerChoice
+ *
+ * How many voices read a deck, as the Create panel offers it.
+ */
+export type SpeakerChoice = {
+    /**
+     * Count
+     */
+    count: number;
+    /**
+     * Label
+     *
+     * `One` or `Two`
+     */
+    label: string;
+    /**
+     * Voices
+     *
+     * Who reads it, in a sentence: `Voices: Ava and Andrew.`
+     */
+    voices: string;
+};
+
+/**
  * StudioOptions
  *
  * Everything the Create panel offers for one collection, and how it says
@@ -2746,9 +2770,21 @@ export type StudioOptions = {
     /**
      * Deck Summary
      *
-     * What a deck of this collection is made with: `5 slides · about 5 min · Host and Expert`
+     * What a deck of this collection is made with: `5 slides · about 5 min`
      */
     deck_summary: string;
+    /**
+     * Deck Speakers
+     *
+     * A deck's speaker counts to choose from, one and two, with their voices
+     */
+    deck_speakers: Array<SpeakerChoice>;
+    /**
+     * Default Deck Speakers
+     *
+     * The count a deck of this collection starts on, as Settings › Voices decide: Automatic is two from two sources on
+     */
+    default_deck_speakers: number;
     /**
      * Language Note
      *

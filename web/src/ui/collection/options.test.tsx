@@ -1,7 +1,9 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { StudioOptions } from "../api-studio";
-import type { PageActions } from "./actions";
+import type { ChatState } from "../chat";
+import { pageActions, type PageActions } from "./actions";
+import { useEstimate } from "./CollectionPage";
 import { applyDefaults, fitLength, pageState } from "./state";
 import { Studio } from "./Studio";
 
@@ -28,7 +30,12 @@ const opts: StudioOptions = {
   default_style: "clay",
   default_audio_format: "deep_dive",
   default_audio_length: "longer",
-  deck_summary: "8 slides · about 5 min · Ava and Andrew",
+  deck_summary: "8 slides · about 5 min",
+  deck_speakers: [
+    { count: 1, label: "One", voices: "Voices: Ava alone." },
+    { count: 2, label: "Two", voices: "Voices: Ava and Andrew." },
+  ],
+  default_deck_speakers: 2,
   language_note: "Writing in French.",
   build_language_note: "Writing in French · voices are English.",
   ask_note: "Answers in French with Claude Haiku 4.5.",
@@ -57,7 +64,10 @@ const props = {
 
 const actions = { fetchEstimate: async () => {}, generate: () => {}, loadOptions: async () => {} } as unknown as PageActions;
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
 
 describe("the Create panel's options, from the server", () => {
   it("starts on the server's picks until the person picks their own", () => {
@@ -90,7 +100,7 @@ describe("the Create panel's options, from the server", () => {
     expect([...container.querySelectorAll(".style-n")].map((n) => n.textContent)).toEqual(["Editorial", "Clay"]);
     expect(container.querySelector(".style.on .style-n")?.textContent).toBe("Clay");
     expect(container.querySelector(".sw")?.getAttribute("style")).toContain("/ui/assets/styles/editorial.jpg");
-    expect(container.textContent).toContain("8 slides · about 5 min · Ava and Andrew · ");
+    expect(container.textContent).toContain("8 slides · about 5 min · ");
     expect(container.textContent).toContain("Writing in French · voices are English.");
     // Costs off in the settings: no banner.
     expect(screen.queryByRole("status", { name: "Estimated cost" })).toBeNull();
@@ -107,5 +117,78 @@ describe("the Create panel's options, from the server", () => {
     expect(container.querySelector(".ao-len")).toBeNull();
     expect(S.audioLength.get()).toBe("default");
     expect(container.textContent).toContain("Brief: Ava alone, about 2 minutes.");
+  });
+
+  it("offers one or two speakers for narrated slides, starting on the settings' count", () => {
+    const S = pageState({ ...props, start: "session" });
+    S.opts.set(opts);
+    applyDefaults(S);
+    S.srcs.set([{ icon: "", name: "a", detail: "", ok: true, url: "", file: "a.md" }]);
+    const { container } = render(<Studio S={S} A={actions} onOpen={() => {}} />);
+    const group = screen.getByRole("radiogroup", { name: "Speakers" });
+    expect([...group.querySelectorAll(".chip")].map((n) => n.textContent)).toEqual(["One", "Two"]);
+    expect(screen.getByRole("radio", { name: "Two" }).getAttribute("aria-checked")).toBe("true");
+    expect(container.textContent).toContain("Voices: Ava and Andrew.");
+    // Nothing picked: the server reads the count from the settings.
+    expect(S.speakers.get()).toBeNull();
+    fireEvent.click(screen.getByRole("radio", { name: "One" }));
+    expect(S.speakers.get()).toBe(1);
+    expect(screen.getByRole("radio", { name: "One" }).getAttribute("aria-checked")).toBe("true");
+    expect(container.textContent).toContain("Voices: Ava alone.");
+  });
+});
+
+describe("narrated slides' speakers, as the server is asked", () => {
+  function reply(body: unknown) {
+    return Promise.resolve(new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } }));
+  }
+
+  it("sends the count picked in the estimate and the build, and leaves it out when none is", async () => {
+    const sent: [string, Record<string, unknown>][] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((url: string, init?: RequestInit) => {
+        const body = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>;
+        sent.push([String(url), body]);
+        if (String(url).endsWith("/outputs/estimate")) return reply({ lines: [] });
+        if (String(url).endsWith("/outputs"))
+          return reply({ id: "s1", collection_id: "c1", kind: "slides", title: "Clay slides", state: "preparing" });
+        return reply({});
+      }),
+    );
+    const S = pageState({ ...props, start: "session" });
+    S.opts.set(opts);
+    applyDefaults(S);
+    S.srcs.set([{ icon: "", name: "a", detail: "", ok: true, url: "", file: "a.md" }]);
+    const A = pageActions("c1", S, {} as ChatState);
+    await A.fetchEstimate();
+    S.speakers.set(1);
+    await A.fetchEstimate();
+    await A.generateBuild("session", null);
+    const asked = sent.filter(([u]) => u.includes("/collections/c1/outputs"));
+    expect(asked.map(([u, b]) => [u.replace(/^.*\/collections\/c1/, ""), b.speakers])).toEqual([
+      ["/outputs/estimate", undefined],
+      ["/outputs/estimate", 1],
+      ["/outputs", 1],
+    ]);
+    expect(asked[2]![1]).toMatchObject({ kind: "slides", style: "clay", speakers: 1 });
+  });
+
+  it("prices the deck again when the count changes", () => {
+    const S = pageState({ ...props, start: "session" });
+    S.opts.set(opts);
+    S.srcs.set([{ icon: "", name: "a", detail: "", ok: true, url: "", file: "a.md" }]);
+    const fetchEstimate = vi.fn(async () => {});
+    const A = { fetchEstimate, dropEstimate: () => {}, signal: () => new AbortController().signal } as unknown as PageActions;
+    function Priced() {
+      useEstimate(S, A, "c1", false);
+      return null;
+    }
+    render(<Priced />);
+    expect(fetchEstimate).toHaveBeenCalledTimes(1);
+    act(() => S.speakers.set(1));
+    expect(fetchEstimate).toHaveBeenCalledTimes(2);
+    act(() => S.speakers.set(2));
+    expect(fetchEstimate).toHaveBeenCalledTimes(3);
   });
 });

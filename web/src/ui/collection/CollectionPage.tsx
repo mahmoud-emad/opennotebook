@@ -194,12 +194,13 @@ function useOptions(S: PageState, A: PageActions): void {
  * picked for it here, the sources it would read (which, not how many), and
  * the settings, any change of which is priced again: the server knows which
  * of them it prices by. */
-function useEstimate(S: PageState, A: PageActions, cid: string, ro: boolean): void {
+export function useEstimate(S: PageState, A: PageActions, cid: string, ro: boolean): void {
   const kindNow = useStore(S.chosen);
   const reads = useStoreSel(SETTINGS, (s) => s.doc);
   const sources = useStoreSel(S.srcs, (v) => staged(v).sort().join("\n"));
   const nSrc = sources === "" ? 0 : sources.split("\n").length;
   const picked = useStoreSel(S.style, (st) => (kindNow === "session" ? st : ""));
+  const speakers = useStoreSel(S.speakers, (n) => (kindNow === "session" ? n : null));
   const format = useStoreSel(S.audioFormat, (f) => (kindNow === "audio" ? f : ""));
   const length = useStoreSel(S.audioLength, (l) => (kindNow === "audio" ? l : ""));
   useEffect(() => {
@@ -210,5 +211,5 @@ function useEstimate(S: PageState, A: PageActions, cid: string, ro: boolean): vo
     else A.dropEstimate();
     // The values below are what the estimate is of, read again by the calls
     // above from the stores; they are here so a change in any asks again.
-  }, [A, S, cid, ro, kindNow, nSrc, sources, picked, format, length, reads]);
+  }, [A, S, cid, ro, kindNow, nSrc, sources, picked, speakers, format, length, reads]);
 }

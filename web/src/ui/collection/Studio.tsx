@@ -140,6 +140,8 @@ function Options({
   const opts = useStore(S.opts);
   const optsErr = useStore(S.optsErr);
   const style = useStore(S.style);
+  // A deck's speakers: as picked here, or the count the settings start on.
+  const speakers = useStore(S.speakers) ?? opts?.default_deck_speakers ?? null;
   const audioFormat = useStore(S.audioFormat);
   const audioLength = useStore(S.audioLength);
   const est = useStore(S.est);
@@ -161,6 +163,7 @@ function Options({
   const showCost = opts?.show_cost ?? true;
   const format = opts?.audio_formats.find((f) => f.id === audioFormat) ?? null;
   const offered = format?.lengths ?? [];
+  const voices = opts?.deck_speakers.find((c) => c.count === speakers)?.voices ?? null;
   // A map's or notes' estimate comes in a build's shape, so every tool is
   // said and checked against the limit the same way.
   const shownEst = build ? est : qEst;
@@ -212,6 +215,28 @@ function Options({
               </button>
             ))}
           </div>
+          {opts !== null && (
+            <div className="ao-len" role="radiogroup" aria-label="Speakers">
+              <span className="opt-l">Speakers</span>
+              {opts.deck_speakers.map((c) => (
+                <button
+                  key={c.count}
+                  className={speakers === c.count ? "chip on" : "chip"}
+                  role="radio"
+                  aria-checked={speakers === c.count}
+                  onClick={() => S.speakers.set(c.count)}
+                >
+                  {c.label}
+                </button>
+              ))}
+            </div>
+          )}
+          {voices !== null && (
+            <p className="opt-hint">
+              {`${voices} `}
+              <SettingsLink tab="voices" text="Change in Settings › Voices" />
+            </p>
+          )}
           {opts !== null && (
             <p className="opt-hint">
               {`${opts.deck_summary} · `}

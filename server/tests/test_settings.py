@@ -450,8 +450,10 @@ async def test_the_create_panel_offers_what_the_settings_say(client: AsyncClient
     assert formats["brief"]["voices"].startswith("Brief: ")
     assert formats["brief"]["voices"].endswith(" alone, about 2 minutes.")
     # No source yet, and Automatic: a deck is read by the host alone.
-    assert " and " not in o["deck_summary"].split(" · ")[2]
-    assert o["deck_summary"].startswith("5 slides · about 5 min · ")
+    assert o["default_deck_speakers"] == 1
+    assert o["deck_summary"] == "5 slides · about 5 min"
+    assert [(c["count"], c["label"]) for c in o["deck_speakers"]] == [(1, "One"), (2, "Two")]
+    assert o["deck_speakers"][0]["voices"].endswith(" alone.")
     assert o["language_note"] is None and o["build_language_note"] is None
     # Who answers in Ask, named as Settings names the model.
     assert o["ask_note"] == "Answers in English with Gemini 2.5 Flash Lite."
@@ -484,7 +486,12 @@ async def test_the_create_panel_follows_a_change_of_settings(client: AsyncClient
         "debate",
         "shorter",
     )
-    assert o["deck_summary"] == "8 slides · about 5 min · Ava and Andrew"
+    assert o["deck_summary"] == "8 slides · about 5 min"
+    assert o["default_deck_speakers"] == 2
+    assert [c["voices"] for c in o["deck_speakers"]] == [
+        "Voices: Ava alone.",
+        "Voices: Ava and Andrew.",
+    ]
     assert next(f for f in o["audio_formats"] if f["id"] == "debate")["voices"] == (
         "Voices: Ava and Andrew."
     )
@@ -515,4 +522,7 @@ def test_voices_that_keep_their_accent_are_said_beside_the_language() -> None:
     v[st.SPEAKER2_VOICE_KEY] = "en-US-AndrewMultilingualNeural"
     assert studio_options(v, 1).build_language_note == "Writing in German."
     # Automatic: two voices from two sources on.
-    assert studio_options(v, 2).deck_summary.endswith(" and Expert")
+    assert studio_options(v, 1).default_deck_speakers == 1
+    assert studio_options(v, 2).default_deck_speakers == 2
+    v[st.SPEAKER_COUNT_KEY] = "1"
+    assert studio_options(v, 2).default_deck_speakers == 1

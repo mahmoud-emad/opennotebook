@@ -449,7 +449,14 @@ export function pageActions(cid: string, S: PageState, chat: ChatState) {
         ...(focus === "" ? {} : { focus }),
       };
     }
-    return { kind: "slides", ...(title === null ? {} : { title }), style: S.style.get() };
+    const speakers = S.speakers.get();
+    return {
+      kind: "slides",
+      ...(title === null ? {} : { title }),
+      style: S.style.get(),
+      // Left out, the server reads the count from the settings.
+      ...(speakers === null ? {} : { speakers }),
+    };
   };
 
   // Start a deck or an audio overview in this collection, from its sources

@@ -174,6 +174,14 @@ class FormatChoice(BaseModel):
     voices: str = Field(description="Who it is read by, in a sentence: `Voices: Ava and Andrew.`")
 
 
+class SpeakerChoice(BaseModel):
+    """How many voices read a deck, as the Create panel offers it."""
+
+    count: int = Field(ge=1, le=2)
+    label: str = Field(description="`One` or `Two`")
+    voices: str = Field(description="Who reads it, in a sentence: `Voices: Ava and Andrew.`")
+
+
 class ResearchHint(BaseModel):
     label: str = Field(description="`Quick research` or `Standard research`")
     takes: str = Field(description="How long it reads the web: `about a minute`")
@@ -203,8 +211,14 @@ class StudioOptions(BaseModel):
     default_audio_format: str
     default_audio_length: str
     deck_summary: str = Field(
-        description="What a deck of this collection is made with: "
-        "`5 slides · about 5 min · Host and Expert`"
+        description="What a deck of this collection is made with: `5 slides · about 5 min`"
+    )
+    deck_speakers: list[SpeakerChoice] = Field(
+        description="A deck's speaker counts to choose from, one and two, with their voices"
+    )
+    default_deck_speakers: int = Field(
+        description="The count a deck of this collection starts on, as Settings › Voices "
+        "decide: Automatic is two from two sources on"
     )
     language_note: str | None = Field(
         description="The output language when it is not English: `Writing in French.`"
@@ -250,9 +264,12 @@ def studio_options(v: dict[str, str], sources: int) -> StudioOptions:
     two = {"1": False, "2": True}.get(count, sources >= 2)
     deck = (
         f"{v[settings.SLIDE_COUNT_KEY].strip()} slides · "
-        f"about {v[settings.SESSION_MINUTES_KEY].strip()} min · "
-        f"{f'{host} and {second}' if two else host}"
+        f"about {v[settings.SESSION_MINUTES_KEY].strip()} min"
     )
+    deck_speakers = [
+        SpeakerChoice(count=1, label="One", voices=f"Voices: {host} alone."),
+        SpeakerChoice(count=2, label="Two", voices=f"Voices: {host} and {second}."),
+    ]
     formats = [
         FormatChoice(
             id=f,
@@ -287,6 +304,8 @@ def studio_options(v: dict[str, str], sources: int) -> StudioOptions:
         default_audio_format=sess.parse_format(v[settings.AUDIO_FORMAT_KEY]),
         default_audio_length=sess.parse_length(v[settings.AUDIO_LENGTH_KEY]),
         deck_summary=deck,
+        deck_speakers=deck_speakers,
+        default_deck_speakers=2 if two else 1,
         language_note=f"Writing in {other}." if other else None,
         build_language_note=(
             f"Writing in {other}." if native else f"Writing in {other} · voices are English."

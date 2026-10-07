@@ -77,6 +77,9 @@ export function pageState(props: CollectionPageProps) {
     chosen: store<Output | null>(props.start),
     // Empty until the server's options say which style to start on.
     style: store(""),
+    // How many voices read a deck: 1 or 2 as picked here, or null for the
+    // count the server's options start on (Settings › Voices).
+    speakers: store<number | null>(null),
     // An audio overview's three options: NotebookLM's format, length and
     // Customize box. Deep Dive at its default length is what NotebookLM makes
     // when nothing is chosen.
