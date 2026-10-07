@@ -91,7 +91,7 @@ describe("the watch page", () => {
     render(<WatchPage sid="s1" style="whiteboard" share={null} />);
     expect(await screen.findByText("Chapter 1 of 2")).toBeTruthy();
     // The other chapter's title is only in its hover tip, not on the page.
-    expect(document.querySelector(".w-chap-t")?.textContent).toBe("Light");
+    expect(document.querySelector(".w-chap-now")?.textContent).toBe("Chapter 1 of 2 · Light");
     expect(document.querySelectorAll(".w-seg")).toHaveLength(2);
     const cc = screen.getByRole("button", { name: "Captions" });
     expect(cc.getAttribute("aria-pressed")).toBe("true");
@@ -114,6 +114,25 @@ describe("the watch page", () => {
     // Turned off, there are none.
     fireEvent.click(screen.getByRole("button", { name: "Captions" }));
     expect(document.querySelector(".w-cap")).toBeNull();
+  });
+});
+
+describe("the controls under the video", () => {
+  it("play, go a chapter on, change speed and go full screen, as the slides' player does", async () => {
+    vi.stubGlobal("fetch", vi.fn(() => reply(200, SCRIPT)));
+    render(<WatchPage sid="s1" style="whiteboard" share={null} />);
+    await screen.findByText("Chapter 1 of 2");
+    const video = document.querySelector("video")!;
+    expect(video.hasAttribute("controls")).toBe(false);
+    fireEvent.click(screen.getByRole("button", { name: "Next chapter" }));
+    expect(video.currentTime).toBe(40);
+    fireEvent.keyDown(window, { key: "ArrowLeft" });
+    await vi.waitFor(() => expect(video.currentTime).toBe(0));
+    const speed = screen.getByRole("button", { name: /Playback speed/ });
+    fireEvent.click(speed);
+    expect(speed.textContent).toBe("1.25×");
+    expect(video.playbackRate).toBe(1.25);
+    expect(screen.getByRole("button", { name: "Full screen" })).toBeTruthy();
   });
 });
 

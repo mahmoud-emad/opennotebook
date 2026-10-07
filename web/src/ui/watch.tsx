@@ -166,31 +166,20 @@ export function WatchPage({ sid, style, share }: { sid: string; style: VideoStyl
       // Kept for this visit only.
     }
   }, []);
-  // Full screen is the frame around the video, not the video, so the
-  // captions drawn over it come along: the video's own button is redirected.
+  // Full screen is the frame around the video, with its captions, as the
+  // slides' player puts its stage in full screen.
   const frameRef = useRef<HTMLDivElement>(null);
+  const [full, setFull] = useState(false);
   useEffect(() => {
-    const onFull = () => {
-      const frame = frameRef.current;
-      if (frame && document.fullscreenElement === videoRef.current) {
-        void document
-          .exitFullscreen()
-          .then(() => frame.requestFullscreen())
-          .catch(() => {});
-      }
-    };
+    const onFull = () => setFull(document.fullscreenElement === frameRef.current);
     document.addEventListener("fullscreenchange", onFull);
     return () => document.removeEventListener("fullscreenchange", onFull);
   }, []);
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      const el = e.target as HTMLElement | null;
-      if (el && (el.tagName === "TEXTAREA" || el.tagName === "INPUT" || el.isContentEditable)) return;
-      if (e.key === "c" || e.key === "C") setCaptions(!captions);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [captions, setCaptions]);
+  const toggleFull = useCallback(() => {
+    if (document.fullscreenElement) void document.exitFullscreen().catch(() => {});
+    else void frameRef.current?.requestFullscreen?.().catch(() => {});
+  }, []);
+  const [speed, setSpeed] = useState(1);
 
   useEffect(() => {
     document.body.classList.add("watch-open");
@@ -208,6 +197,19 @@ export function WatchPage({ sid, style, share }: { sid: string; style: VideoStyl
   useEffect(() => saveThread(sid, style, turns), [sid, style, turns]);
 
   const duration = script?.duration_ms ?? 0;
+  const togglePlay = useCallback(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    if (v.paused) playIt(v);
+    else v.pause();
+  }, []);
+  const cycleSpeed = useCallback(() => {
+    setSpeed((now) => {
+      const next = SPEEDS[(SPEEDS.indexOf(now) + 1) % SPEEDS.length]!;
+      if (videoRef.current) videoRef.current.playbackRate = next;
+      return next;
+    });
+  }, []);
   const seek = useCallback((ms: number, play = true) => {
     const v = videoRef.current;
     if (!v) return;
@@ -236,11 +238,38 @@ export function WatchPage({ sid, style, share }: { sid: string; style: VideoStyl
       .finally(() => setAsking(false));
   };
 
-  const chapters = script?.chapters ?? [];
+  const chapters = useMemo(() => script?.chapters ?? [], [script]);
   const scenes = script?.scenes ?? [];
   const chapterOn = onAt(chapters, t);
   const sceneOn = onAt(scenes, t);
   const where = scenes[sceneOn]?.title || chapters[chapterOn]?.title || "";
+
+  // The slides' player's keys: K or Space plays and pauses, the arrows go a
+  // chapter back or on, C turns the captions on and off, F is full screen.
+  const step = useCallback(
+    (d: number) => {
+      const to = chapters[Math.min(Math.max(chapterOn + d, 0), chapters.length - 1)];
+      if (to) seek(to.start_ms);
+    },
+    [chapters, chapterOn, seek],
+  );
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const el = e.target as HTMLElement | null;
+      if (el && (el.tagName === "TEXTAREA" || el.tagName === "INPUT" || el.isContentEditable)) return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      const k = e.key.toLowerCase();
+      if (k === "c") setCaptions(!captions);
+      else if (k === "f") toggleFull();
+      else if (k === "k" || (k === " " && el?.tagName !== "BUTTON")) {
+        e.preventDefault();
+        togglePlay();
+      } else if (k === "arrowleft") step(-1);
+      else if (k === "arrowright") step(1);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [captions, setCaptions, toggleFull, togglePlay, step]);
 
   const back = () => {
     if (history.length > 1) history.back();
@@ -272,8 +301,8 @@ export function WatchPage({ sid, style, share }: { sid: string; style: VideoStyl
           <video
             ref={videoRef}
             className="w-video"
-            controls
             preload="metadata"
+            onClick={togglePlay}
             crossOrigin="use-credentials"
             src={mediaUrl(sid, style, share)}
             onTimeUpdate={(e) => setT(Math.round(e.currentTarget.currentTime * 1000))}
@@ -285,17 +314,19 @@ export function WatchPage({ sid, style, share }: { sid: string; style: VideoStyl
             onPause={() => setPlaying(false)}
           />
           {captions && script && <Captions lines={script.lines} videoRef={videoRef} />}
+          {!playing && t === 0 && (
+            <button className="w-start" aria-label="Play" title="Play (K)" onClick={togglePlay}>
+              <Icon name="play-fill" />
+            </button>
+          )}
           </div>
         </div>
-        {chapters.length > 0 && duration > 0 ? (
-          <Strip chapters={chapters} duration={duration} t={t} on={chapterOn} seek={seek}
-            captions={captions} setCaptions={setCaptions} />
-        ) : (
-          <div className="w-under">
-            <span className="grow" />
-            <CaptionsButton on={captions} set={setCaptions} />
-          </div>
-        )}
+        <Controls
+          chapters={chapters} duration={duration} t={t} on={chapterOn} seek={seek}
+          playing={playing} togglePlay={togglePlay} step={step}
+          speed={speed} cycleSpeed={cycleSpeed} captions={captions} setCaptions={setCaptions}
+          full={full} toggleFull={toggleFull}
+        />
         {loadErr !== "" && (
           <div className="w-err" role="alert">
             {loadErr}
@@ -427,47 +458,88 @@ function Captions({ lines, videoRef }: {
   );
 }
 
-/** The chapters under the video: one track cut into a segment per chapter,
- * each as long as its chapter and filling as it plays (a hover names it, a
- * click goes there), with the chapter playing named once beneath it. Never
- * every title at once: eight titles in a row's width is a pile of words. */
-function Strip({ chapters, duration, t, on, seek, captions, setCaptions }: {
+// The playback speeds the speed button steps through, as the slides' player.
+const SPEEDS = [1, 1.25, 1.5, 2, 0.75];
+
+/** The controls under the video, as the slides' player has them: the
+ * chapters as one track cut into a segment each (a hover names one, a click
+ * goes there), then previous, play and next, the clock, the chapter playing,
+ * the speed, captions and full screen. */
+function Controls(props: {
   chapters: Script["chapters"];
   duration: number;
   t: number;
   on: number;
   seek: (ms: number) => void;
+  playing: boolean;
+  togglePlay: () => void;
+  step: (d: number) => void;
+  speed: number;
+  cycleSpeed: () => void;
   captions: boolean;
   setCaptions: (on: boolean) => void;
+  full: boolean;
+  toggleFull: () => void;
 }) {
+  const { chapters, duration, t, on, seek } = props;
   const now = chapters[on];
   return (
-    <div className="w-chapters">
+    <div className="w-controls">
       <div className="w-track" role="group" aria-label="Chapters">
-        {chapters.map((c, i) => {
-          const len = Math.max(c.end_ms - c.start_ms, 1);
-          const done = Math.min(Math.max((t - c.start_ms) / len, 0), 1);
-          return (
-            <button key={i} className={i === on ? "w-seg on" : "w-seg"} style={{ flexGrow: len }}
-              aria-label={`${c.title}, at ${clock(c.start_ms)}`} onClick={() => seek(c.start_ms)}>
-              <span className="w-seg-fill" style={{ width: `${done * 100}%` }} />
-              <span className="w-seg-tip" aria-hidden="true">
-                <b>{clock(c.start_ms)}</b> {c.title}
-              </span>
-            </button>
-          );
-        })}
-      </div>
-      <div className="w-under">
-        {now && (
-          <span className="w-chap-now">
-            <span className="w-chap-n">{`Chapter ${on + 1} of ${chapters.length}`}</span>
-            <span className="w-chap-t">{now.title}</span>
-          </span>
+        {chapters.length > 0 ? (
+          chapters.map((c, i) => {
+            const len = Math.max(c.end_ms - c.start_ms, 1);
+            const done = Math.min(Math.max((t - c.start_ms) / len, 0), 1);
+            return (
+              <button key={i} className={i === on ? "w-seg on" : "w-seg"} style={{ flexGrow: len }}
+                aria-label={`${c.title}, at ${clock(c.start_ms)}`} onClick={() => seek(c.start_ms)}>
+                <span className="w-seg-fill" style={{ width: `${done * 100}%` }} />
+                <span className="w-seg-tip" aria-hidden="true">
+                  <b>{clock(c.start_ms)}</b> {c.title}
+                </span>
+              </button>
+            );
+          })
+        ) : (
+          <button className="w-seg on" style={{ flexGrow: 1 }} aria-label="Progress"
+            onClick={(e) => {
+              const r = e.currentTarget.getBoundingClientRect();
+              if (r.width > 0 && duration > 0) seek(((e.clientX - r.left) / r.width) * duration);
+            }}>
+            <span className="w-seg-fill" style={{ width: `${duration ? (t / duration) * 100 : 0}%` }} />
+          </button>
         )}
-        <span className="grow" />
+      </div>
+      <div className="w-ctl-row">
+        <button className="w-btn" title="Previous chapter (←)" aria-label="Previous chapter"
+          disabled={chapters.length === 0} onClick={() => props.step(-1)}>
+          <Icon name="skip-start-fill" />
+        </button>
+        <button className="w-btn w-play" title={props.playing ? "Pause (K)" : "Play (K)"}
+          aria-label={props.playing ? "Pause" : "Play"} onClick={props.togglePlay}>
+          <Icon name={props.playing ? "pause-fill" : "play-fill"} />
+        </button>
+        <button className="w-btn" title="Next chapter (→)" aria-label="Next chapter"
+          disabled={chapters.length === 0} onClick={() => props.step(1)}>
+          <Icon name="skip-end-fill" />
+        </button>
         <span className="w-clock">{`${clock(t)} / ${clock(duration)}`}</span>
-        <CaptionsButton on={captions} set={setCaptions} />
+        <span className="w-chap-now">
+          {now && (
+            <>
+              <b>{`Chapter ${on + 1} of ${chapters.length}`}</b>
+              {` · ${now.title}`}
+            </>
+          )}
+        </span>
+        <button className="w-speed" title="Playback speed" aria-label={`Playback speed, ${props.speed} times`}
+          onClick={props.cycleSpeed}>
+          {`${props.speed}×`}
+        </button>
+        <CaptionsButton on={props.captions} set={props.setCaptions} />
+        <button className="w-btn" title="Full screen (F)" aria-label="Full screen" onClick={props.toggleFull}>
+          <Icon name={props.full ? "fullscreen-exit" : "fullscreen"} />
+        </button>
       </div>
     </div>
   );
@@ -475,7 +547,7 @@ function Strip({ chapters, duration, t, on, seek, captions, setCaptions }: {
 
 function CaptionsButton({ on, set }: { on: boolean; set: (on: boolean) => void }) {
   return (
-    <button className={on ? "w-cc on" : "w-cc"} aria-pressed={on} title="Captions (C)"
+    <button className={on ? "w-btn on" : "w-btn"} aria-pressed={on} title="Captions (C)"
       aria-label="Captions" onClick={() => set(!on)}>
       <Icon name="badge-cc" />
     </button>
