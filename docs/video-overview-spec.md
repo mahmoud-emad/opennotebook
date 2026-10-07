@@ -692,6 +692,31 @@ A whiteboard video started on its first idea and stopped on its last: the deck's
 
 They are drawn by the browser that draws a deck's slides, in the board's paper and ink; with no browser, the studio writes them on the board itself. Each is a chapter, **Introduction** and **Recap**, so the watch page's strip and its Chapters tab show them, and what each shows (the agenda, the takeaways) is in the video's script for the tutor. They cost nothing: no model writes or checks them, and they are left out of the counts of scenes written first time, repaired or checked.
 
+### 2026-10-07, themes
+
+A whiteboard video can now be made in a theme, as [plans/video-themes.md](plans/video-themes.md) planned: the same scenes, written and checked as before, drawn in another paper, ink, pen and hand. Phases 0 to 3 of that plan are done; phase 4 (illustrated themes) is not.
+
+**The themes**, all drawn by the studio, at no cost beyond the render's own:
+
+| Theme | Paper | Pen and hand |
+|---|---|---|
+| Whiteboard (default) | Off-white board | Marker, Caveat; unchanged, held to golden images |
+| Notebook | Lined paper, red margin | Blue ballpoint, Kalam |
+| Chalkboard | Green slate with old chalk clouds | Chalk with grain and a dusty edge, Gochi Hand |
+| Blueprint | Prussian blue with a white grid | Thin, steady technical pen, Architects Daughter |
+| Retro Print | Cream newsprint | Typewriter (Special Elite), light halftone screens, a second impression a little out of register |
+| Paper-craft | Card with fibres | Cut-paper shapes that drop in with soft shadows, icons on paper discs, Patrick Hand |
+
+**How:** one `Theme` (`build/whiteboard/theme.py`) carries the whole look (paper and what is printed on it, the five inks the scenes name by tone, the highlighter and how it blends, the pen and its tip, fills and shadows, the hand, the opening and closing slides' colours). It is set where drawing starts (`compile_scene`, `draw.frames`, `check.still`, the slides) and read below with `current()`; a drawing process is told the theme's id. The fonts are bundled under OFL or Apache 2.0 (`assets/LICENSES.md`).
+
+**From the request to the frame:** `POST /api/sessions/{sid}/video` and `POST /api/collections/{cid}/videos` take `theme`; the job carries it; the video's state and script report it; `GET /api/video/themes` lists them.
+
+**In the app:** the Video overview tool shows a Theme row of thumbnails when the style is Whiteboard (rendered by `server/scripts/theme_previews.py` into `web/public/themes/`); the choice is remembered in the browser, per collection and overall, and "Make a video of this" on an output uses the last one. An output's video line and the watch page name the theme ("Chalkboard video").
+
+**Readable:** every ink reaches 3:1 against its paper (WCAG's bar for large text; every label is 24 px or more); every theme added reaches 4:1 everywhere, on its highlighter and on Paper-craft's cut paper too. The whiteboard's amber and green on its yellow highlighter fall short and are kept, as the whiteboard is kept unchanged.
+
+**Measured on lab01**, the vaccines session: Chalkboard 3:22, $0.35, 32/32 claims; Notebook 3:21, $0.34, 39/39; Blueprint 3:23, $0.27, 40/40.
+
 ## Appendix A. Scene JSON (draft)
 
 ```json

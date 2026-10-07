@@ -1,6 +1,6 @@
 # Plan: themes for video overviews
 
-Status: planned, not started (2026-10-07). Owner: whoever picks it up.
+Status: phases 0 to 3 done (2026-10-07), phase 4 (illustrated themes) to do. See the spec's amendment "themes".
 Read first: [video-overview-spec.md](../video-overview-spec.md) (how a video is made today), sections 4.4 to 4.9 and the amendments.
 
 ## 1. What and why
@@ -26,7 +26,7 @@ NotebookLM gets its styles by painting every slide with an image model (Nano Ban
 | Kawaii | illustrated | 4 | Cute rounded characters, pastel |
 | Custom | illustrated | 4 | The person's own words, e.g. "children's storybook" |
 
-Previews of a drawn theme, one scene rendered by a palette and background swap only (no new drawing code), are in [plans/img](img/): `video-themes-whiteboard.png`, `-notebook.png`, `-chalkboard.png`, `-blueprint.png`. Notebook already reads well. Chalkboard and Blueprint show the two problems phase 1 fixes: the highlight is multiplied, so on a dark board it darkens the box until its label is hard to read ("Antibodies"), and chalk needs real grain.
+Previews of each drawn theme, rendered by the real renderer, are in [plans/img](img/): `video-themes-<id>.png`.
 
 ## 2. Decisions
 
