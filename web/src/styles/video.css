@@ -15,7 +15,8 @@
 .video-player { display: block; width: 100%; aspect-ratio: 16 / 9; background: #000; border-radius: 0 0 8px 8px; }
 
 /* The Video overview tool's theme picker: a thumbnail of each look. */
-.vt-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-bottom: 4px; }
+.vt-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 8px;
+  max-width: 980px; margin-bottom: 4px; }
 .vt { display: flex; flex-direction: column; gap: 5px; height: auto; padding: 5px; text-align: left; white-space: normal;
   border-radius: var(--bs-border-radius); }
 .vt img { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; object-fit: cover;
@@ -24,5 +25,4 @@
 .vt-n { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; padding: 0 3px 2px; font-size: 12.5px; font-weight: 600;
   color: var(--bs-emphasis-color); }
 .vt-cost { font-size: 11px; font-weight: 500; color: var(--bs-secondary-color); }
-@media (max-width: 560px) { .vt-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
