@@ -36,7 +36,7 @@ Every variable is listed with its default in [deploy/.env.example](deploy/.env.e
 - [Stack migration plan](docs/stack-migration-plan.md): the move from Rust to this stack, its decisions and progress
 - [Open questions](docs/open-questions.md): decisions not made yet and what each one blocks
 - [Design](docs/design.md): how the studio looks and why
-- Specifications: [phase 1](docs/phase1-spec.md) (narrated decks), [phase 2](docs/phase2-spec.md) (spoken questions), [mind maps](docs/mindmap-spec.md), [study notes](docs/study-notes-spec.md), [audio overviews](docs/audio-overview-spec.md)
+- Specifications: [phase 1](docs/phase1-spec.md) (narrated decks), [phase 2](docs/phase2-spec.md) (spoken questions), [mind maps](docs/mindmap-spec.md), [study notes](docs/study-notes-spec.md), [audio overviews](docs/audio-overview-spec.md), [video overviews](docs/video-overview-spec.md)
 
 ## Licence
 
