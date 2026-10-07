@@ -29,6 +29,7 @@ import skia
 
 from opennotebook.build.whiteboard import geometry as g
 from opennotebook.build.whiteboard import icons
+from opennotebook.build.whiteboard import theme as th
 from opennotebook.build.whiteboard.scene import COLS, ROWS, Beat, Element, Scene, cell
 
 W, H = 1920, 1080
@@ -37,15 +38,8 @@ SAFE = (110.0, 175.0, 1810.0, 940.0)
 TITLE_Y = 118.0
 PAD = 16.0
 
-INK = {
-    "ink": (0x1F, 0x29, 0x37),
-    "blue": (0x25, 0x63, 0xEB),
-    "red": (0xDC, 0x26, 0x26),
-    "amber": (0xD9, 0x77, 0x06),
-    "green": (0x16, 0xA3, 0x4A),
-}
-WASH = (0xFD, 0xE6, 0x8A)
-STROKE = 5.0
+# The inks, the highlighter, the pen's width and the hand's sizes are the
+# theme's (`theme.py`); what follows is how the board is laid out and timed.
 
 # Drawing speed, px of line per ms, and the bounds of one element's time.
 LINE_SPEED = 1.6
@@ -57,7 +51,6 @@ LEAD_MS = 120
 # done before the next one starts.
 SETTLE_MS = 500
 
-LABEL_SIZE = 50
 MIN_LABEL = 30
 
 type Box = tuple[float, float, float, float]
@@ -78,7 +71,7 @@ class Piece:
     # Where a label's baseline starts; a wash's box.
     at: g.Point = (0.0, 0.0)
     box: Box = (0.0, 0.0, 0.0, 0.0)
-    width: float = STROKE
+    width: float = field(default_factory=lambda: th.current().stroke)
     # A label's words, for what the lint says about it.
     said: str = ""
 
@@ -177,7 +170,9 @@ def _edge(b: Box, toward: g.Point) -> g.Point:
 def shape(e: Element, box: Box, notes: list[str]) -> tuple[list[Piece], Box | None]:
     """An element's own strokes and labels, untimed, and the box its label
     sits in when it has one."""
-    color = INK[e.tone]
+    look = th.current()
+    color = look.ink[e.tone]
+    size = look.label_size
     seed = _seed(e.id, e.kind, e.at, e.label)
     inner = _inset(box, PAD)
     x0, y0, x1, y1 = inner
@@ -189,17 +184,17 @@ def shape(e: Element, box: Box, notes: list[str]) -> tuple[list[Piece], Box | No
 
     if e.kind == "box":
         return lines(g.rough_rect(x0, y0, w, h, seed)) + _label_pieces(
-            eid, e.label, _inset(inner, 14), color, LABEL_SIZE
+            eid, e.label, _inset(inner, 14), color, size
         ), inner
     if e.kind == "circle":
         out = lines(g.rough_ellipse((x0 + x1) / 2, (y0 + y1) / 2, w / 2, h / 2, seed))
-        return out + _label_pieces(eid, e.label, _inset(inner, w * 0.15), color, LABEL_SIZE), inner
+        return out + _label_pieces(eid, e.label, _inset(inner, w * 0.15), color, size), inner
     if e.kind == "label":
-        return _label_pieces(eid, e.label or e.text, inner, color, LABEL_SIZE * 1.2), None
+        return _label_pieces(eid, e.label or e.text, inner, color, size * 1.2), None
     if e.kind == "number":
         label_h = 56.0 if e.label else 0.0
         fig = _label_pieces(eid, e.text or e.label, (x0, y0, x1, y1 - label_h), color, 120)
-        cap = _label_pieces(eid, e.label, (x0, y1 - label_h, x1, y1), INK["ink"], 40)
+        cap = _label_pieces(eid, e.label, (x0, y1 - label_h, x1, y1), look.ink["ink"], 40)
         return fig + cap if e.text else fig, None
     if e.kind == "sketch":
         if not e.d:
@@ -279,7 +274,7 @@ def connector(e: Element, boxes: dict[str, Box], notes: list[str]) -> list[Piece
     p, q = _edge(a, cb), _edge(b, ca)
     p, q = _at_least(p, q, MIN_JOIN)
     polys = g.arrow(p, q, _seed(e.id, e.source, e.target), head=e.kind == "arrow")
-    color = INK[e.tone]
+    color = th.current().ink[e.tone]
     out = [Piece(e.id, "line", color, points=pl) for pl in polys]
     if e.label:
         mx, my = (p[0] + q[0]) / 2, (p[1] + q[1]) / 2
@@ -310,9 +305,15 @@ def compile_scene(
     when: Callable[[Beat], float],
     start_ms: float,
     end_ms: float,
+    theme: th.Theme | str | None = None,
 ) -> Drawing:
-    """The scene placed and timed. `when` turns a beat into the ms its word
-    is said; the scene is on screen from `start_ms` to `end_ms`."""
+    """The scene placed and timed, in `theme` (or the one in use). `when`
+    turns a beat into the ms its word is said; the scene is on screen from
+    `start_ms` to `end_ms`."""
+    if theme is not None:
+        with th.using(theme):
+            return compile_scene(sc, when, start_ms, end_ms)
+    look = th.current()
     notes: list[str] = []
     elements = list(sc.elements)
     for i, e in enumerate(elements):
@@ -345,15 +346,16 @@ def compile_scene(
         if b is None:
             notes.append(f"highlight of {h.target!r}, which is not in the scene; left out")
             continue
-        groups.append((when(h.beat), 10_000, [Piece(h.target, "wash", WASH, box=_inset(b, 6))]))
+        wash = Piece(h.target, "wash", look.highlight, box=_inset(b, 6))
+        groups.append((when(h.beat), 10_000, [wash]))
     title: list[Piece] = []
     if sc.title:
-        t = fit_text(sc.title, SAFE[2] - SAFE[0], 64)[0]
+        t = fit_text(sc.title, SAFE[2] - SAFE[0], look.title_size)[0]
         title = [
             Piece(
                 "title",
                 "text",
-                INK["ink"],
+                look.ink["ink"],
                 text=t,
                 at=(SAFE[0], TITLE_Y),
                 said=sc.title,

@@ -46,6 +46,9 @@ router = APIRouter(prefix="/api", tags=["video"])
 
 Style = Literal["slides", "whiteboard"]
 StyleQuery = Annotated[Style, Query(description="The video's style")]
+# A whiteboard's look (build/whiteboard/theme.py): one per theme the studio
+# has, kept in step with it by a test.
+ThemeId = Literal["whiteboard", "notebook", "chalkboard", "blueprint"]
 
 NOT_READY = "This output is still being made. Make its video once it is ready."
 NO_VIDEO = "This output has no video in that style yet. Make one first."
@@ -108,6 +111,9 @@ class VideoState(BaseModel):
         description="Every word's time came from the speech server rather than an estimate",
     )
     rendered_at: datetime | None = None
+    theme: str | None = Field(
+        default=None, description="A whiteboard's theme; null for slides and older videos"
+    )
     playable: bool = Field(
         default=False,
         description="A video can be played now: this one, or while a new one is made or "
@@ -130,6 +136,7 @@ class VideoState(BaseModel):
 
 class VideoReq(BaseModel):
     style: Style = "slides"
+    theme: ThemeId = Field(default="whiteboard", description="A whiteboard's look")
 
 
 async def _owned(s: AsyncSession, owner: uuid.UUID, sid: uuid.UUID, lock: bool = False) -> Session:
@@ -182,7 +189,9 @@ async def _alive(s: AsyncSession, job_id: uuid.UUID) -> tuple[bool, bool]:
     return True, job.status == "queued"
 
 
-async def _start(s: AsyncSession, o: Session, style: Style) -> VideoState:
+async def _start(
+    s: AsyncSession, o: Session, style: Style, theme: str = "whiteboard"
+) -> VideoState:
     if o.state != "ready":
         raise Problem(409, NOT_READY)
     current = await state_of(s, o, style)
@@ -200,7 +209,7 @@ async def _start(s: AsyncSession, o: Session, style: Style) -> VideoState:
         # The scenes are written by a model: without a key the render would
         # fail at its first call, after waiting its turn.
         raise Problem(503, NO_KEY)
-    await video.queue(s, o, style)
+    await video.queue(s, o, style, theme)
     return VideoState.of(style, (o.video or {})[style])
 
 
@@ -210,7 +219,7 @@ async def make_video(sid: uuid.UUID, body: VideoReq, s: Db, me: Me) -> VideoStat
     audio overview's chapters as title cards), with chapters and a caption
     track. Takes about a minute; follow it on /api/jobs/{job_id}. Asking
     again while one is being made returns that one."""
-    return await _start(s, await _owned(s, me.id, sid, lock=True), body.style)
+    return await _start(s, await _owned(s, me.id, sid, lock=True), body.style, body.theme)
 
 
 @router.get("/sessions/{sid}/videos")
@@ -475,6 +484,26 @@ async def explain_moment(sid: uuid.UUID, body: ExplainReq, s: Db, me: Me) -> Exp
     )
 
 
+# ── themes ───────────────────────────────────────────────────────────────────
+
+
+class ThemeOut(BaseModel):
+    id: str
+    label: str
+    family: Literal["drawn", "illustrated"] = Field(
+        description="`drawn`: the scenes drawn in another paper, ink and hand, at no extra cost; "
+        "`illustrated`: a picture per scene, at a cost per scene"
+    )
+
+
+@router.get("/video/themes")
+async def video_themes(me: Me) -> list[ThemeOut]:
+    """The looks a whiteboard video can be made in, the default first."""
+    from opennotebook.build.whiteboard import theme as th
+
+    return [ThemeOut(id=t.id, label=t.label, family=t.family) for t in th.THEMES.values()]
+
+
 # ── a video overview: an output made for its video ───────────────────────────
 
 # A video overview's length, as the deck it is narrated over: parts, each a
@@ -486,6 +515,7 @@ class OverviewReq(BaseModel):
     style: Style = "whiteboard"
     length: Literal["short", "default", "long"] = "default"
     title: str = Field(default="", max_length=200)
+    theme: ThemeId = Field(default="whiteboard", description="A whiteboard's look")
 
 
 class OverviewOut(BaseModel):
@@ -516,7 +546,9 @@ async def make_overview(cid: uuid.UUID, body: OverviewReq, s: Db, me: Me) -> Ove
     )
     made = await sessions_api.build(cid, build, s, me)
     o = await _owned(s, me.id, made.id, lock=True)
-    asked = {"state": video.WAITING}
+    asked: dict[str, Any] = {"state": video.WAITING}
+    if body.style == "whiteboard":
+        asked["theme"] = body.theme
     o.video = {body.style: asked}
     return OverviewOut(session=made, video=VideoState.of(body.style, asked))
 

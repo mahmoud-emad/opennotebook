@@ -17,6 +17,7 @@ process can be handed one, and it compiles the scene itself.
 # pyright: reportUnknownParameterType=false, reportUnknownVariableType=false, reportUnknownMemberType=false, reportUnknownArgumentType=false
 
 import contextlib
+import functools
 import json
 import math
 import subprocess
@@ -25,13 +26,16 @@ from collections.abc import Iterator
 from dataclasses import asdict, dataclass
 from typing import Any
 
+import numpy as np
 import skia
 
+from opennotebook.build.whiteboard import theme as th
 from opennotebook.build.whiteboard.compile import H, Piece, W, compile_scene
 from opennotebook.build.whiteboard.scene import Beat, Scene
 
 FPS = 30
-BOARD = (0xFB, 0xFA, 0xF6)
+# The whiteboard's paper; a theme has its own (`paper`).
+BOARD = th.WHITEBOARD.paper
 # The board is wiped in this long at the end of a scene.
 WIPE_MS = 280
 
@@ -55,6 +59,8 @@ class Segment:
     # A fixed slide shown whole instead of a drawing: a PNG at the video's
     # size (`frame.py`). The scene is then only what it says.
     still: str = ""
+    # The theme it is drawn in, by id (`theme.py`).
+    theme: str = th.DEFAULT
 
 
 def when_of(seg: Segment) -> Any:
@@ -69,15 +75,87 @@ def when_of(seg: Segment) -> Any:
 
 def _paint(color: tuple[int, int, int], kind: str, width: float = 5.0) -> skia.Paint:
     p = skia.Paint(AntiAlias=True, Color=skia.ColorSetRGB(*color))
+    if kind in ("line", "text") and th.current().pen == "chalk":
+        # Chalk: the ink only where the grain lets it through. The grain is in
+        # the board's own coordinates, so it stays put from frame to frame.
+        p.setShader(_chalk(color))
     if kind == "line":
         p.setStyle(skia.Paint.kStroke_Style)
         p.setStrokeWidth(width)
         p.setStrokeCap(skia.Paint.kRound_Cap)
         p.setStrokeJoin(skia.Paint.kRound_Join)
-    elif kind == "wash":
-        # Multiplied, so a highlight laid over lines leaves them dark.
+    elif kind == "wash" and th.current().highlight_blend == "multiply":
+        # Multiplied, so a highlight laid over lines leaves them dark. On
+        # dark paper it is laid over instead, lighter (`theme.py`).
         p.setBlendMode(skia.BlendMode.kMultiply)
     return p
+
+
+def paper(c: skia.Canvas) -> None:
+    """The theme's paper, and what is printed on it: what every board starts
+    as and every wipe returns to."""
+    look = th.current()
+    c.clear(skia.ColorSetRGB(*look.paper))
+    if look.background == "plain":
+        return
+    rule = skia.Paint(AntiAlias=True, Color=skia.ColorSetRGB(*look.rule), StrokeWidth=1.6)
+    step = look.spacing
+    if look.background == "lined":
+        # Ruled under the title band, as a notebook's first line is.
+        for y in range(160, H, step):
+            c.drawLine(0, y, W, y, rule)
+        if look.margin is not None:
+            red = skia.ColorSetRGB(*look.margin)
+            margin = skia.Paint(AntiAlias=True, Color=red, StrokeWidth=2.5)
+            c.drawLine(88, 0, 88, H, margin)
+    elif look.background == "grid":
+        for y in range(step, H, step):
+            c.drawLine(0, y, W, y, rule)
+        for x in range(step, W, step):
+            c.drawLine(x, 0, x, H, rule)
+    elif look.background == "slate":
+        c.drawImage(_slate(look.paper), 0, 0)
+
+
+def _noise(size: int, seed: int) -> np.ndarray:
+    """Random values in [0, 1), the same every time for one seed."""
+    return np.random.default_rng(seed).random((size, size), dtype=np.float32)
+
+
+@functools.cache
+def _grain() -> skia.Image:
+    """Chalk's grain: a tile that is mostly solid, with pits where the chalk
+    skipped the slate's surface."""
+    n = _noise(256, 7)
+    alpha = np.where(n < 0.16, 0.18, 0.62 + 0.38 * _noise(256, 11))
+    rgba = np.zeros((256, 256, 4), dtype=np.uint8)
+    rgba[..., 3] = (alpha * 255).astype(np.uint8)
+    rgba[..., :3] = rgba[..., 3:4]  # premultiplied white
+    return skia.Image.fromarray(rgba, colorType=skia.kRGBA_8888_ColorType)
+
+
+@functools.cache
+def _chalk(color: tuple[int, int, int]) -> skia.Shader:
+    grain = _grain().makeShader(skia.TileMode.kRepeat, skia.TileMode.kRepeat)
+    ink = skia.Shaders.Color(skia.ColorSetRGB(*color))
+    return skia.Shaders.Blend(skia.BlendMode.kDstIn, ink, grain)
+
+
+@functools.cache
+def _slate(base: tuple[int, int, int]) -> skia.Image:
+    """A used slate: faint clouds of old chalk wiped across it."""
+    surface = skia.Surface(W, H)
+    c = surface.getCanvas()
+    c.clear(skia.ColorSetRGB(*base))
+    rnd = np.random.default_rng(3)
+    blur = skia.MaskFilter.MakeBlur(skia.kNormal_BlurStyle, 90)
+    cloud = skia.Paint(AntiAlias=True, MaskFilter=blur)
+    for _ in range(14):
+        x, y = rnd.uniform(0, W), rnd.uniform(0, H)
+        rx, ry = rnd.uniform(220, 520), rnd.uniform(90, 220)
+        cloud.setColor(skia.Color4f(1, 1, 1, float(rnd.uniform(0.025, 0.055))).toColor())
+        c.drawOval(skia.Rect.MakeXYWH(x - rx, y - ry, 2 * rx, 2 * ry), cloud)
+    return surface.makeImageSnapshot()
 
 
 def _poly(points: list[tuple[float, float]]) -> skia.Path:
@@ -96,7 +174,13 @@ def draw_piece(c: skia.Canvas, p: Piece, f: float) -> tuple[float, float] | None
     if p.kind == "line":
         n = len(p.points)
         k = max(2, min(n, math.ceil(n * f)))
-        c.drawPath(_poly(p.points[:k]), _paint(p.color, "line", p.width))
+        path = _poly(p.points[:k])
+        if th.current().pen == "chalk":
+            # Chalk's dusty edge: a wider, fainter pass under the line.
+            dust = _paint(p.color, "line", p.width + 3.5)
+            dust.setAlphaf(0.22)
+            c.drawPath(path, dust)
+        c.drawPath(path, _paint(p.color, "line", p.width))
         return p.points[k - 1] if f < 1 else None
     if p.kind == "text" and p.text is not None:
         x, y = p.at
@@ -120,7 +204,7 @@ def draw_piece(c: skia.Canvas, p: Piece, f: float) -> tuple[float, float] | None
         return (edge, y - p.text.ascent * 0.3)
     x0, y0, x1, y1 = p.box
     paint = _paint(p.color, "wash")
-    paint.setAlphaf(min(f, 1.0) * 0.85)
+    paint.setAlphaf(min(f, 1.0) * th.current().highlight_alpha)
     c.drawRoundRect(skia.Rect.MakeLTRB(x0, y0, x1, y1), 18, 18, paint)
     return None
 
@@ -139,20 +223,62 @@ def _marker(c: skia.Canvas, at: tuple[float, float], t: float) -> None:
     tip.lineTo(12, -9)
     tip.lineTo(12, 9)
     tip.close()
-    c.drawPath(tip, skia.Paint(AntiAlias=True, Color=skia.ColorSetRGB(0x1F, 0x29, 0x37)))
+    look = th.current()
+    point, collar, body = look.tip
+    if look.pen == "chalk":
+        # A stick of chalk, its end worn round.
+        stick = skia.Paint(AntiAlias=True, Color=skia.ColorSetRGB(*body))
+        c.drawRoundRect(skia.Rect.MakeXYWH(-2, -11, 96, 22), 10, 10, stick)
+        c.restore()
+        return
+    if look.pen in ("ballpoint", "technical"):
+        # A slim pen: a fine point, a metal collar, a long body.
+        tip = skia.Path()
+        tip.moveTo(0, 0)
+        tip.lineTo(16, -5)
+        tip.lineTo(16, 5)
+        tip.close()
+        c.drawPath(tip, skia.Paint(AntiAlias=True, Color=skia.ColorSetRGB(*point)))
+        c.drawRoundRect(skia.Rect.MakeXYWH(16, -7, 18, 14), 3, 3,
+                        skia.Paint(AntiAlias=True, Color=skia.ColorSetRGB(*collar)))  # fmt: skip
+        c.drawRoundRect(skia.Rect.MakeXYWH(34, -9, 120, 18), 9, 9,
+                        skia.Paint(AntiAlias=True, Color=skia.ColorSetRGB(*body)))  # fmt: skip
+        c.restore()
+        return
+    c.drawPath(tip, skia.Paint(AntiAlias=True, Color=skia.ColorSetRGB(*point)))
     c.drawRoundRect(
         skia.Rect.MakeXYWH(12, -12, 22, 24),
         3,
         3,
-        skia.Paint(AntiAlias=True, Color=skia.ColorSetRGB(0xE5, 0xE7, 0xEB)),
+        skia.Paint(AntiAlias=True, Color=skia.ColorSetRGB(*collar)),
     )
     c.drawRoundRect(
         skia.Rect.MakeXYWH(34, -15, 100, 30),
         8,
         8,
-        skia.Paint(AntiAlias=True, Color=skia.ColorSetRGB(0x25, 0x63, 0xEB)),
+        skia.Paint(AntiAlias=True, Color=skia.ColorSetRGB(*body)),
     )
     c.restore()
+
+
+def _wipe(c: skia.Canvas, share: float) -> None:
+    """Fade the frame back to the empty paper, `share` of the way."""
+    look = th.current()
+    paint = skia.Paint(Color=skia.ColorSetRGB(*look.paper))
+    paint.setAlphaf(min(max(share, 0.0), 1.0))
+    if look.background == "plain":
+        c.drawRect(skia.Rect.MakeWH(W, H), paint)
+    else:
+        c.drawImage(_blank(look.id), 0, 0, skia.SamplingOptions(), paint)
+
+
+@functools.cache
+def _blank(theme_id: str) -> skia.Image:
+    """A theme's empty paper, drawn once per process."""
+    surface = skia.Surface(W, H)
+    with th.using(theme_id):
+        paper(surface.getCanvas())
+    return surface.makeImageSnapshot()
 
 
 def _still_frames(seg: Segment) -> Iterator[tuple[bytes, bool]]:
@@ -169,12 +295,11 @@ def _still_frames(seg: Segment) -> Iterator[tuple[bytes, bool]]:
             yield last, False
             continue
         c = frame.getCanvas()
-        c.clear(skia.ColorSetRGB(*BOARD))
-        c.drawImageRect(img, skia.Rect.MakeWH(W, H))
-        if wiping:
-            wipe = skia.Paint(Color=skia.ColorSetRGB(*BOARD))
-            wipe.setAlphaf(min((t - (seg.end_ms - WIPE_MS)) / WIPE_MS, 1.0))
-            c.drawRect(skia.Rect.MakeWH(W, H), wipe)
+        with th.using(seg.theme):
+            paper(c)
+            c.drawImageRect(img, skia.Rect.MakeWH(W, H))
+            if wiping:
+                _wipe(c, (t - (seg.end_ms - WIPE_MS)) / WIPE_MS)
         pixels: bytes = frame.makeImageSnapshot().tobytes()
         last = pixels
         yield pixels, True
@@ -183,49 +308,58 @@ def _still_frames(seg: Segment) -> Iterator[tuple[bytes, bool]]:
 def frames(seg: Segment) -> Iterator[tuple[bytes, bool]]:
     """The segment's frames as raw RGBA, each with whether it differs from
     the one before. A board holding still repeats the same bytes, without
-    being drawn again."""
+    being drawn again. Drawn in the segment's theme; the theme is set only
+    while a frame is drawn, never across a `yield`, so it does not leak into
+    whoever reads the frames."""
     if seg.still:
         yield from _still_frames(seg)
         return
-    drawing = compile_scene(Scene.model_validate(seg.scene), when_of(seg), seg.start_ms, seg.end_ms)
+    look = th.theme_of(seg.theme)
+    drawing = compile_scene(
+        Scene.model_validate(seg.scene), when_of(seg), seg.start_ms, seg.end_ms, look
+    )
     pieces = sorted(drawing.pieces, key=lambda p: p.start_ms)
     info = skia.ImageInfo.Make(W, H, skia.kRGBA_8888_ColorType, skia.kPremul_AlphaType)
     board = skia.Surface.MakeRaster(info)
-    board.getCanvas().clear(skia.ColorSetRGB(*BOARD))
+    with th.using(look):
+        paper(board.getCanvas())
     board_img = board.makeImageSnapshot()
     frame = skia.Surface.MakeRaster(info)
     done = 0
     last: bytes | None = None
     for i in range(seg.frames):
         t = (seg.first_frame + i) * 1000 / FPS
-        # Everything finished by now goes onto the board, once.
-        committed = False
-        while done < len(pieces) and pieces[done].end_ms <= t:
-            draw_piece(board.getCanvas(), pieces[done], 1.0)
-            done += 1
-            committed = True
-        if committed:
-            board_img = board.makeImageSnapshot()
-        active = done < len(pieces) and pieces[done].start_ms < t
-        wiping = seg.wipe and t > seg.end_ms - WIPE_MS
-        if last is not None and not (committed or active or wiping):
+        with th.using(look):
+            # Everything finished by now goes onto the board, once.
+            committed = False
+            while done < len(pieces) and pieces[done].end_ms <= t:
+                draw_piece(board.getCanvas(), pieces[done], 1.0)
+                done += 1
+                committed = True
+            if committed:
+                board_img = board.makeImageSnapshot()
+            active = done < len(pieces) and pieces[done].start_ms < t
+            wiping = seg.wipe and t > seg.end_ms - WIPE_MS
+            if last is not None and not (committed or active or wiping):
+                pixels = None
+            else:
+                c = frame.getCanvas()
+                c.drawImage(board_img, 0, 0)
+                tip = None
+                for p in pieces[done:]:
+                    if p.start_ms >= t:
+                        break
+                    span = max(p.end_ms - p.start_ms, 1.0)
+                    tip = draw_piece(c, p, (t - p.start_ms) / span) or tip
+                if wiping:
+                    _wipe(c, (t - (seg.end_ms - WIPE_MS)) / WIPE_MS)
+                elif tip is not None:
+                    _marker(c, tip, t)
+                pixels = frame.makeImageSnapshot().tobytes()
+        if pixels is None:
+            assert last is not None
             yield last, False
             continue
-        c = frame.getCanvas()
-        c.drawImage(board_img, 0, 0)
-        tip = None
-        for p in pieces[done:]:
-            if p.start_ms >= t:
-                break
-            span = max(p.end_ms - p.start_ms, 1.0)
-            tip = draw_piece(c, p, (t - p.start_ms) / span) or tip
-        if wiping:
-            wipe = skia.Paint(Color=skia.ColorSetRGB(*BOARD))
-            wipe.setAlphaf(min((t - (seg.end_ms - WIPE_MS)) / WIPE_MS, 1.0))
-            c.drawRect(skia.Rect.MakeWH(W, H), wipe)
-        elif tip is not None:
-            _marker(c, tip, t)
-        pixels: bytes = frame.makeImageSnapshot().tobytes()
         last = pixels
         yield pixels, True
 

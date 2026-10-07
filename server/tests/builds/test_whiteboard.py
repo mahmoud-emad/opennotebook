@@ -462,14 +462,17 @@ def test_frames_start_blank_fill_in_and_are_the_same_every_time(tmp_path: Path) 
 
 
 @needs_ffmpeg
-def test_a_segment_is_drawn_in_pieces_that_join_to_every_frame(tmp_path: Path) -> None:
+@pytest.mark.parametrize("theme", ["whiteboard", "chalkboard"])
+def test_a_segment_is_drawn_in_pieces_that_join_to_every_frame(tmp_path: Path, theme: str) -> None:
     """A scene that finishes drawing early holds still for the rest: the
-    hold is a piece of its own, and the pieces joined have every frame."""
+    hold is a piece of its own, and the pieces joined have every frame. In
+    chalk too, whose grain is a texture of its own."""
+    import dataclasses
     import json
     import subprocess
     import sys
 
-    seg = _segment(tmp_path, frames=150)
+    seg = dataclasses.replace(_segment(tmp_path, frames=150), theme=theme)
     spec = tmp_path / "seg.json"
     spec.write_text(draw.to_json(seg))
     subprocess.run(
@@ -741,3 +744,36 @@ def test_the_explainer_is_told_what_is_on_at_the_moment() -> None:
     assert m.heard.endswith("They make sugar.") and m.ahead == "And release oxygen."
     assert explain.moments("At [0:05] and [0:21].", 20_000) == "At [0:05] and ."
     assert "- [0:15] And release oxygen." in explain.timeline(script)
+
+
+@needs_ffmpeg
+async def test_a_video_is_made_in_the_theme_asked_for(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch, files: Path
+) -> None:
+    import asyncio
+    import subprocess
+
+    install(monkeypatch, files)
+    sid = await _ready(client)
+    r = await client.post(
+        f"/api/sessions/{sid}/video", json={"style": "whiteboard", "theme": "chalkboard"}
+    )
+    assert r.status_code == 202, r.text
+    assert r.json()["theme"] == "chalkboard"
+    await drain("render")
+    states = {v["style"]: v for v in (await client.get(f"/api/sessions/{sid}/videos")).json()}
+    assert states["whiteboard"]["state"] == "ready", states["whiteboard"]["failure"]
+    assert states["whiteboard"]["theme"] == "chalkboard"
+    assert states["slides"]["theme"] is None
+    # A frame from the middle of the video is on the slate, not white paper.
+    mp4 = files / "video" / sid / "whiteboard.mp4"
+    half = states["whiteboard"]["duration_ms"] / 2000
+    rgb = (
+        await asyncio.to_thread(
+            subprocess.run,
+            ["ffmpeg", "-v", "error", "-ss", f"{half:.2f}", "-i", str(mp4), "-frames:v", "1",
+             "-vf", "scale=64:36", "-f", "rawvideo", "-pix_fmt", "rgb24", "-"],
+            capture_output=True, check=True,
+        )
+    ).stdout  # fmt: skip
+    assert sum(rgb) / len(rgb) < 110, "the board is dark"

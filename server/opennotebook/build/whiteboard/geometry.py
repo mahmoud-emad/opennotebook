@@ -29,6 +29,8 @@ from fontTools.pens.basePen import BasePen
 from fontTools.svgLib.path import parse_path
 from fontTools.ttLib import TTCollection, TTFont
 
+from opennotebook.build.whiteboard import theme as th
+
 # fontTools warns about harmless quirks in system fonts it opens for a
 # missing letter ("extra bytes in post.stringData"); the worker's log is not
 # the place for them.
@@ -104,6 +106,8 @@ def wobble(poly: Poly, seed: int, amp: float = 1.3) -> Poly:
     joined strokes still meet."""
     if len(poly) < 3:
         return poly
+    # The theme's hand: steadier for a technical pen, looser for chalk.
+    amp *= th.current().wobble
     rnd = random.Random(seed)
     f1, f2 = rnd.uniform(0.004, 0.009), rnd.uniform(0.013, 0.025)
     p1, p2 = rnd.uniform(0, math.tau), rnd.uniform(0, math.tau)
@@ -269,8 +273,9 @@ def _needs_shaping(ch: str) -> bool:
 
 
 @cache
-def _font() -> TTFont:
-    ref = resources.files("opennotebook.build.whiteboard") / "assets" / "Caveat-Bold.ttf"
+def _font(name: str = "Caveat-Bold.ttf") -> TTFont:
+    """A hand under `assets/`, open for the process: each theme has one."""
+    ref = resources.files("opennotebook.build.whiteboard") / "assets" / name
     with resources.as_file(ref) as f:
         return TTFont(str(f))
 
@@ -280,8 +285,8 @@ def text(s: str, size: float) -> Text:
     renderer draws no text of its own, so a label can never be lost to a
     missing font. A letter the handwriting font lacks comes from another
     font that has it (`fallback`); one no font can draw is a "?", and
-    `missing` says which they were."""
-    font = _font()
+    `missing` says which they were. The hand is the theme's."""
+    font = _font(th.current().font)
     path = skia.Path()
     x = 0.0
     missing: list[str] = []

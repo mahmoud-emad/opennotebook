@@ -24,8 +24,9 @@ import skia
 
 from opennotebook.ai import client
 from opennotebook.ai.errors import AiError
+from opennotebook.build.whiteboard import theme as th
 from opennotebook.build.whiteboard.compile import H, W, compile_scene
-from opennotebook.build.whiteboard.draw import BOARD, draw_piece
+from opennotebook.build.whiteboard.draw import draw_piece, paper
 from opennotebook.build.whiteboard.scene import Beat, Scene
 
 # skia-python ships without complete type information.
@@ -73,15 +74,23 @@ class Verdict:
     checked: bool = True
 
 
-def still(sc: Scene, when: Callable[[Beat], float], start_ms: float, end_ms: float) -> bytes:
-    """The scene's finished board as a PNG, at the size the checker reads."""
-    d = compile_scene(sc, when, start_ms, end_ms)
-    surface = skia.Surface(SEEN[0], SEEN[1])
-    c = surface.getCanvas()
-    c.clear(skia.ColorSetRGB(*BOARD))
-    c.scale(SEEN[0] / W, SEEN[1] / H)
-    for p in sorted(d.pieces, key=lambda p: p.start_ms):
-        draw_piece(c, p, 1.0)
+def still(
+    sc: Scene,
+    when: Callable[[Beat], float],
+    start_ms: float,
+    end_ms: float,
+    theme: th.Theme | str | None = None,
+) -> bytes:
+    """The scene's finished board as a PNG, at the size the checker reads,
+    in the theme it will be drawn in (or the one in use)."""
+    with th.using(theme if theme is not None else th.current()):
+        d = compile_scene(sc, when, start_ms, end_ms)
+        surface = skia.Surface(SEEN[0], SEEN[1])
+        c = surface.getCanvas()
+        c.scale(SEEN[0] / W, SEEN[1] / H)
+        paper(c)
+        for p in sorted(d.pieces, key=lambda p: p.start_ms):
+            draw_piece(c, p, 1.0)
     data = surface.makeImageSnapshot().encodeToData()
     return bytes(data) if data is not None else b""
 

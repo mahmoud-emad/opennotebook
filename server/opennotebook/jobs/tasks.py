@@ -148,6 +148,9 @@ class RenderSpec(BaseModel):
     job_id: uuid.UUID
     session_id: uuid.UUID
     style: str
+    # A whiteboard's theme (build/whiteboard/theme.py); a render queued
+    # before themes has none and is drawn as the whiteboard.
+    theme: str = "whiteboard"
 
 
 @app.task(name=RENDER_TASK, pass_context=False)
@@ -178,7 +181,7 @@ async def render_video(**spec: object) -> None:
             owner, "video", collection_id=cid, session_id=r.session_id, job_id=r.job_id
         ) as spend:
             done = await video.render(
-                r.session_id, r.style, progress.phase, progress.phase_done, models
+                r.session_id, r.style, progress.phase, progress.phase_done, models, theme=r.theme
             )
         done["spent_usd"] = float(spend.total_usd)
         done["spent_known"] = spend.known

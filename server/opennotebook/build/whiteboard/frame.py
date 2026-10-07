@@ -22,6 +22,7 @@ import html
 from functools import cache
 from pathlib import Path
 
+from opennotebook.build.whiteboard import theme as th
 from opennotebook.build.whiteboard.compile import compile_scene
 from opennotebook.build.whiteboard.scene import COLS, Beat, Element, Scene
 
@@ -36,8 +37,9 @@ W, H = 1920, 1080
 
 
 @cache
-def _caveat() -> str:
-    return base64.b64encode((ASSETS / "Caveat-Bold.ttf").read_bytes()).decode()
+def _hand(name: str) -> str:
+    """A theme's hand, for the slide to embed."""
+    return base64.b64encode((ASSETS / name).read_bytes()).decode()
 
 
 def _clock(ms: int) -> str:
@@ -46,31 +48,37 @@ def _clock(ms: int) -> str:
 
 
 def _page(body: str) -> str:
+    """A slide in the theme in use: its colours are CSS variables, set from
+    the theme's `Slides`."""
+    look = th.current()
+    v = look.slides
     return f"""<!doctype html><html><head><meta charset="utf-8"><style>
-@font-face{{font-family:Hand;src:url(data:font/ttf;base64,{_caveat()}) format("truetype")}}
-html,body{{margin:0;width:{W}px;height:{H}px;background:#fbfaf6;color:#1f2937;
+@font-face{{font-family:Hand;src:url(data:font/ttf;base64,{_hand(look.font)}) format("truetype")}}
+:root{{--paper:{v.paper};--ink:{v.ink};--muted:{v.muted};--soft:{v.soft};--accent:{v.accent};
+--card:{v.card};--edge:{v.edge};--rule:{v.rule};--tick:{v.tick};--on-accent:{v.on_accent}}}
+html,body{{margin:0;width:{W}px;height:{H}px;background:var(--paper);color:var(--ink);
 font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}}
 main{{position:absolute;inset:110px 140px;display:grid;grid-template-columns:1.05fr .95fr;
 gap:90px;align-items:center}}
 .kicker{{font-size:30px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;
-color:#2563eb;margin:0 0 22px}}
-h1{{font-family:Hand,cursive;font-size:118px;line-height:1.02;margin:0 0 34px;color:#1f2937}}
-.about{{font-size:38px;line-height:1.4;color:#4b5563;margin:0}}
-.card{{background:#fff;border:3px solid #1f2937;border-radius:28px;padding:44px 50px;
-box-shadow:10px 12px 0 #1f2937}}
-.card h2{{font-family:Hand,cursive;font-size:64px;margin:0 0 18px;color:#2563eb}}
+color:var(--accent);margin:0 0 22px}}
+h1{{font-family:Hand,cursive;font-size:118px;line-height:1.02;margin:0 0 34px;color:var(--ink)}}
+.about{{font-size:38px;line-height:1.4;color:var(--soft);margin:0}}
+.card{{background:var(--card);border:3px solid var(--edge);border-radius:28px;padding:44px 50px;
+box-shadow:10px 12px 0 var(--edge)}}
+.card h2{{font-family:Hand,cursive;font-size:64px;margin:0 0 18px;color:var(--accent)}}
 ol,ul{{list-style:none;margin:0;padding:0}}
 li{{display:flex;align-items:baseline;gap:22px;font-size:34px;line-height:1.3;padding:13px 0;
-border-top:2px dashed #d6d3cb}}
+border-top:2px dashed var(--rule)}}
 li:first-child{{border-top:0}}
-.n{{flex:0 0 auto;width:52px;height:52px;border-radius:50%;background:#2563eb;color:#fff;
-display:grid;place-items:center;font-size:28px;font-weight:700;align-self:center}}
+.n{{flex:0 0 auto;width:52px;height:52px;border-radius:50%;background:var(--accent);
+color:var(--on-accent);display:grid;place-items:center;font-size:28px;font-weight:700;align-self:center}}
 .t{{flex:1}}
-.at{{color:#6b7280;font-variant-numeric:tabular-nums;font-size:28px}}
-.tick{{flex:0 0 auto;color:#16a34a;font-size:40px;font-weight:800;align-self:center}}
+.at{{color:var(--muted);font-variant-numeric:tabular-nums;font-size:28px}}
+.tick{{flex:0 0 auto;color:var(--tick);font-size:40px;font-weight:800;align-self:center}}
 .thanks{{font-family:Hand,cursive;font-size:132px;line-height:1;margin:0 0 30px;
-color:#1f2937}}
-.of{{font-size:34px;color:#6b7280;margin:0}}
+color:var(--ink)}}
+.of{{font-size:34px;color:var(--muted);margin:0}}
 </style></head><body><main>{body}</main></body></html>"""
 
 
@@ -126,17 +134,19 @@ def board(heading: str, items: list[str], ticked: bool) -> Scene:
     return Scene(title=heading, layout="stack", elements=elements)
 
 
-def board_png(sc: Scene) -> bytes:
-    """A scene as a finished board, a PNG at the video's size."""
+def board_png(sc: Scene, theme: th.Theme | str | None = None) -> bytes:
+    """A scene as a finished board, a PNG at the video's size, in the theme
+    given (or the one in use)."""
     import skia
 
-    from opennotebook.build.whiteboard.draw import BOARD, draw_piece
+    from opennotebook.build.whiteboard.draw import draw_piece, paper
 
-    d = compile_scene(sc, lambda _b: 0.0, 0.0, 1000.0)
-    surface = skia.Surface(W, H)
-    c = surface.getCanvas()
-    c.clear(skia.ColorSetRGB(*BOARD))
-    for p in d.pieces:
-        draw_piece(c, p, 1.0)
+    with th.using(theme if theme is not None else th.current()):
+        d = compile_scene(sc, lambda _b: 0.0, 0.0, 1000.0)
+        surface = skia.Surface(W, H)
+        c = surface.getCanvas()
+        paper(c)
+        for p in d.pieces:
+            draw_piece(c, p, 1.0)
     data = surface.makeImageSnapshot().encodeToData()
     return bytes(data) if data is not None else b""

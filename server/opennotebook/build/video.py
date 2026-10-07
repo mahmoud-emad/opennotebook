@@ -515,11 +515,20 @@ class Models:
 
 
 async def render(
-    sid: uuid.UUID, style: str, phase: Say, phase_done: Done, models: Models | None = None
+    sid: uuid.UUID,
+    style: str,
+    phase: Say,
+    phase_done: Done,
+    models: Models | None = None,
+    theme: str = "whiteboard",
 ) -> dict[str, Any]:
     """Render one output's video and keep it: returns the fields its video
-    state is written with. Raises a `BuildError` saying why it could not."""
+    state is written with. Raises a `BuildError` saying why it could not. A
+    whiteboard is drawn in `theme` (build/whiteboard/theme.py)."""
+    from opennotebook.build.whiteboard import theme as th
+
     models = models or Models()
+    look = th.theme_of(theme)
     if style not in STYLES:
         raise BuildError(f"unknown video style {style!r}")
     async with sessionmaker()() as s:
@@ -562,10 +571,14 @@ async def render(
         out = work / "video.mp4"
         if style == "whiteboard":
             scope = Scope(o.owner_id, o.collection_id)
-            extra |= await _whiteboard(
-                work, models, parts, timing, phases, phase, phase_done, scope=scope,
-                voiced=voiced, title=o.title,
-            )  # fmt: skip
+            # The theme is set before the scenes' tasks start, so each one,
+            # and each thread it hands work to, draws and checks in it.
+            with th.using(look):
+                extra |= await _whiteboard(
+                    work, models, parts, timing, phases, phase, phase_done, scope=scope,
+                    voiced=voiced, title=o.title,
+                )  # fmt: skip
+            extra["theme"] = look.id
             board = extra.pop("board", [])
             await encode(work, out, timing.total_ms, captions=bool(caps), drawn=True)
         else:
@@ -629,6 +642,7 @@ async def _whiteboard(
     presenter's opening and closing (`voiced`) are fixed slides of their
     own, before and after the planned scenes."""
     from opennotebook.build.whiteboard import draw, ground, write
+    from opennotebook.build.whiteboard import theme as th
     from opennotebook.build.whiteboard.scene import Plan, PlannedScene
 
     spans = {sp.line_id: sp for sp in timing.lines}
@@ -688,6 +702,7 @@ async def _whiteboard(
                 scene={}, words=words, line_starts=starts, start_ms=start, end_ms=end,
                 first_frame=first, frames=max(last - first, 1), wipe=i + 1 < n,
                 out=str(work / f"scene-{i:03d}.mp4"), ffmpeg=ffmpeg,
+                theme=th.current().id,
             )
         )  # fmt: skip
 
@@ -879,10 +894,11 @@ RENDER_TASK = "render_video"
 WAITING = "waiting"
 
 
-async def queue(s: Any, o: Session, style: str) -> uuid.UUID:
-    """Put a render of `o` in `style` on the queue, in the caller's
-    transaction, and mark the video as being made. The video made before it
-    plays on while it is made, and stays if it fails."""
+async def queue(s: Any, o: Session, style: str, theme: str = "whiteboard") -> uuid.UUID:
+    """Put a render of `o` in `style` (and a whiteboard's `theme`) on the
+    queue, in the caller's transaction, and mark the video as being made.
+    The video made before it plays on while it is made, and stays if it
+    fails."""
     from opennotebook import jobs
     from opennotebook.jobs.app import RENDER_LOCK, RENDER_QUEUE
 
@@ -894,6 +910,8 @@ async def queue(s: Any, o: Session, style: str) -> uuid.UUID:
     was: dict[str, Any] = videos.get(style) or {}
     keep = was if was.get("state") == "ready" else was.get("previous")
     videos[style] = {"state": "rendering", "job_id": str(job.id), "failure": None}
+    if style == "whiteboard":
+        videos[style]["theme"] = theme
     if isinstance(keep, dict):
         videos[style]["previous"] = {k: v for k, v in keep.items() if k != "previous"}
     o.video = videos
@@ -901,7 +919,7 @@ async def queue(s: Any, o: Session, style: str) -> uuid.UUID:
         s,
         job,
         RENDER_TASK,
-        {"job_id": str(job.id), "session_id": str(o.id), "style": style},
+        {"job_id": str(job.id), "session_id": str(o.id), "style": style, "theme": theme},
         queue=RENDER_QUEUE,
         lock=RENDER_LOCK,
     )
@@ -928,6 +946,6 @@ async def after_build(sid: uuid.UUID) -> None:
                     videos[style] = {"state": "failed", "failure": e.sentence}
                     o.video = videos
                     continue
-                await queue(s, o, style)
+                await queue(s, o, style, str(v.get("theme") or "whiteboard"))  # pyright: ignore[reportUnknownMemberType, reportUnknownArgumentType]
     except Exception:
         log.exception("the video asked for with output %s could not be started", sid)
