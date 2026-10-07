@@ -115,6 +115,8 @@ def paper(c: skia.Canvas) -> None:
             c.drawLine(x, 0, x, H, rule)
     elif look.background == "slate":
         c.drawImage(_slate(look.paper), 0, 0)
+    elif look.background in ("newsprint", "card"):
+        c.drawImage(_stock(look.paper, look.background), 0, 0)
 
 
 def _noise(size: int, seed: int) -> np.ndarray:
@@ -142,6 +144,51 @@ def _chalk(color: tuple[int, int, int]) -> skia.Shader:
 
 
 @functools.cache
+def _stock(base: tuple[int, int, int], kind: str) -> skia.Image:
+    """Paper with a grain: newsprint's fine specks, or card's soft fibres."""
+    n = _noise(512, 5 if kind == "newsprint" else 9)
+    if kind == "card":
+        # Fibres: the noise smeared along one direction.
+        n = (n + np.roll(n, 1, axis=1) + np.roll(n, 2, axis=1) + np.roll(n, 3, axis=1)) / 4
+        shade = (n - 0.5) * 0.10
+    else:
+        shade = np.where(n > 0.985, -0.22, (n - 0.5) * 0.05)
+    rgb = np.clip(np.array(base, dtype=np.float32) / 255 * (1 + shade[..., None]), 0, 1)
+    tile = np.dstack([rgb * 255, np.full((512, 512, 1), 255.0)]).astype(np.uint8)
+    img = skia.Image.fromarray(np.ascontiguousarray(tile), colorType=skia.kRGBA_8888_ColorType)
+    surface = skia.Surface(W, H)
+    paint = skia.Paint(Shader=img.makeShader(skia.TileMode.kRepeat, skia.TileMode.kRepeat))
+    surface.getCanvas().drawRect(skia.Rect.MakeWH(W, H), paint)
+    return surface.makeImageSnapshot()
+
+
+# How strong a halftone screen is printed: its dots cover about a seventh of
+# the shape, at this strength.
+HALFTONE_ALPHA = 0.42
+
+
+@functools.cache
+def _dots() -> skia.Image:
+    """A halftone screen's tile: one dot, for a shape's fill to show through."""
+    size, r = 12, 2.6
+    yy, xx = np.mgrid[0:size, 0:size] + 0.5
+    d = np.hypot(xx - size / 2, yy - size / 2)
+    alpha = np.clip(r + 0.5 - d, 0, 1)
+    rgba = np.zeros((size, size, 4), dtype=np.uint8)
+    rgba[..., 3] = (alpha * 255).astype(np.uint8)
+    rgba[..., :3] = rgba[..., 3:4]
+    return skia.Image.fromarray(rgba, colorType=skia.kRGBA_8888_ColorType)
+
+
+@functools.cache
+def _halftone(color: tuple[int, int, int]) -> skia.Shader:
+    screen = _dots().makeShader(skia.TileMode.kRepeat, skia.TileMode.kRepeat)
+    return skia.Shaders.Blend(
+        skia.BlendMode.kDstIn, skia.Shaders.Color(skia.ColorSetRGB(*color)), screen
+    )
+
+
+@functools.cache
 def _slate(base: tuple[int, int, int]) -> skia.Image:
     """A used slate: faint clouds of old chalk wiped across it."""
     surface = skia.Surface(W, H)
@@ -158,6 +205,12 @@ def _slate(base: tuple[int, int, int]) -> skia.Image:
     return surface.makeImageSnapshot()
 
 
+def _faded(p: skia.Paint, alpha: float) -> skia.Paint:
+    if alpha < 1.0:
+        p.setAlphaf(alpha)
+    return p
+
+
 def _poly(points: list[tuple[float, float]]) -> skia.Path:
     path = skia.Path()
     if points:
@@ -171,6 +224,75 @@ def draw_piece(c: skia.Canvas, p: Piece, f: float) -> tuple[float, float] | None
     """Draw `p`, the share `f` of it done, and return where the pen is."""
     if f <= 0:
         return None
+    look = th.current()
+    if p.kind == "fill" and p.shape is not None:
+        _fill(c, p, min(f, 1.0))
+        return None
+    if look.ghost is not None and p.kind in ("line", "text"):
+        # The second impression, out of register: in the ghost ink, or for
+        # what is printed in that ink already, in the blue.
+        ghost = look.ghost if p.color != look.ink["red"] else look.ink["blue"]
+        c.save()
+        c.translate(2.4, 1.8)
+        _draw_ink(c, Piece(p.element, p.kind, ghost, points=p.points, text=p.text, at=p.at,
+                           box=p.box, width=p.width), f, 0.32)  # fmt: skip
+        c.restore()
+    return _draw_ink(c, p, f, 1.0)
+
+
+def _fill(c: skia.Canvas, p: Piece, f: float) -> None:
+    """A shape filled in: a halftone screen wiped across it (print), or a
+    piece of cut paper dropped into place with its shadow (craft)."""
+    look = th.current()
+    assert p.shape is not None
+    x0, y0, x1, y1 = p.box
+    if look.fill == "halftone":
+        c.save()
+        c.clipRect(skia.Rect.MakeLTRB(x0 - 8, y0 - 8, x0 + (x1 - x0 + 16) * f, y1 + 8))
+        # A light screen: a tint behind the type, never as dark as the type.
+        screen = skia.Paint(AntiAlias=True, Shader=_halftone(p.color))
+        screen.setAlphaf(HALFTONE_ALPHA)
+        c.drawPath(p.shape, screen)
+        c.restore()
+        return
+    # Cut paper: it settles from a little above the card, its shadow
+    # tightening as it lands.
+    ease = 1 - (1 - f) ** 3
+    scale = 1.08 - 0.08 * ease
+    cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
+    c.save()
+    c.translate(cx, cy)
+    c.scale(scale, scale)
+    c.translate(-cx, -cy)
+    if look.shadow:
+        blur = skia.MaskFilter.MakeBlur(skia.kNormal_BlurStyle, 7 + 5 * (1 - ease))
+        shadow = skia.Paint(AntiAlias=True, MaskFilter=blur)
+        shadow.setColor(skia.Color4f(0.18, 0.13, 0.08, 0.28 * ease).toColor())
+        c.save()
+        c.translate(5 + 6 * (1 - ease), 7 + 8 * (1 - ease))
+        c.drawPath(p.shape, shadow)
+        c.restore()
+    paint = skia.Paint(AntiAlias=True, Color=skia.ColorSetRGB(*p.color))
+    paint.setAlphaf(min(1.0, 0.25 + ease))
+    c.drawPath(p.shape, paint)
+    c.restore()
+
+
+def _draw_ink(c: skia.Canvas, p: Piece, f: float, alpha: float) -> tuple[float, float] | None:
+    """A line, a label or a highlight, the share `f` of it done."""
+    look = th.current()
+    if p.kind == "line" and look.shadow:
+        # Strips of paper: each line lifted off the card by its shadow.
+        n = len(p.points)
+        k = max(2, min(n, math.ceil(n * f)))
+        blur = skia.MaskFilter.MakeBlur(skia.kNormal_BlurStyle, 3)
+        shade = _paint((0x2E, 0x22, 0x14), "line", p.width)
+        shade.setMaskFilter(blur)
+        shade.setAlphaf(0.25)
+        c.save()
+        c.translate(2.5, 3.5)
+        c.drawPath(_poly(p.points[:k]), shade)
+        c.restore()
     if p.kind == "line":
         n = len(p.points)
         k = max(2, min(n, math.ceil(n * f)))
@@ -180,7 +302,7 @@ def draw_piece(c: skia.Canvas, p: Piece, f: float) -> tuple[float, float] | None
             dust = _paint(p.color, "line", p.width + 3.5)
             dust.setAlphaf(0.22)
             c.drawPath(path, dust)
-        c.drawPath(path, _paint(p.color, "line", p.width))
+        c.drawPath(path, _faded(_paint(p.color, "line", p.width), alpha))
         return p.points[k - 1] if f < 1 else None
     if p.kind == "text" and p.text is not None:
         x, y = p.at
@@ -189,7 +311,7 @@ def draw_piece(c: skia.Canvas, p: Piece, f: float) -> tuple[float, float] | None
             # and a clip at the width cut each label's last one.
             c.save()
             c.translate(x, y)
-            c.drawPath(p.text.path, _paint(p.color, "text"))
+            c.drawPath(p.text.path, _faded(_paint(p.color, "text"), alpha))
             c.restore()
             return None
         right = max(p.text.path.getBounds().right(), p.text.width)
@@ -199,7 +321,7 @@ def draw_piece(c: skia.Canvas, p: Piece, f: float) -> tuple[float, float] | None
             skia.Rect.MakeLTRB(x - 12, y - p.text.ascent * 1.8, edge, y + p.text.descent * 2.5)
         )
         c.translate(x, y)
-        c.drawPath(p.text.path, _paint(p.color, "text"))
+        c.drawPath(p.text.path, _faded(_paint(p.color, "text"), alpha))
         c.restore()
         return (edge, y - p.text.ascent * 0.3)
     x0, y0, x1, y1 = p.box
@@ -212,6 +334,9 @@ def draw_piece(c: skia.Canvas, p: Piece, f: float) -> tuple[float, float] | None
 def _marker(c: skia.Canvas, at: tuple[float, float], t: float) -> None:
     """A marker pen whose tip is on the stroke being drawn, with a little
     hand tremor."""
+    if th.current().pen in ("print", "craft"):
+        # Nothing holds a pen: a print appears, cut paper is laid down.
+        return
     x, y = at
     c.save()
     c.translate(x, y + math.sin(t / 37) * 1.5)

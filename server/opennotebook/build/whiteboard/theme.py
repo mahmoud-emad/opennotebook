@@ -48,7 +48,7 @@ class Theme:
     family: Literal["drawn", "illustrated"] = "drawn"
     # The paper, and what is printed on it before anything is drawn.
     paper: RGB = (0xFB, 0xFA, 0xF6)
-    background: Literal["plain", "lined", "grid", "slate"] = "plain"
+    background: Literal["plain", "lined", "grid", "slate", "newsprint", "card"] = "plain"
     # What is printed on it: the rules or grid, their spacing in px, and a
     # notebook's margin line.
     rule: RGB = (0xC7, 0xDB, 0xF5)
@@ -74,7 +74,17 @@ class Theme:
     # point, collar and body).
     stroke: float = 5.0
     wobble: float = 1.0
-    pen: Literal["marker", "ballpoint", "technical", "chalk"] = "marker"
+    pen: Literal["marker", "ballpoint", "technical", "chalk", "print", "craft"] = "marker"
+    # Shapes: a box or circle may be filled behind its label, with a halftone
+    # screen (print) or solid cut paper (craft), in the tone's fill colour
+    # (`fills`, else its ink); keep its outline or not; and cast a shadow.
+    fill: Literal["none", "halftone", "solid"] = "none"
+    fills: dict[str, RGB] = field(default_factory=dict[str, RGB])
+    outline: bool = True
+    shadow: bool = False
+    # A second impression a little off the first, as a print run that is not
+    # quite in register leaves; None for none.
+    ghost: RGB | None = None
     tip: tuple[RGB, RGB, RGB] = ((0x1F, 0x29, 0x37), (0xE5, 0xE7, 0xEB), (0x25, 0x63, 0xEB))
     # The hand: a font under `assets/`, drawn as outlines.
     font: str = "Caveat-Bold.ttf"
@@ -178,7 +188,79 @@ BLUEPRINT = Theme(
     ),
 )  # fmt: skip
 
-THEMES: dict[str, Theme] = {t.id: t for t in (WHITEBOARD, NOTEBOOK, CHALKBOARD, BLUEPRINT)}
+# A mid-century print: cream newsprint, a few spot inks, halftone screens,
+# a second impression slightly out of register, a typewriter face.
+RETRO_PRINT = Theme(
+    id="retro",
+    label="Retro Print",
+    paper=(0xF3, 0xEA, 0xD3),
+    background="newsprint",
+    ink={
+        "ink": (0x1C, 0x1B, 0x1A),
+        "blue": (0x1F, 0x3A, 0x5F),
+        "red": (0xA8, 0x23, 0x1C),
+        "amber": (0x9A, 0x3F, 0x12),
+        "green": (0x2A, 0x55, 0x48),
+    },
+    highlight=(0xF2, 0xC1, 0x4E),
+    highlight_alpha=0.6,
+    stroke=4.2,
+    wobble=0.6,
+    pen="print",
+    fill="halftone",
+    ghost=(0xC8, 0x3A, 0x30),
+    tip=((0x1C, 0x1B, 0x1A), (0xCF, 0xC3, 0xA3), (0xA8, 0x23, 0x1C)),
+    font="SpecialElite-Regular.ttf",
+    title_size=56,
+    label_size=38,
+    slides=Slides(
+        paper="#f3ead3", ink="#1c1b1a", muted="#6b6255", soft="#3d372f", accent="#a8231c",
+        card="#fbf6e9", edge="#1c1b1a", rule="#cfc3a3", tick="#2a5548",
+    ),
+)  # fmt: skip
+
+# Cut paper on card: solid pastel shapes with soft shadows, labels in dark
+# ink, arrows as strips of paper.
+PAPER_CRAFT = Theme(
+    id="papercraft",
+    label="Paper-craft",
+    paper=(0xEF, 0xE7, 0xDA),
+    background="card",
+    ink={
+        "ink": (0x1F, 0x29, 0x37),
+        "blue": (0x1E, 0x3A, 0x8A),
+        "red": (0x99, 0x1B, 0x1B),
+        "amber": (0x7C, 0x2D, 0x12),
+        "green": (0x14, 0x53, 0x2D),
+    },
+    fills={
+        "ink": (0xFF, 0xFD, 0xF8),
+        "blue": (0xBF, 0xDB, 0xFE),
+        "red": (0xFE, 0xCA, 0xCA),
+        "amber": (0xFD, 0xE6, 0x8A),
+        "green": (0xBB, 0xF7, 0xD0),
+    },
+    highlight=(0xFD, 0xE6, 0x8A),
+    highlight_alpha=0.7,
+    stroke=7.0,
+    wobble=1.6,
+    pen="craft",
+    fill="solid",
+    outline=False,
+    shadow=True,
+    tip=((0x1F, 0x29, 0x37), (0xD8, 0xCD, 0xB9), (0xC2, 0x41, 0x0C)),
+    font="PatrickHand-Regular.ttf",
+    title_size=64,
+    label_size=48,
+    slides=Slides(
+        paper="#efe7da", ink="#1f2937", muted="#6b6255", soft="#3d372f", accent="#c2410c",
+        card="#fffdf8", edge="#1f2937", rule="#d8cdb9", tick="#14532d",
+    ),
+)  # fmt: skip
+
+THEMES: dict[str, Theme] = {
+    t.id: t for t in (WHITEBOARD, NOTEBOOK, CHALKBOARD, BLUEPRINT, RETRO_PRINT, PAPER_CRAFT)
+}
 DEFAULT = WHITEBOARD.id
 
 

@@ -48,7 +48,7 @@ Style = Literal["slides", "whiteboard"]
 StyleQuery = Annotated[Style, Query(description="The video's style")]
 # A whiteboard's look (build/whiteboard/theme.py): one per theme the studio
 # has, kept in step with it by a test.
-ThemeId = Literal["whiteboard", "notebook", "chalkboard", "blueprint"]
+ThemeId = Literal["whiteboard", "notebook", "chalkboard", "blueprint", "retro", "papercraft"]
 
 NOT_READY = "This output is still being made. Make its video once it is ready."
 NO_VIDEO = "This output has no video in that style yet. Make one first."
@@ -344,6 +344,7 @@ class VideoScript(BaseModel):
     chapters: list[ScriptChapter]
     lines: list[ScriptLine] = Field(description="The narration, line by line")
     scenes: list[ScriptScene] = Field(description="A whiteboard's scenes; empty for slides")
+    theme: str | None = Field(default=None, description="A whiteboard's theme")
 
 
 CUE = re.compile(r"(\d+):(\d{2}):(\d{2})[.,](\d{3})\s+-->\s+(\d+):(\d{2}):(\d{2})[.,](\d{3})")
@@ -399,11 +400,13 @@ async def script_of(s: AsyncSession, o: Session, style: Style) -> VideoScript:
     rel = v.get("script")
     if isinstance(rel, str) and storage.exists(rel):
         raw = await asyncio.to_thread(storage.local_path(rel).read_text, encoding="utf-8")
-        return VideoScript.model_validate(json.loads(raw))
+        return VideoScript.model_validate({**json.loads(raw), "theme": v.get("theme")})
     caps = await asyncio.to_thread(Path(_file(v.get("captions"))).read_text, encoding="utf-8")
     lines = lines_of_vtt(caps)
     total = int(v.get("duration_ms") or (lines[-1].end_ms if lines else 0))
-    return VideoScript(title=o.title, duration_ms=total, chapters=[], lines=lines, scenes=[])
+    return VideoScript(
+        title=o.title, duration_ms=total, chapters=[], lines=lines, scenes=[], theme=v.get("theme")
+    )
 
 
 @router.get("/sessions/{sid}/video/script")

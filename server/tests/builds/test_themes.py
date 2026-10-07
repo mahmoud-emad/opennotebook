@@ -197,3 +197,27 @@ def test_each_theme_has_its_own_slides(theme_id: str) -> None:
     with th.using(theme_id):
         page = frame.opening_html("Plants", "How plants eat.", ["Light"], [0], 3)
     assert f"--paper:{t.slides.paper}" in page and f"--accent:{t.slides.accent}" in page
+
+
+# ── the filled themes ────────────────────────────────────────────────────────
+
+
+@pytest.mark.parametrize("theme_id", [t.id for t in th.THEMES.values() if t.fill == "solid"])
+def test_a_label_reads_on_its_cut_paper(theme_id: str) -> None:
+    t = th.THEMES[theme_id]
+    for tone, ink in t.ink.items():
+        assert _contrast(ink, t.fills[tone]) >= NEW_THEMES, (theme_id, tone)
+
+
+def test_a_filled_theme_fills_its_shapes_and_cut_paper_has_no_outline() -> None:
+    from opennotebook.build.whiteboard.compile import compile_scene
+
+    def kinds(theme_id: str, element: str) -> list[str]:
+        d = compile_scene(_scene(), _when, 0, 6000, theme_id)
+        return [p.kind for p in d.pieces if p.element == element]
+
+    assert "fill" not in kinds("whiteboard", "k")
+    assert kinds("retro", "k")[0] == "fill" and "line" in kinds("retro", "k")
+    assert kinds("papercraft", "k")[0] == "fill" and "line" not in kinds("papercraft", "k")
+    # An icon on cut paper sits on a disc of its own.
+    assert kinds("papercraft", "cpu")[0] == "fill" and "fill" not in kinds("retro", "cpu")

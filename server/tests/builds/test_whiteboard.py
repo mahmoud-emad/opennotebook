@@ -462,7 +462,7 @@ def test_frames_start_blank_fill_in_and_are_the_same_every_time(tmp_path: Path) 
 
 
 @needs_ffmpeg
-@pytest.mark.parametrize("theme", ["whiteboard", "chalkboard"])
+@pytest.mark.parametrize("theme", ["whiteboard", "chalkboard", "papercraft"])
 def test_a_segment_is_drawn_in_pieces_that_join_to_every_frame(tmp_path: Path, theme: str) -> None:
     """A scene that finishes drawing early holds still for the rest: the
     hold is a piece of its own, and the pieces joined have every frame. In
@@ -678,7 +678,7 @@ async def test_a_video_keeps_its_script_and_explains_a_moment_of_it(
     r = await client.get(f"/api/sessions/{sid}/video/script", params={"style": "whiteboard"})
     assert r.status_code == 200, r.text
     script = r.json()
-    assert script["duration_ms"] == st["duration_ms"]
+    assert script["duration_ms"] == st["duration_ms"] and script["theme"] == "whiteboard"
     assert len(script["chapters"]) == st["chapters"] and len(script["scenes"]) == st["scenes"]
     # Opened and closed as a video: a slide of its own at each end, with
     # what it shows (the agenda, the takeaways) in the script.

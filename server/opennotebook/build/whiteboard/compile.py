@@ -59,10 +59,11 @@ type Box = tuple[float, float, float, float]
 @dataclass
 class Piece:
     """One thing the pen does: a line drawn along its points, a label
-    written left to right, or a highlight washed in behind."""
+    written left to right, a highlight washed in behind, or a shape filled
+    in (`shape`, a closed path) where a theme fills its boxes."""
 
     element: str
-    kind: Literal["line", "text", "wash"]
+    kind: Literal["line", "text", "wash", "fill"]
     color: tuple[int, int, int]
     start_ms: float = 0.0
     end_ms: float = 0.0
@@ -74,6 +75,7 @@ class Piece:
     width: float = field(default_factory=lambda: th.current().stroke)
     # A label's words, for what the lint says about it.
     said: str = ""
+    shape: skia.Path | None = None
 
 
 @dataclass
@@ -182,12 +184,22 @@ def shape(e: Element, box: Box, notes: list[str]) -> tuple[list[Piece], Box | No
     def lines(polys: list[g.Poly]) -> list[Piece]:
         return [Piece(eid, "line", color, points=p) for p in polys if len(p) > 1]
 
+    def outlined(polys: list[g.Poly]) -> list[Piece]:
+        """A box's or circle's outline, and the theme's fill behind it."""
+        out: list[Piece] = []
+        if look.fill != "none" and polys and len(polys[0]) > 2:
+            fill = look.fills.get(e.tone, color)
+            out.append(Piece(eid, "fill", fill, box=inner, shape=_closed(polys[0])))
+        if look.outline or not out:
+            out += lines(polys)
+        return out
+
     if e.kind == "box":
-        return lines(g.rough_rect(x0, y0, w, h, seed)) + _label_pieces(
+        return outlined(g.rough_rect(x0, y0, w, h, seed)) + _label_pieces(
             eid, e.label, _inset(inner, 14), color, size
         ), inner
     if e.kind == "circle":
-        out = lines(g.rough_ellipse((x0 + x1) / 2, (y0 + y1) / 2, w / 2, h / 2, seed))
+        out = outlined(g.rough_ellipse((x0 + x1) / 2, (y0 + y1) / 2, w / 2, h / 2, seed))
         return out + _label_pieces(eid, e.label, _inset(inner, w * 0.15), color, size), inner
     if e.kind == "label":
         return _label_pieces(eid, e.label or e.text, inner, color, size * 1.2), None
@@ -234,7 +246,25 @@ def shape(e: Element, box: Box, notes: list[str]) -> tuple[list[Piece], Box | No
         g.wobble(p, seed + i, 0.9)
         for i, p in enumerate(g.polylines(g.transform(icons.path(name), s, dx, dy)))
     ]
-    return lines(polys) + _label_pieces(eid, e.label, (x0, y1 - label_h, x1, y1), color, 44), None
+    disc: list[Piece] = []
+    if look.fill == "solid":
+        # Cut paper: the icon is drawn on a disc of paper of its own.
+        cx, cy, r = dx + side / 2, dy + side / 2, side * 0.62
+        ring = skia.Path()
+        ring.addCircle(cx, cy, r)
+        paper_disc = look.fills.get("ink", (0xFF, 0xFF, 0xFF))
+        disc = [Piece(eid, "fill", paper_disc, box=(cx - r, cy - r, cx + r, cy + r), shape=ring)]
+    label = _label_pieces(eid, e.label, (x0, y1 - label_h, x1, y1), color, 44)
+    return disc + lines(polys) + label, None
+
+
+def _closed(poly: g.Poly) -> skia.Path:
+    path = skia.Path()
+    path.moveTo(*poly[0])
+    for pt in poly[1:]:
+        path.lineTo(*pt)
+    path.close()
+    return path
 
 
 # The shortest an arrow is drawn. Two joined things in neighbouring cells
