@@ -34,9 +34,9 @@ from opennotebook.api.deps import Db, Me
 from opennotebook.api.media import file_name_of
 from opennotebook.api.notes import Citation
 from opennotebook.build import video
-from opennotebook.db.models import Job, Session
+from opennotebook.db.models import Job, Session, Source
 from opennotebook.db.session import release
-from opennotebook.domain import reading, sessions, shares
+from opennotebook.domain import collections, reading, sessions, shares
 from opennotebook.domain import settings as config
 from opennotebook.errors import Problem, not_found
 from opennotebook.script import explain
@@ -539,11 +539,12 @@ async def make_overview(cid: uuid.UUID, body: OverviewReq, s: Db, me: Me) -> Ove
         video.tool(video.FFPROBE_KEY, "ffprobe")
     except video.ToolMissing as e:
         raise Problem(503, e.sentence) from e
-    # Named as what it is for: without a title a deck is named for its slide
-    # style ("Editorial slides"), which says nothing of its video.
+    # Named for what it is about: the title asked for, else the collection's,
+    # else its one source's. The video's opening slide shows it, so a generic
+    # name ("Video overview", or a deck's "Editorial slides") will not do.
     build = sessions_api.BuildReq(
         kind="slides",
-        title=body.title.strip() or "Video overview",
+        title=body.title.strip() or await _overview_title(s, me.id, cid),
         speakers=1,
         slide_count=LENGTHS[body.length],
     )
@@ -554,6 +555,19 @@ async def make_overview(cid: uuid.UUID, body: OverviewReq, s: Db, me: Me) -> Ove
         asked["theme"] = body.theme
     o.video = {body.style: asked}
     return OverviewOut(session=made, video=VideoState.of(body.style, asked))
+
+
+async def _overview_title(s: AsyncSession, owner: uuid.UUID, cid: uuid.UUID) -> str:
+    c = await collections.owned(s, owner, cid)
+    title = " ".join((c.title or "").split())
+    if title and title != collections.UNTITLED:
+        return title
+    found = (
+        await s.scalars(select(Source.title).where(Source.collection_id == cid).limit(2))
+    ).all()
+    if len(found) == 1 and found[0].strip():
+        return " ".join(found[0].split())
+    return "Video overview"
 
 
 class CollectionVideo(VideoState):

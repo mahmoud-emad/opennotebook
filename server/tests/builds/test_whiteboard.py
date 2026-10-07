@@ -635,7 +635,7 @@ async def test_a_video_overview_is_made_from_a_collection_in_one_go(
     await drain("prep")
     got = (await client.get(f"/api/sessions/{sid}")).json()
     assert got["state"] == "ready" and got["parts"] == 4 and got["speakers"] == 1
-    assert got["title"] == "Video overview"
+    assert got["title"] == "Linux", "named for its collection"
     # The build's end started the video: it is on the render queue now.
     assert (await client.get(f"/api/sessions/{sid}/videos")).json()[1]["state"] == "rendering"
     await drain("render")
