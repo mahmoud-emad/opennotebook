@@ -9,7 +9,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type * as Rest from "@/client/types.gen";
-import { apiBase, call, enc, errText } from "./api";
+import { apiBase, call, enc, errText, storage } from "./api";
 import { Icon } from "./Icon";
 import { follow, routeUrl, type View } from "./routes";
 import "../styles/video.css";
@@ -28,6 +28,53 @@ const STYLE_BLURB: Record<VideoStyle, string> = {
   whiteboard: "A presenter explains while each idea is drawn as it is said.",
   slides: "The deck's slides, each on screen while it is narrated.",
 };
+/** A theme's name, for a video's line and the watch page. */
+const THEME_LABEL: Record<string, string> = {
+  whiteboard: "Whiteboard",
+  notebook: "Notebook",
+  chalkboard: "Chalkboard",
+  blueprint: "Blueprint",
+  retro: "Retro Print",
+  papercraft: "Paper-craft",
+};
+
+export function themeLabel(id: string | null | undefined): string | null {
+  if (!id) return null;
+  return THEME_LABEL[id] ?? id.charAt(0).toUpperCase() + id.slice(1);
+}
+
+/** What a video is called on its row: its theme's name when it has one. */
+export function videoName(v: { style: string; theme?: string | null }): string {
+  return `${themeLabel(v.theme) ?? STYLE_LABEL[v.style as VideoStyle]} video`;
+}
+
+// The theme last chosen, per collection and overall, in this browser only.
+const THEME_KEY = "video-theme";
+
+export function lastTheme(cid?: string): string {
+  try {
+    const s = storage();
+    return (cid && s?.getItem(`${THEME_KEY}:${cid}`)) || s?.getItem(THEME_KEY) || "whiteboard";
+  } catch {
+    return "whiteboard";
+  }
+}
+
+function rememberTheme(theme: string, cid?: string): void {
+  try {
+    const s = storage();
+    s?.setItem(THEME_KEY, theme);
+    if (cid) s?.setItem(`${THEME_KEY}:${cid}`, theme);
+  } catch {
+    // Not remembered: the next video starts from the whiteboard.
+  }
+}
+
+/** A theme's thumbnail, rendered by server/scripts/theme_previews.py. */
+export function themeThumb(id: string): string {
+  return `${import.meta.env.BASE_URL}themes/${id}.jpg`;
+}
+
 const LENGTH_LABEL: Record<VideoLength, string> = {
   short: "Shorter",
   default: "Default",
@@ -108,13 +155,29 @@ export function VideoOptions({
 }) {
   const [style, setStyle] = useState<VideoStyle>("whiteboard");
   const [length, setLength] = useState<VideoLength>("default");
+  const [theme, setTheme] = useState(() => lastTheme(cid));
+  const [themes, setThemes] = useState<VideoTheme[]>([]);
   const [making, setMaking] = useState(false);
   const [err, setErr] = useState("");
+  useEffect(() => {
+    let live = true;
+    videoThemes()
+      .then((t) => live && setThemes(Array.isArray(t) ? t : []))
+      // Without the list the whiteboard is made, as before themes.
+      .catch(() => live && setThemes([]));
+    return () => {
+      live = false;
+    };
+  }, []);
+  // A theme remembered that this studio no longer has is the whiteboard.
+  const chosen = themes.some((t) => t.id === theme) ? theme : "whiteboard";
   const go = () => {
     if (making) return;
     setMaking(true);
     setErr("");
-    makeOverview(cid, style, length)
+    const asked = style === "whiteboard" ? chosen : undefined;
+    if (asked) rememberTheme(asked, cid);
+    makeOverview(cid, style, length, asked)
       .then(() => onMade())
       .catch((e) => setErr(errText(e)))
       .finally(() => setMaking(false));
@@ -135,6 +198,23 @@ export function VideoOptions({
           </button>
         ))}
       </div>
+      {style === "whiteboard" && themes.length > 1 && (
+        <>
+          <div className="opt-l">Theme</div>
+          <div className="vt-grid" role="radiogroup" aria-label="Theme">
+            {themes.map((t) => (
+              <button key={t.id} className={chosen === t.id ? "vt on" : "vt"} role="radio"
+                aria-checked={chosen === t.id} onClick={() => setTheme(t.id)}>
+                <img src={themeThumb(t.id)} alt="" loading="lazy" width={192} height={108} />
+                <span className="vt-n">
+                  {t.label}
+                  {t.family === "illustrated" && <span className="vt-cost">+ about 30 cents</span>}
+                </span>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
       <div className="ao-len" role="radiogroup" aria-label="Length">
         <span className="opt-l">Length</span>
         {(["short", "default", "long"] as const).map((l) => (
@@ -199,7 +279,7 @@ export function VideoLine({ sid, ready, ro }: { sid: string; ready: boolean; ro:
     if (starting) return;
     setStarting(true);
     setErr("");
-    makeVideo(sid, "whiteboard")
+    makeVideo(sid, "whiteboard", lastTheme())
       .then(load)
       .catch((e) => setErr(errText(e)))
       .finally(() => setStarting(false));
@@ -222,7 +302,7 @@ export function VideoLine({ sid, ready, ro }: { sid: string; ready: boolean; ro:
         <div key={v.style} className="out-video">
           <Icon name="collection-play" />
           <span className="out-d num">
-            {`${STYLE_LABEL[v.style as VideoStyle]} video`}
+            {videoName(v)}
             {v.state === "waiting" && (v.waiting ? ` · ${v.waiting}` : " · starts when the deck is made")}
             {v.state === "rendering" && " · being made…"}
             {v.state === "ready" && (v.duration_ms ?? 0) > 0 && ` · ${Math.round((v.duration_ms ?? 0) / 1000)} s`}

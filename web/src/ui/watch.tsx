@@ -18,7 +18,7 @@ import { citeFrom, citeGroups, type Cite } from "./cite";
 import { Icon } from "./Icon";
 import { mdToHtml, withChips } from "./markdown";
 import { go } from "./routes";
-import { STYLE_LABEL, type VideoStyle } from "./video";
+import { type VideoStyle, videoName } from "./video";
 import "../styles/watch.css";
 
 export type Script = Rest.VideoScript;
@@ -210,7 +210,7 @@ export function WatchPage({ sid, style, share }: { sid: string; style: VideoStyl
         <div className="w-titles">
           <div className="w-title">{script?.title ?? ""}</div>
           <div className="w-sub">
-            {`${STYLE_LABEL[style]} video`}
+            {videoName({ style, theme: script?.theme })}
             {duration > 0 && ` · ${clock(duration)}`}
             {chapters.length > 0 && ` · ${chapters.length} chapters`}
           </div>

@@ -1381,7 +1381,7 @@ export type OverviewReq = {
      *
      * A whiteboard's look
      */
-    theme?: 'whiteboard' | 'notebook' | 'chalkboard' | 'blueprint';
+    theme?: 'whiteboard' | 'notebook' | 'chalkboard' | 'blueprint' | 'retro' | 'papercraft';
 };
 
 /**
@@ -2918,7 +2918,7 @@ export type VideoReq = {
      *
      * A whiteboard's look
      */
-    theme?: 'whiteboard' | 'notebook' | 'chalkboard' | 'blueprint';
+    theme?: 'whiteboard' | 'notebook' | 'chalkboard' | 'blueprint' | 'retro' | 'papercraft';
 };
 
 /**
@@ -2951,6 +2951,12 @@ export type VideoScript = {
      * A whiteboard's scenes; empty for slides
      */
     scenes: Array<ScriptScene>;
+    /**
+     * Theme
+     *
+     * A whiteboard's theme
+     */
+    theme?: string | null;
 };
 
 /**

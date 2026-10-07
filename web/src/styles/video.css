@@ -13,3 +13,16 @@
 .video-dialog .set-head { display: flex; align-items: center; gap: 6px; }
 .video-dialog .set-head h3 { flex: 1; }
 .video-player { display: block; width: 100%; aspect-ratio: 16 / 9; background: #000; border-radius: 0 0 8px 8px; }
+
+/* The Video overview tool's theme picker: a thumbnail of each look. */
+.vt-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-bottom: 4px; }
+.vt { display: flex; flex-direction: column; gap: 5px; height: auto; padding: 5px; text-align: left; white-space: normal;
+  border-radius: var(--bs-border-radius); }
+.vt img { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; object-fit: cover;
+  border-radius: calc(var(--bs-border-radius) - 2px); border: 1px solid var(--bs-border-color-translucent); }
+.vt.on { border-color: var(--bs-primary); box-shadow: 0 0 0 1px var(--bs-primary) inset; background: var(--st-hover-bg); }
+.vt-n { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; padding: 0 3px 2px; font-size: 12.5px; font-weight: 600;
+  color: var(--bs-emphasis-color); }
+.vt-cost { font-size: 11px; font-weight: 500; color: var(--bs-secondary-color); }
+@media (max-width: 560px) { .vt-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+

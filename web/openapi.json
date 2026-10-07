@@ -6467,7 +6467,9 @@
               "whiteboard",
               "notebook",
               "chalkboard",
-              "blueprint"
+              "blueprint",
+              "retro",
+              "papercraft"
             ],
             "title": "Theme",
             "description": "A whiteboard's look",
@@ -8613,7 +8615,9 @@
               "whiteboard",
               "notebook",
               "chalkboard",
-              "blueprint"
+              "blueprint",
+              "retro",
+              "papercraft"
             ],
             "title": "Theme",
             "description": "A whiteboard's look",
@@ -8655,6 +8659,18 @@
             "type": "array",
             "title": "Scenes",
             "description": "A whiteboard's scenes; empty for slides"
+          },
+          "theme": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Theme",
+            "description": "A whiteboard's theme"
           }
         },
         "type": "object",
