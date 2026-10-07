@@ -22,6 +22,10 @@ PREP_LOCK = "prep"
 # Everything else that takes longer than a request: deep research, mind maps,
 # study notes, and the hourly tidy of finished work.
 WORK_QUEUE = "work"
+# Videos, one at a time under their own lock: a render is a browser and an
+# encoder busy for a minute, and it must never hold up a build's turn.
+RENDER_QUEUE = "render"
+RENDER_LOCK = "render"
 # Naming a collection and designing its cover, after its sources change. A job
 # per collection carries the collection's id as both its `lock` and its
 # `queueing_lock`: never two runs of one collection at once, and at most one

@@ -289,6 +289,10 @@ class Session(Base):
     # Format, length, focus and minutes, for an audio overview.
     audio: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     deck_ref: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    # Its videos, by style: `{"slides": {"state", "job_id", "path", ...}}`.
+    # Apart from `state`, so a video that fails to render leaves a ready
+    # output ready.
+    video: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     duration_ms: Mapped[int] = mapped_column(BigInteger, server_default="0")
     spent_usd: Mapped[Decimal | None] = mapped_column(Numeric(12, 6))
     # False when any call of the build could not be priced.

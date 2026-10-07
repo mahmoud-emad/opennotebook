@@ -897,7 +897,7 @@ def moved(value: Any, old: uuid.UUID, new: uuid.UUID) -> Any:
 
 
 # Where a deck's or audio overview's files are on the files volume, by its id.
-OUTPUT_DIRS = ("decks", "audio")
+OUTPUT_DIRS = ("decks", "audio", "video")
 
 
 def _columns(row: DeclarativeBase, *skip: str) -> dict[str, Any]:
@@ -960,6 +960,13 @@ def rewrite(old: Session, sid: uuid.UUID, owner: uuid.UUID, cid: uuid.UUID) -> S
         deck_ref=moved(old.deck_ref, old.id, sid),
         audio=moved(old.audio, old.id, sid),
         speakers=moved(old.speakers, old.id, sid),
+        # Only finished videos come along: a render in flight belongs to the
+        # original's job, which never writes to the copy.
+        video=moved(
+            {k: v for k, v in (old.video or {}).items() if v.get("state") == "ready"} or None,
+            old.id,
+            sid,
+        ),
         failure=None,
         pinned=False,
         spent_usd=Decimal(0),

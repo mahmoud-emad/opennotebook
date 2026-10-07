@@ -25,7 +25,7 @@ from opennotebook.ai.prices import Price
 from opennotebook.api import paging
 from opennotebook.api.deps import Db, Me
 from opennotebook.auth import current_user
-from opennotebook.build import narrate, pipeline, slides
+from opennotebook.build import narrate, pipeline, slides, video
 from opennotebook.db.models import Job, Playback, Session
 from opennotebook.db.session import release, sessionmaker
 from opennotebook.domain import collections, reading, sessions, styles, voice
@@ -668,6 +668,7 @@ async def delete_session(sid: uuid.UUID, s: Db, me: Me, after: BackgroundTasks) 
     await collections.touch(s, o.collection_id)
     after.add_task(storage.remove_tree, narrate.audio_dir(sid))
     after.add_task(storage.remove_tree, slides.deck_dir(sid))
+    after.add_task(storage.remove_tree, video.video_dir(sid))
 
 
 NOT_FAILED = "Only an output that failed can be tried again. Reload the page to see where it is."

@@ -39,9 +39,13 @@ async def synthesise_line(client: speech.Speech, sid: object, line: Line, voice_
     # STORED text keeps its dash: that is what the subtitle and the transcript
     # show, and it is what the writer wrote.
     try:
-        data = await client.synthesize(speakable(line.text), voice_id)
+        data, words = await client.synthesize_timed(speakable(line.text), voice_id)
     except speech.SpeechError as e:
         raise Voice(str(e), e.sentence) from e
+    # When the server times its words, they are kept: they are what a video
+    # draws on and a transcript highlights. Times are of the spoken text,
+    # which `speakable` changes only in punctuation.
+    line.cues = [w.as_cue() for w in words]
     if not data:
         raise EmptyAudio(line.line_id)
     duration = wav.duration_of(data, line.line_id)

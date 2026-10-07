@@ -40,7 +40,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from opennotebook import errors, memory, research, speech
 from opennotebook.ai import ledger
 from opennotebook.ai.errors import AiError
-from opennotebook.build import kits, narrate, slides, validate
+from opennotebook.build import kits, narrate, slides, validate, video
 from opennotebook.build.errors import Abandoned, BuildError
 from opennotebook.build.phases import PHASES
 from opennotebook.db.models import Chunk, QaPair, Session, Source
@@ -229,6 +229,8 @@ async def run(spec: PrepSpec) -> None:
             await progress.finish(str(e) or type(e).__name__)
             return
     await progress.finish(None)
+    # A video asked for together with this output starts now that it is ready.
+    await video.after_build(spec.session_id)
 
 
 async def _run(spec: PrepSpec, progress: Progress, spend: ledger.Spend) -> None:

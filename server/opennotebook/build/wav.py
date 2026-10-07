@@ -45,7 +45,7 @@ def duration_of(data: bytes, name: str) -> int:
     return data_len * 1000 // byte_rate
 
 
-def _pcm_of(data: bytes) -> tuple[int, int, int, bytes] | None:
+def pcm_of(data: bytes) -> tuple[int, int, int, bytes] | None:
     """The format and PCM bytes of a WAV: (channels, sample rate, bits per
     sample, data). Walks the chunks the same way `duration_of` does."""
     if len(data) < 12 or data[0:4] != b"RIFF" or data[8:12] != b"WAVE":
@@ -87,7 +87,7 @@ def join(clips: list[tuple[str, bytes, int]]) -> bytes:
     fmt: tuple[int, int, int] | None = None
     out = bytearray()
     for k, (name, data, gap_ms) in enumerate(clips):
-        found = _pcm_of(data)
+        found = pcm_of(data)
         if found is None:
             raise NotWav(name, "not a PCM WAV")
         ch, rate, bits, pcm = found

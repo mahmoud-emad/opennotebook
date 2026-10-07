@@ -32,8 +32,25 @@ def put(rel: str, data: bytes) -> str:
     return rel
 
 
+def put_file(rel: str, src: Path) -> str:
+    """Move a finished local file in whole, through a temporary name, and
+    return its path: for files too big to hold in memory, such as a video."""
+    path = _at(rel)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(path.name + ".part")
+    shutil.move(src, tmp)
+    tmp.replace(path)
+    return rel
+
+
 def read(rel: str) -> bytes:
     return _at(rel).read_bytes()
+
+
+def local_path(rel: str) -> Path:
+    """Where a file is on this machine, for a response that streams it from
+    disk or a tool that reads it by name."""
+    return _at(rel)
 
 
 def remove_tree(rel: str) -> None:

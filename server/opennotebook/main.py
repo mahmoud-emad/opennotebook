@@ -22,6 +22,7 @@ from opennotebook.api import (
     settings,
     shares,
     sources,
+    video,
 )
 from opennotebook.config import settings as config
 from opennotebook.shutdown import close_all
@@ -69,6 +70,7 @@ def create_app() -> FastAPI:
         chat,
         settings,
         shares,
+        video,
     ):
         app.include_router(module.router)
     # DEPRECATED: the old JSON-RPC API, for one release after cutover; delete

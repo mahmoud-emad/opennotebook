@@ -19,11 +19,22 @@ contract, not a preference.
 
 The settings are what whoever runs the studio sets, read from the
 environment as the Rust server read them.
+
+Word timings come from Kokoro-FastAPI's `POST /dev/captioned_speech`, which
+returns the audio with each word's start and end, taken from the model's own
+predicted durations. Speaches has no such route and its Kokoro model has no
+duration output, so there a line is voiced without them and the video times
+its words by estimate (`build/timeline.py`). Which servers answer the route
+is learned once per server and remembered.
 """
 
+import base64
+import binascii
 import functools
 import json
+import math
 import os
+from dataclasses import dataclass
 from typing import Any
 
 import httpx
@@ -38,6 +49,9 @@ STT_BASE_URL_KEY = "OPENNOTEBOOK_STT_BASE_URL"
 TTS_MODEL_KEY = "OPENNOTEBOOK_TTS_MODEL"
 STT_MODEL_KEY = "OPENNOTEBOOK_STT_MODEL"
 API_KEY_KEY = "OPENNOTEBOOK_SPEECH_API_KEY"
+# `auto` asks the speech server for word timings and falls back when it has
+# none; `off` never asks.
+TIMESTAMPS_KEY = "OPENNOTEBOOK_TTS_TIMESTAMPS"
 
 BASE_URL_DEFAULT = "http://localhost:8000/v1"
 TTS_MODEL_DEFAULT = "speaches-ai/Kokoro-82M-v1.0-ONNX"
@@ -107,6 +121,59 @@ def empty() -> SpeechError:
     )
 
 
+@dataclass(frozen=True)
+class Word:
+    """One spoken word and when it is said, in ms from the clip's start."""
+
+    word: str
+    start_ms: int
+    end_ms: int
+
+    def as_cue(self) -> dict[str, Any]:
+        return {"word": self.word, "start_ms": self.start_ms, "end_ms": self.end_ms}
+
+
+# Speech servers that answered the captioned route with something other than
+# timed audio, by base URL: asked once per process, not once per line.
+_UNTIMED: set[str] = set()
+
+
+def captioned_url(tts_url: str) -> str:
+    """Kokoro-FastAPI serves the OpenAI routes under `/v1` and its own under
+    the root, so the captioned route is beside `/v1`, not inside it."""
+    root = tts_url[: -len("/v1")] if tts_url.endswith("/v1") else tts_url
+    return f"{root}/dev/captioned_speech"
+
+
+def _ms(v: Any) -> int | None:
+    """Seconds as ms, or None for anything that is not a finite number: a
+    JSON reader accepts `NaN` and `Infinity`, and a bool is an int to
+    Python."""
+    if isinstance(v, bool) or not isinstance(v, int | float) or not math.isfinite(v):
+        return None
+    return round(float(v) * 1000)
+
+
+def words_of(raw: Any) -> list[Word]:
+    """The timed words of a captioned reply. Kokoro-FastAPI's documentation
+    names the fields `start_time` and `end_time` while one of its examples
+    says `start` and `end`, so both are read. A word without a time (one
+    outside Kokoro's lexicon comes back that way) is dropped here and
+    estimated later between its neighbours."""
+    out: list[Word] = []
+    for t in raw if isinstance(raw, list) else []:  # pyright: ignore[reportUnknownVariableType]
+        if not isinstance(t, dict):
+            continue
+        w: Any = t.get("word", t.get("text"))  # pyright: ignore[reportUnknownMemberType]
+        start = _ms(t.get("start_time", t.get("start")))  # pyright: ignore[reportUnknownMemberType]
+        end = _ms(t.get("end_time", t.get("end")))  # pyright: ignore[reportUnknownMemberType]
+        # Kokoro times punctuation as tokens of its own; only words are kept.
+        has_letter = isinstance(w, str) and any(c.isalnum() for c in w)
+        if has_letter and start is not None and end is not None:
+            out.append(Word(str(w).strip(), start, max(end, start)))
+    return out
+
+
 class Speech:
     """A speech client."""
 
@@ -119,6 +186,7 @@ class Speech:
         api_key: str | None = None,
         *,
         http: httpx.AsyncClient | None = None,
+        timestamps: bool = True,
     ) -> None:
         self.tts_url = tts_url.strip().rstrip("/")
         self.stt_url = stt_url.strip().rstrip("/")
@@ -126,6 +194,7 @@ class Speech:
         self.stt_model = stt_model
         self.api_key = api_key if api_key and api_key.strip() else None
         self._http = http
+        self.timestamps = timestamps
 
     def _headers(self) -> dict[str, str]:
         return {"Authorization": f"Bearer {self.api_key}"} if self.api_key else {}
@@ -156,12 +225,41 @@ class Speech:
             raise refused(r.status_code, r.content)
         if not r.content:
             raise empty()
+        return _clip(r.content)
+
+    async def synthesize_timed(self, text: str, voice: str) -> tuple[bytes, list[Word]]:
+        """`text` spoken in `voice`, with each word's timing when the server
+        gives them, and none when it does not. The audio is the same contract
+        as `synthesize`; resampling to `SAMPLE_RATE` keeps every time."""
+        if not self.timestamps or self.tts_url in _UNTIMED:
+            return await self.synthesize(text, voice), []
+        r = await self._post(
+            captioned_url(self.tts_url),
+            self.tts_url,
+            json={
+                "model": self.tts_model,
+                "input": text,
+                "voice": voice,
+                "response_format": "wav",
+                "stream": False,
+            },
+        )
+        timed = _timed(r) if r.is_success else None
+        if timed is None:
+            # No such route, or a reply that is not timed audio: not a
+            # captioning server, remembered. Any other refusal (an unknown
+            # voice, say) is this line's, and the plain call says it properly.
+            if r.is_success or r.status_code in (404, 405, 501):
+                _UNTIMED.add(self.tts_url)
+            return await self.synthesize(text, voice), []
+        audio, words = timed
         try:
-            return normalize(r.content, SAMPLE_RATE)
-        except EmptyAudio as e:
-            raise empty() from e
-        except NotWav as e:
-            raise not_wav(str(e)) from e
+            return _clip(audio), words
+        except SpeechError:
+            # Timed, but not audio we can use: not a captioning server we
+            # can read, so the plain route from now on.
+            _UNTIMED.add(self.tts_url)
+            return await self.synthesize(text, voice), []
 
     async def transcribe(self, wav: bytes) -> str:
         """The words in a WAV recording."""
@@ -181,6 +279,37 @@ class Speech:
         if not isinstance(said, str):
             raise _undecoded("no `text` in the response")
         return said.strip()
+
+
+def _clip(data: bytes) -> bytes:
+    """A server's audio in the studio's one clip format, or the error that
+    says why it is not usable."""
+    if not data:
+        raise empty()
+    try:
+        return normalize(data, SAMPLE_RATE)
+    except EmptyAudio as e:
+        raise empty() from e
+    except NotWav as e:
+        raise not_wav(str(e)) from e
+
+
+def _timed(r: httpx.Response) -> tuple[bytes, list[Word]] | None:
+    """The audio and words of a captioned reply, or None when it is not one:
+    a JSON object with base64 audio and a list of timestamps."""
+    try:
+        v: Any = r.json()
+    except ValueError:
+        return None
+    if not isinstance(v, dict) or not isinstance(v.get("audio"), str):
+        return None
+    try:
+        audio = base64.b64decode(v["audio"], validate=True)
+    except binascii.Error, ValueError:
+        return None
+    if "timestamps" not in v:
+        return None
+    return audio, words_of(v["timestamps"])
 
 
 def _undecoded(why: str) -> SpeechError:
@@ -205,6 +334,7 @@ def from_env(http: httpx.AsyncClient | None = None) -> Speech:
         _env(STT_MODEL_KEY, STT_MODEL_DEFAULT),
         _env(API_KEY_KEY, "") or None,
         http=http,
+        timestamps=_env(TIMESTAMPS_KEY, "auto").lower() not in ("off", "false", "0", "no"),
     )
 
 

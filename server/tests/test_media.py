@@ -63,7 +63,7 @@ def test_clips_join_into_one_wav_with_silence_between() -> None:
     assert wav_ms(joined) == 1_750
     with pytest.raises(ValueError, match="no clips"):
         media.join([])
-    with pytest.raises(ValueError, match="different format"):
+    with pytest.raises(ValueError, match="format differs"):
         media.join([("a", wav(24_000, 10), 0), ("o", wav(16_000, 10), 0)])
     with pytest.raises(ValueError, match="not a PCM WAV"):
         media.join([("x", b"RIFF", 0)])

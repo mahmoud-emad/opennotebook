@@ -26,7 +26,9 @@ Rust studio wrote and the player reads.
 import asyncio
 import html as html_lib
 import logging
+import re
 from dataclasses import dataclass
+from typing import Any
 
 from opennotebook import storage
 from opennotebook.ai import client
@@ -60,6 +62,35 @@ def deck_dir(sid: object) -> str:
 def slide_path(sid: object, slide: str) -> str:
     """The file a slide of this deck is written to."""
     return f"{deck_dir(sid)}/{PRESENTATION}/{slide}.html"
+
+
+PLAIN = re.compile(r"^[^/\\]+$")
+
+
+def render_of(slide_ref: Any) -> tuple[str, bytes] | None:
+    """A slide's render on the files volume, with its type: the deck's own
+    `<presentation>/<slide>.html`, or an older deck's `output/slide.html` or
+    `output/slide.png`. None when there is none or the ref is not three plain
+    names."""
+    if not isinstance(slide_ref, dict):
+        return None
+    parts = [slide_ref.get(k) for k in ("collection", "presentation", "slide")]  # pyright: ignore[reportUnknownMemberType]
+    names = [p for p in parts if isinstance(p, str) and PLAIN.match(p) and ".." not in p]
+    if len(names) != 3:
+        return None
+    deck, pres, slide = names
+    base = f"decks/{deck}/{pres}"
+    for rel, kind in (
+        (f"{base}/{slide}.html", "text/html; charset=utf-8"),
+        (f"{base}/{slide}/output/slide.html", "text/html; charset=utf-8"),
+        (f"{base}/{slide}/output/slide.png", "image/png"),
+    ):
+        try:
+            if storage.exists(rel):
+                return kind, storage.read(rel)
+        except OSError, ValueError:
+            continue
+    return None
 
 
 @dataclass(frozen=True)

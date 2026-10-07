@@ -1,5 +1,5 @@
-"""The work the queue runs: a build (deck or audio overview) and deep
-research. Each task reads its arguments strictly, and a task whose arguments
+"""The work the queue runs: a build (deck or audio overview), a video of
+one, and deep research. Each task reads its arguments strictly, and a task whose arguments
 do not decode fails its job row with that rather than doing something
 else."""
 
@@ -10,10 +10,12 @@ import uuid
 
 from pydantic import BaseModel, ConfigDict, ValidationError
 
-from opennotebook import research
+from opennotebook import research, storage
 from opennotebook.ai import ledger
 from opennotebook.ai.errors import AiError
-from opennotebook.build import pipeline
+from opennotebook.build import pipeline, video
+from opennotebook.build.errors import Abandoned, BuildError
+from opennotebook.db.models import Session
 from opennotebook.db.session import sessionmaker
 from opennotebook.domain import refresh
 from opennotebook.domain import settings as st
@@ -25,6 +27,8 @@ log = logging.getLogger(__name__)
 
 PREP_TASK = "prep"
 RESEARCH_TASK = "research"
+RENDER_TASK = video.RENDER_TASK
+
 # Why a job whose arguments do not decode failed, as a person reads it; the
 # detail goes to the log.
 UNREADABLE = (
@@ -136,3 +140,79 @@ async def refresh_collection(**spec: object) -> None:
 async def _finish(progress: Progress, error: str | None) -> None:
     with contextlib.suppress(NoJob):
         await progress.finish(error)
+
+
+class RenderSpec(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    job_id: uuid.UUID
+    session_id: uuid.UUID
+    style: str
+
+
+@app.task(name=RENDER_TASK, pass_context=False)
+async def render_video(**spec: object) -> None:
+    """Make a video of a finished output. Its result goes on the output's
+    `video` field; the output's own state is never touched, so a failed
+    render leaves a ready output ready."""
+    try:
+        r = RenderSpec.model_validate(spec)
+    except ValidationError as e:
+        await _fail_unreadable(spec.get("job_id"), e)
+        return
+    progress = Progress(r.job_id, len(video.phases_of(r.style)))
+    try:
+        await progress.start()
+        async with sessionmaker()() as s:
+            o = await s.get(Session, r.session_id)
+            if o is None:
+                raise Abandoned(r.session_id)
+            owner, cid = o.owner_id, o.collection_id
+            values = await st.values(s, owner)
+            models = video.Models(
+                write=str(values[st.VIDEO_MODEL_KEY]),
+                check=str(values[st.VIDEO_CHECK_MODEL_KEY]),
+                escalate=str(values[st.VIDEO_ESCALATE_MODEL_KEY]),
+            )
+        async with ledger.spending(
+            owner, "video", collection_id=cid, session_id=r.session_id, job_id=r.job_id
+        ) as spend:
+            done = await video.render(
+                r.session_id, r.style, progress.phase, progress.phase_done, models
+            )
+        done["spent_usd"] = float(spend.total_usd)
+        done["spent_known"] = spend.known
+        await video.set_state(r.session_id, r.style, **done)
+    except NoJob, Abandoned:
+        # The output was deleted, and its job row with it. Its delete removed
+        # its files when it happened; a render that wrote after that removes
+        # its own, or they would be kept forever.
+        if await video.gone(r.session_id):
+            await asyncio.to_thread(storage.remove_tree, video.video_dir(r.session_id))
+        return
+    except asyncio.CancelledError:
+        with contextlib.suppress(Abandoned):
+            await asyncio.shield(
+                video.set_state(r.session_id, r.style, state="failed", failure=STOPPED)
+            )
+        await asyncio.shield(progress.cancelled())
+        raise
+    except Exception as e:
+        if isinstance(e, BuildError | AiError):
+            log.info("video of %s failed: %s", r.session_id, e)
+            sentence = e.sentence
+        else:
+            log.exception("video of %s failed", r.session_id)
+            sentence = SERVER_FAULT
+        try:
+            await video.set_state(r.session_id, r.style, state="failed", failure=sentence)
+        except Abandoned:
+            return
+        # A build failure names what failed; anything else is said by its
+        # kind only, since its message can carry the server's own paths.
+        await _finish(progress, str(e) if isinstance(e, BuildError) else type(e).__name__)
+        return
+    await _finish(progress, None)
+
+
+STOPPED = "The video was stopped before it was finished. Make it again to start over."

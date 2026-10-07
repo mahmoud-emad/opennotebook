@@ -12,22 +12,33 @@ own row says it is, and a slide is under the deck its `slide_ref` names, each
 part a plain name; the files volume then refuses anything outside itself.
 """
 
+import asyncio
 import hashlib
-import re
-import struct
+import logging
 import uuid
 from collections.abc import Sequence
+from pathlib import Path
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Header, Query, Response
+from fastapi.responses import FileResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.responses import MalformedRangeHeader
 
 from opennotebook import storage
-from opennotebook.api.deps import Db, Me
+from opennotebook.api.deps import SANDBOXED, Db, Me
+from opennotebook.build import wav
+from opennotebook.build.errors import NotWav
+from opennotebook.build.slides import render_of as render_of
+from opennotebook.build.wav import gap_before as gap_before
+from opennotebook.build.wav import pcm_of as pcm_of
 from opennotebook.db.models import Session
 from opennotebook.domain import shares
+from opennotebook.domain.sessions import Part
 from opennotebook.errors import Problem, not_found
+
+log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api", tags=["media"])
 
@@ -35,14 +46,6 @@ router = APIRouter(prefix="/api", tags=["media"])
 # writes a new output rather than new bytes under the old one. An hour is the
 # number the Rust server chose, and it bounds a Retry that reuses an id.
 CACHE = "private, max-age=3600"
-
-# Silence in front of a line in the episode: when the other speaker answers,
-# when the same one goes on, and when a new chapter starts. People leave about
-# 200 ms between turns in conversation (Stivers et al., 2009); a chapter is a
-# breath longer.
-GAP_TURN_MS = 220
-GAP_SAME_MS = 320
-GAP_CHAPTER_MS = 650
 
 WAV: dict[int | str, dict[str, Any]] = {
     200: {"content": {"audio/wav": {}}, "description": "A WAV file"}
@@ -91,19 +94,32 @@ def _int(v: Any) -> int:
     return v if isinstance(v, int) else 0
 
 
+MISSING_AUDIO = (
+    "This output's audio is missing from the studio's files. Make the output again to record it."
+)
+
+
 def _bytes(rel: str) -> bytes:
     """A file the output's row names, or a sentence saying it is missing."""
     try:
         return storage.read(rel)
     except (OSError, ValueError) as e:
-        raise Problem(
-            500,
-            "This output's audio is missing from the studio's files. "
-            "Make the output again to record it.",
-        ) from e
+        raise Problem(500, MISSING_AUDIO) from e
 
 
-def _audio_of(o: Session, line_id: str) -> bytes:
+async def _file(rel: str) -> Path:
+    """Where a file the output's row names is, checked to be there, or a
+    sentence saying it is missing."""
+    try:
+        path = storage.local_path(rel)
+    except ValueError as e:
+        raise Problem(500, MISSING_AUDIO) from e
+    if not await asyncio.to_thread(path.is_file):
+        raise Problem(500, MISSING_AUDIO)
+    return path
+
+
+def _audio_path(o: Session, line_id: str) -> str:
     line = next(
         (ln for p in _slides(o) for ln in _lines(p) if ln.get("line_id") == line_id),
         None,
@@ -119,119 +135,60 @@ def _audio_of(o: Session, line_id: str) -> bytes:
             "This part has no audio yet: the output is still being made. "
             "Wait for it to finish, then press play again.",
         )
-    return _bytes(path)
+    return path
 
 
 # ── a line ────────────────────────────────────────────────────────────────────
 
-RANGE = re.compile(r"^bytes=(\d*)-(\d*)$")
+
+class Ranged(FileResponse):
+    """A file sent from disk as it is read, whole or in the byte ranges asked
+    for: a browser seeks in audio with ranges, and some will not seek at all
+    without them. A range in a unit other than bytes, or one that cannot be
+    read, is ignored and the whole file sent, as HTTP says it may be."""
+
+    @classmethod
+    def _parse_range_header(cls, http_range: str, file_size: int) -> list[tuple[int, int]]:
+        try:
+            return super()._parse_range_header(http_range, file_size)
+        except MalformedRangeHeader:
+            return []
 
 
-def _ranged(body: bytes, media_type: str, range_: str | None, headers: dict[str, str]) -> Response:
-    """The whole body, or the one byte range asked for: a browser seeks in
-    audio with ranges, and some will not seek at all without them."""
-    headers = {**headers, "Accept-Ranges": "bytes"}
-    m = RANGE.match(range_.strip()) if range_ else None
-    if m is None or not body or (m.group(1) == "" and m.group(2) == ""):
-        return Response(body, media_type=media_type, headers=headers)
-    n = len(body)
-    if m.group(1) == "":
-        start, end = max(0, n - int(m.group(2))), n - 1
-    else:
-        start = int(m.group(1))
-        end = min(int(m.group(2)), n - 1) if m.group(2) else n - 1
-    if start >= n or end < start:
-        return Response(status_code=416, headers={**headers, "Content-Range": f"bytes */{n}"})
-    headers["Content-Range"] = f"bytes {start}-{end}/{n}"
-    return Response(body[start : end + 1], status_code=206, media_type=media_type, headers=headers)
-
-
-def line_response(o: Session, line_id: str, range_: str | None) -> Response:
-    return _ranged(_audio_of(o, line_id), "audio/wav", range_, {"Cache-Control": CACHE})
-
-
-RangeHeader = Annotated[str | None, Header(alias="Range", include_in_schema=False)]
+async def line_response(o: Session, line_id: str) -> Response:
+    # Only the path is read here; the bytes are sent once the request's
+    # transaction has ended.
+    path = await _file(_audio_path(o, line_id))
+    return Ranged(path, media_type="audio/wav", headers={"Cache-Control": CACHE})
 
 
 @router.get("/sessions/{sid}/audio/{line_id}", response_class=Response, responses=WAV)
-async def line_audio(
-    sid: uuid.UUID, line_id: str, s: Db, me: Me, range_: RangeHeader = None
-) -> Response:
+async def line_audio(sid: uuid.UUID, line_id: str, s: Db, me: Me) -> Response:
     """One narration line's audio, as the player plays it."""
-    return line_response(await _owned(s, me.id, sid), line_id, range_)
+    return await line_response(await _owned(s, me.id, sid), line_id)
 
 
 @router.get(
     "/shares/{share_id}/sessions/{sid}/audio/{line_id}", response_class=Response, responses=WAV
 )
 async def shared_line_audio(
-    share_id: uuid.UUID, sid: uuid.UUID, line_id: str, s: Db, me: Me, range_: RangeHeader = None
+    share_id: uuid.UUID, sid: uuid.UUID, line_id: str, s: Db, me: Me
 ) -> Response:
     """One narration line's audio, of a deck or audio overview a share
     includes."""
-    return line_response(await shares.output_of(s, share_id, Session, sid), line_id, range_)
+    return await line_response(await shares.output_of(s, share_id, Session, sid), line_id)
 
 
 # ── the episode ───────────────────────────────────────────────────────────────
 
 
-def gap_before(first_of_chapter: bool, same_speaker: bool) -> int:
-    """The pause in front of a line: a new chapter, the same speaker going
-    on, or the other speaker answering."""
-    if first_of_chapter:
-        return GAP_CHAPTER_MS
-    return GAP_SAME_MS if same_speaker else GAP_TURN_MS
-
-
-def pcm_of(data: bytes) -> tuple[int, int, int, bytes] | None:
-    """(channels, sample rate, bits per sample, PCM bytes) of a PCM WAV. The
-    chunks are walked, not assumed at fixed offsets: a WAV may carry `LIST`
-    or `fact` before `data`."""
-    if len(data) < 12 or data[0:4] != b"RIFF" or data[8:12] != b"WAVE":
-        return None
-    fmt: tuple[int, int, int, int] | None = None
-    at = 12
-    while at + 8 <= len(data):
-        cid = data[at : at + 4]
-        size = struct.unpack_from("<I", data, at + 4)[0]
-        body = at + 8
-        if cid == b"fmt " and body + 16 <= len(data):
-            tag, channels, rate = struct.unpack_from("<HHI", data, body)
-            bits = struct.unpack_from("<H", data, body + 14)[0]
-            fmt = (tag, channels, rate, bits)
-        elif cid == b"data":
-            if fmt is None or fmt[0] != 1:
-                return None
-            return fmt[1], fmt[2], fmt[3], data[body : min(body + size, len(data))]
-        at = body + size + (size & 1)
-    return None
-
-
 def join(clips: Sequence[tuple[str, bytes, int]]) -> bytes:
-    """Several WAVs as one, each with its own silence in front of it; the
-    first clip's gap is ignored. Every clip must share the first one's format,
-    or the episode would play part of itself at the wrong speed."""
-    fmt: tuple[int, int, int] | None = None
-    out = bytearray()
-    for k, (name, data, gap_ms) in enumerate(clips):
-        pcm = pcm_of(data)
-        if pcm is None:
-            raise ValueError(f"{name} is not a PCM WAV")
-        if fmt is None:
-            fmt = pcm[:3]
-        elif fmt != pcm[:3]:
-            raise ValueError(f"{name} has a different format from the first clip")
-        channels, rate, bits = fmt
-        if k > 0:
-            out += bytes(rate * gap_ms // 1000 * channels * (bits // 8))
-        out += pcm[3]
-    if fmt is None:
-        raise ValueError("there are no clips to join")
-    channels, rate, bits = fmt
-    block = channels * (bits // 8)
-    head = b"RIFF" + struct.pack("<I", 36 + len(out)) + b"WAVEfmt "
-    head += struct.pack("<IHHIIHH", 16, 1, channels, rate, rate * block, block, bits)
-    return head + b"data" + struct.pack("<I", len(out)) + bytes(out)
+    """Several WAVs as one, each with its own silence in front of it: the
+    build's join (`wav.join`), its refusal as a `ValueError` naming why."""
+    try:
+        return wav.join(list(clips))
+    except NotWav as e:
+        raise ValueError(str(e)) from e
 
 
 def file_name_of(title: str) -> str:
@@ -242,35 +199,33 @@ def file_name_of(title: str) -> str:
 
 
 def episode_response(o: Session) -> Response:
-    clips: list[tuple[str, bytes, int]] = []
-    prev: str | None = None
-    for ci, part in enumerate(_slides(o)):
-        for li, line in enumerate(_lines(part)):
-            line_id = str(line.get("line_id", ""))
-            path = line.get("audio_path")
-            if not isinstance(path, str) or not path:
-                raise Problem(
-                    404,
-                    "The narration is not recorded yet. "
-                    "Wait for the output to finish, then download it again.",
-                )
-            speaker = str(line.get("speaker_id", ""))
-            clips.append((line_id, _bytes(path), gap_before(ci > 0 and li == 0, prev == speaker)))
-            prev = speaker
-    if not clips:
-        raise Problem(404, "This output has no narration to download. Make it again to record one.")
+    # The episode's plan is the build's (`wav.episode_plan`), so the pauses
+    # here are the ones a video of this output is timed on.
+    parts = [Part.of_json(p) for p in _slides(o)]
     try:
-        wav = join(clips)
+        plan = wav.episode_plan(parts)
     except ValueError as e:
         raise Problem(
+            404,
+            "The narration is not recorded yet. "
+            "Wait for the output to finish, then download it again.",
+        ) from e
+    if not plan:
+        raise Problem(404, "This output has no narration to download. Make it again to record one.")
+    try:
+        wav_bytes = join([(line_id, _bytes(path), gap) for line_id, path, gap in plan])
+    except ValueError as e:
+        log.warning("the episode of %s could not be joined: %s", o.id, e)
+        raise Problem(
             500,
-            f"The episode could not be put together: {e}. Make the output again to re-record it.",
+            "The episode could not be put together: its recorded lines do not fit together. "
+            "Make the output again to re-record it.",
         ) from e
     # Kept to ASCII: a header value is Latin-1, and a title in another script
     # would otherwise fail the whole download.
     name = file_name_of(file_name_of(o.title).encode("ascii", "ignore").decode())
     return Response(
-        wav,
+        wav_bytes,
         media_type="audio/wav",
         headers={
             "Content-Disposition": f'attachment; filename="{name}.wav"',
@@ -283,18 +238,18 @@ def episode_response(o: Session) -> Response:
 async def episode(sid: uuid.UUID, s: Db, me: Me) -> Response:
     """Every line, in order, as one WAV with natural pauses between them: an
     audio overview to download."""
-    return episode_response(await _owned(s, me.id, sid))
+    # Reading and joining every line is file work: off the event loop.
+    return await asyncio.to_thread(episode_response, await _owned(s, me.id, sid))
 
 
 @router.get("/shares/{share_id}/sessions/{sid}/episode", response_class=Response, responses=WAV)
 async def shared_episode(share_id: uuid.UUID, sid: uuid.UUID, s: Db, me: Me) -> Response:
     """The whole episode of an audio overview a share includes."""
-    return episode_response(await shares.output_of(s, share_id, Session, sid))
+    o = await shares.output_of(s, share_id, Session, sid)
+    return await asyncio.to_thread(episode_response, o)
 
 
 # ── a slide ───────────────────────────────────────────────────────────────────
-
-PLAIN = re.compile(r"^[^/\\]+$")
 
 
 def etag_for(body: bytes) -> str:
@@ -338,33 +293,7 @@ def thumb_placeholder(why: str) -> Response:
         'background:#0d1219;color:#8b98a9;font:34px ui-sans-serif,system-ui,sans-serif">'
         f"{safe}</div>"
     )
-    return Response(html, media_type="text/html; charset=utf-8")
-
-
-def render_of(slide_ref: Any) -> tuple[str, bytes] | None:
-    """A slide's render on the files volume, with its type: the deck's own
-    `<presentation>/<slide>.html`, or an older deck's `output/slide.html` or
-    `output/slide.png`. None when there is none or the ref is not three plain
-    names."""
-    if not isinstance(slide_ref, dict):
-        return None
-    parts = [slide_ref.get(k) for k in ("collection", "presentation", "slide")]  # pyright: ignore[reportUnknownMemberType]
-    names = [p for p in parts if isinstance(p, str) and PLAIN.match(p) and ".." not in p]
-    if len(names) != 3:
-        return None
-    deck, pres, slide = names
-    base = f"decks/{deck}/{pres}"
-    for rel, kind in (
-        (f"{base}/{slide}.html", "text/html; charset=utf-8"),
-        (f"{base}/{slide}/output/slide.html", "text/html; charset=utf-8"),
-        (f"{base}/{slide}/output/slide.png", "image/png"),
-    ):
-        try:
-            if storage.exists(rel):
-                return kind, storage.read(rel)
-        except OSError, ValueError:
-            continue
-    return None
+    return Response(html, media_type="text/html; charset=utf-8", headers=SANDBOXED)
 
 
 def slide_response(o: Session, ordinal: int, thumb: bool, if_none_match: str | None) -> Response:
@@ -389,6 +318,8 @@ def slide_response(o: Session, ordinal: int, thumb: bool, if_none_match: str | N
         body = strip_scripts(body.decode("utf-8", "replace")).encode()
     etag = etag_for(body)
     headers = {"ETag": etag, "Cache-Control": CACHE}
+    if kind.startswith("text/html"):
+        headers.update(SANDBOXED)
     if fresh(if_none_match, etag):
         return Response(status_code=304, headers=headers)
     return Response(body, media_type=kind, headers=headers)
@@ -414,7 +345,9 @@ async def slide(
 ) -> Response:
     """One slide of a deck as its own HTML document (or PNG), with an ETag so
     a browser that holds it is answered 304."""
-    return slide_response(await _owned(s, me.id, sid), ordinal, _thumb(thumb), inm)
+    o = await _owned(s, me.id, sid)
+    # Reading the render is file work: off the event loop.
+    return await asyncio.to_thread(slide_response, o, ordinal, _thumb(thumb), inm)
 
 
 @router.get(
@@ -431,4 +364,4 @@ async def shared_slide(
 ) -> Response:
     """One slide of a deck a share includes."""
     o = await shares.output_of(s, share_id, Session, sid)
-    return slide_response(o, ordinal, _thumb(thumb), inm)
+    return await asyncio.to_thread(slide_response, o, ordinal, _thumb(thumb), inm)

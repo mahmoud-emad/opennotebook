@@ -28,6 +28,12 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 
 # ── run: the slim image, the code and its venv, a user that is not root ──────
 FROM python:3.14.8-slim-trixie
+# Videos (docs/video-overview-spec.md): ffmpeg encodes them, as a program of
+# its own and never linked in (its x264 is GPL); skia draws a whiteboard's
+# frames on the CPU but loads libEGL and libGL all the same.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ffmpeg libegl1 libgl1 \
+    && rm -rf /var/lib/apt/lists/*
 RUN useradd --system --uid 10001 --home-dir /app opennotebook \
     && mkdir -p /data/files \
     && chown opennotebook /data/files

@@ -8,6 +8,7 @@ batches run side by side.
 """
 
 import asyncio
+import base64
 import json
 import re
 from pathlib import Path
@@ -71,6 +72,16 @@ class Studio:
         # Steps that answer with this HTTP status instead.
         self.fail: dict[str, int] = {}
         self.slide_docs = True
+        # A whiteboard: whether the plan is usable, and how many answers a
+        # scene gets wrong before a right one (a large number: never right).
+        self.plan_ok = True
+        self.scene_wrong = 0
+        # The scene check: how many of a scene's checks fail before one
+        # passes, and whether the checker answers at all.
+        self.check_fail = 0
+        self.check_down = False
+        self._checks: dict[str, int] = {}
+        self._scene_tries: dict[str, int] = {}
         self.running = 0
         self.most_at_once = 0
 
@@ -95,6 +106,16 @@ class Studio:
             return "edit"
         if "design presentation slides as HTML" in system:
             return "slides"
+        if system.startswith("You plan a whiteboard explainer video."):
+            return "video_plan"
+        if system.startswith("You draw one scene of a whiteboard explainer video."):
+            return "video_scene"
+        if system.startswith("You check one scene of a whiteboard explainer video"):
+            return "video_check"
+        if system.startswith("You are the teacher who will say this lesson on camera"):
+            return "video_presenter"
+        if system.startswith("You are the tutor beside a video lesson"):
+            return "video_explain"
         if system.startswith("You plan web research"):
             return "research_plan"
         if system.startswith("You write a research report"):
@@ -160,6 +181,45 @@ class Studio:
                 if self.slide_docs
                 else "no slides today"
             )
+        elif kind == "video_plan":
+            ids = re.findall(r"^(\S+) \(\d+\.\d s\):", user, re.M)
+            scenes = [ids[i : i + 2] for i in range(0, len(ids), 2)]
+            if not self.plan_ok:
+                scenes = [ids[1:]]
+            text = json.dumps(
+                {
+                    "scenes": [
+                        {"lines": sc, "layout": "flow", "title": f"Scene {i}",
+                         "brief": "a server and a box", "concepts": ["server", "kernel"]}
+                        for i, sc in enumerate(scenes)
+                    ]
+                }
+            )  # fmt: skip
+        elif kind == "video_scene":
+            text = self._scene(user)
+        elif kind == "video_check":
+            text = self._check(body)
+        elif kind == "video_presenter":
+            # Each part's lines as one paragraph: the same words, said whole.
+            blocks = re.split(r"^## Part (\d+):.*$", user, flags=re.M)[1:]
+            titles = re.findall(r"^## Part \d+: (.*)$", user, flags=re.M)
+            text = json.dumps(
+                {
+                    "opening": ["Here is what this covers, part by part."],
+                    "parts": [
+                        {"ordinal": int(n), "paragraphs": [" ".join(b.strip().splitlines())]}
+                        for n, b in zip(blocks[::2], blocks[1::2], strict=True)
+                    ],
+                    "closing": ["That is the whole idea. Thanks for watching."],
+                    "about": "What the kernel does.",
+                    "agenda": titles,
+                    "takeaways": ["The kernel manages memory."],
+                }
+            )
+        elif kind == "video_explain":
+            # A citation of a passage and one of none; a moment in the video
+            # and one past its end.
+            text = "The kernel manages memory [1][9]. It was said at [0:01], not at [99:00]."
         elif kind == "research_plan":
             text = "first query\nsecond query"
         elif kind == "search":
@@ -170,6 +230,53 @@ class Studio:
         else:
             text = "ok"
         return kind, {"text": text, "extra": extra}
+
+    def _check(self, body: dict[str, Any]) -> str:
+        if self.check_down:
+            return "I cannot look at pictures today."
+        msgs = body.get("messages") or []
+        user = next(m["content"] for m in msgs if m["role"] == "user")
+        text = next(p["text"] for p in user if p.get("type") == "text")
+        assert any(p.get("type") == "image_url" for p in user), "the board is sent as a picture"
+        claims = re.findall(r"^- (.+)$", text, re.M)
+        key = text.split("\n")[1]
+        n = self._checks[key] = self._checks.get(key, 0) + 1
+        ok = n > self.check_fail
+        return json.dumps(
+            {
+                "claims": [{"claim": c, "supported": ok, "why": "" if ok else "not said"}
+                           for c in claims],
+                "recognizable": True, "missing": [], "unreadable": [],
+                "matches_narration": True, "fixes": [] if ok else ["say only what is said"],
+            }
+        )  # fmt: skip
+
+    def _scene(self, user: str) -> str:
+        line = re.findall(r"^(\S+): \[0\]", user, re.M)[0]
+        tries = self._scene_tries[line] = self._scene_tries.get(line, 0) + 1
+        target = "box" if tries > self.scene_wrong else "nowhere"
+        icon = (re.findall(r"^- server: (\S+?)[,\n]", user + "\n", re.M) or ["server"])[0]
+        # Labels from the narration's own words, as the rules ask.
+        said = [w.strip(".,;:!?\"'") for w in re.findall(rf"^{re.escape(line)}: (.*)$", user,
+                re.M)[0].split()]  # fmt: skip
+        words = [re.sub(r"^\[\d+\]", "", w) for w in said]
+        words = [w for w in words if len(w) > 3] or ["thing", "other"]
+        first, second = words[0], words[min(1, len(words) - 1)]
+        return json.dumps(
+            {
+                "title": "",
+                "layout": "flow",
+                "elements": [
+                    {"id": "srv", "kind": "icon", "icon": icon, "at": "A2", "span": [2, 3],
+                     "label": first, "tone": "blue", "beat": {"line": line, "word": 0}},
+                    {"id": "box", "kind": "box", "at": "E2", "span": [2, 3], "label": second,
+                     "beat": {"line": line, "word": 1}},
+                    {"id": "a", "kind": "arrow", "from": "srv", "to": target,
+                     "beat": {"line": line, "word": 1}},
+                ],
+                "highlight": [{"target": "box", "beat": {"line": line, "word": 0}}],
+            }
+        )  # fmt: skip
 
     async def answer(self, request: httpx2.Request) -> httpx2.Response:
         if request.url.path.endswith("/models"):
@@ -206,14 +313,31 @@ class Voice:
     def __init__(self) -> None:
         self.said: list[dict[str, Any]] = []
         self.status = 200
+        # Like Speaches by default: no captioned route. True answers it as
+        # Kokoro-FastAPI does, every word timed.
+        self.timestamps = False
 
     def answer(self, request: httpx.Request) -> httpx.Response:
         body = json.loads(request.content)
+        captioned = request.url.path.endswith("/dev/captioned_speech")
+        if captioned and not self.timestamps:
+            return httpx.Response(404, json={"detail": "Not Found"})
         self.said.append(body)
         if self.status != 200:
             return httpx.Response(self.status, json={"detail": "Voice not found"})
-        frames = 24_000 * 60 * max(len(body["input"].split()), 1) // 1000
-        return httpx.Response(200, content=ramp_wav(24_000, 1, frames))
+        words = body["input"].split()
+        frames = 24_000 * 60 * max(len(words), 1) // 1000
+        audio = ramp_wav(24_000, 1, frames)
+        if not captioned:
+            return httpx.Response(200, content=audio)
+        stamps = [
+            {"word": w, "start_time": i * 0.06, "end_time": (i + 1) * 0.06}
+            for i, w in enumerate(words)
+        ]
+        return httpx.Response(
+            200,
+            json={"audio": base64.b64encode(audio).decode(), "timestamps": stamps},
+        )
 
 
 def install(monkeypatch: pytest.MonkeyPatch, files: Path) -> tuple[Studio, Voice]:
@@ -233,4 +357,7 @@ def install(monkeypatch: pytest.MonkeyPatch, files: Path) -> tuple[Studio, Voice
         speech, "speech", lambda: speech.Speech("http://tts.test/v1", "", "kokoro", "", http=http)
     )
     monkeypatch.setattr(storage, "_root", lambda: files)
+    # Which servers lack timings is remembered per process; each test starts
+    # from not knowing.
+    monkeypatch.setattr(speech, "_UNTIMED", set[str]())
     return studio, voice

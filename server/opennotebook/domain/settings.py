@@ -81,6 +81,20 @@ NOTES_MODEL_DEFAULT = "google/gemini-2.5-flash-lite"
 SLIDE_MODEL_KEY = "OPENNOTEBOOK_SLIDE_MODEL"
 SLIDE_MODEL_DEFAULT = "anthropic/claude-haiku-4.5"
 
+# The model that plans a whiteboard video's scenes and writes each one as a
+# short description the studio draws (docs/video-overview-spec.md, 4.3-4.4).
+# Sonnet by judgement until the phase 0 bake-off measures the others.
+VIDEO_MODEL_KEY = "OPENNOTEBOOK_VIDEO_MODEL"
+VIDEO_MODEL_DEFAULT = "anthropic/claude-sonnet-5.5"
+# The model that checks each whiteboard scene before it is drawn: its claims
+# against the sources and its finished board as a picture, so it must read
+# images. And the stronger model a scene is written by once when repairs
+# have not fixed it (docs/video-overview-spec.md, section 4.7).
+VIDEO_CHECK_MODEL_KEY = "OPENNOTEBOOK_VIDEO_CHECK_MODEL"
+VIDEO_CHECK_MODEL_DEFAULT = "anthropic/claude-haiku-4.5"
+VIDEO_ESCALATE_MODEL_KEY = "OPENNOTEBOOK_VIDEO_ESCALATE_MODEL"
+VIDEO_ESCALATE_MODEL_DEFAULT = "anthropic/claude-opus-5.5"
+
 # Perplexity's Sonar does a real web search behind a chat completion and
 # returns the pages it found.
 SEARCH_MODEL_KEY = "OPENNOTEBOOK_SEARCH_MODEL"
@@ -94,6 +108,10 @@ AGENT_MODEL_DEFAULT = "google/gemini-2.5-flash-lite"
 
 type Pairs = tuple[tuple[str, str], ...]
 
+VIDEO_ESCALATE_MODELS: Pairs = (
+    ("anthropic/claude-opus-5.5", "Claude Opus 5.5"),
+    ("anthropic/claude-sonnet-5.5", "Claude Sonnet 5.5"),
+)
 SLIDE_MODELS: Pairs = (
     ("anthropic/claude-haiku-4.5", "Claude Haiku 4.5"),
     ("anthropic/claude-sonnet-5.5", "Claude Sonnet 5.5"),
@@ -548,6 +566,33 @@ CATALOGUE: tuple[Def, ...] = (
         "costs about twice as much as Haiku.",
         SLIDE_MODELS,
         SLIDE_MODEL_DEFAULT,
+        WRITING,
+    ),
+    _model(
+        VIDEO_MODEL_KEY,
+        "Whiteboard video model",
+        "Plans a whiteboard video's scenes and writes what each one draws. Haiku is about half "
+        "the price and draws simpler scenes.",
+        SLIDE_MODELS,
+        VIDEO_MODEL_DEFAULT,
+        WRITING,
+    ),
+    _model(
+        VIDEO_CHECK_MODEL_KEY,
+        "Whiteboard check model",
+        "Checks each scene's claims against the sources and looks at its finished board before "
+        "it is drawn. It must read images.",
+        SLIDE_MODELS,
+        VIDEO_CHECK_MODEL_DEFAULT,
+        WRITING,
+    ),
+    _model(
+        VIDEO_ESCALATE_MODEL_KEY,
+        "Whiteboard escalation model",
+        "Writes a scene once more when two repairs have not fixed it. Used for a scene or two a "
+        "video at most.",
+        VIDEO_ESCALATE_MODELS,
+        VIDEO_ESCALATE_MODEL_DEFAULT,
         WRITING,
     ),
     _model(
