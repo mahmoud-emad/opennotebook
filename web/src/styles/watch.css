@@ -76,9 +76,9 @@ body.watch-open { overflow:hidden; }
 
 /* Before it starts: one big play button over the video, as a poster has. */
 .watch-page .w-start { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); width:76px; height:76px;
-  display:grid; place-items:center; padding:0; border:0; border-radius:50%; background:rgba(17,24,39,.72);
-  color:#fff; font-size:34px; z-index:3; box-shadow:0 8px 28px rgba(0,0,0,.3); }
-.watch-page .w-start:hover { background:var(--accent); }
+  display:grid; place-items:center; padding:0 0 0 4px; border:0; border-radius:50%; background:var(--accent);
+  color:var(--st-on-primary, #fff); font-size:34px; z-index:3; box-shadow:0 8px 28px rgba(0,0,0,.35); }
+.watch-page .w-start:hover { filter:brightness(1.08); }
 
 /* Captions over the video, as the slides' player draws them (player.css,
    "#cap"): a phrase at a time, the words said so far bright, the word being
