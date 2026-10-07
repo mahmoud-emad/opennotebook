@@ -32,16 +32,35 @@ body.watch-open { overflow:hidden; }
   border-radius:var(--bs-border-radius-lg); box-shadow:var(--bs-box-shadow-lg); }
 .watch-page .w-err { color:var(--bs-danger-text-emphasis); font-size:13px; }
 
-/* The chapters, each as wide as it is long: YouTube's chapter bar, with names. */
-.watch-page .w-strip { display:flex; gap:3px; }
-.watch-page .w-seg { flex:1 1 0; min-width:0; display:flex; flex-direction:column; gap:6px; padding:4px 0;
-  background:none; border:0; cursor:pointer; text-align:left; color:var(--dim); }
-.watch-page .w-seg-bar { position:relative; display:block; height:5px; border-radius:3px; overflow:hidden;
-  background:var(--bs-border-color); transition:height .12s; }
-.watch-page .w-seg:hover .w-seg-bar { height:8px; }
-.watch-page .w-seg-fill { position:absolute; inset:0 auto 0 0; background:var(--accent); }
-.watch-page .w-seg-t { font-size:11.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.watch-page .w-seg.on .w-seg-t { color:var(--em); font-weight:600; }
+/* The chapters: one slim track cut into a segment per chapter, each as long
+   as its chapter, filling as it plays; a hover lifts it and names it. The
+   chapter playing is named once, under the track. */
+.watch-page .w-chapters { display:flex; flex-direction:column; gap:8px; }
+.watch-page .w-track { display:flex; gap:3px; height:14px; align-items:center; }
+.watch-page .w-seg { position:relative; flex:1 1 0; min-width:6px; height:6px; padding:0; margin:0; border:0;
+  border-radius:3px; background:var(--bs-border-color); overflow:visible; cursor:pointer; transition:height .12s; }
+.watch-page .w-seg:hover, .watch-page .w-seg:focus-visible { height:10px; }
+.watch-page .w-seg-fill { position:absolute; inset:0 auto 0 0; border-radius:3px; background:var(--accent); }
+.watch-page .w-seg-tip { position:absolute; bottom:calc(100% + 10px); left:50%; transform:translateX(-50%);
+  width:max-content; max-width:280px; padding:5px 9px; border-radius:var(--bs-border-radius);
+  background:rgba(17,24,39,.94); color:#fff; font-size:12.5px; line-height:1.35; text-align:left; white-space:normal;
+  pointer-events:none; opacity:0; transition:opacity .12s; z-index:5; }
+.watch-page .w-seg-tip b { font-variant-numeric:tabular-nums; color:#93c5fd; margin-right:4px; }
+.watch-page .w-seg:hover .w-seg-tip, .watch-page .w-seg:focus-visible .w-seg-tip { opacity:1; }
+.watch-page .w-seg:first-child .w-seg-tip { left:0; transform:none; }
+.watch-page .w-seg:last-child .w-seg-tip { left:auto; right:0; transform:none; }
+.watch-page .w-under { display:flex; align-items:center; gap:10px; min-height:32px; min-width:0; }
+.watch-page .w-chap-now { display:flex; align-items:baseline; gap:8px; min-width:0; }
+.watch-page .w-chap-n { flex:0 0 auto; font-size:11.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--dim); }
+.watch-page .w-chap-t { font-size:14px; font-weight:600; color:var(--em); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.watch-page .w-clock { flex:0 0 auto; font-size:12.5px; color:var(--dim); font-variant-numeric:tabular-nums; }
+.watch-page .w-cc { display:grid; place-items:center; width:34px; height:30px; padding:0; border-radius:var(--bs-border-radius);
+  border:1px solid var(--bs-border-color); background:transparent; color:var(--dim); font-size:17px; }
+.watch-page .w-cc.on { color:var(--st-on-primary); background:var(--accent); border-color:var(--accent); }
+
+/* Captions over the video, as the slides' player draws them. */
+.watch-page .w-video::cue { background:rgba(0,0,0,.78); color:#fff; font-size:clamp(14px,1.45vw,20px); line-height:1.45;
+  font-family:var(--bs-font-sans-serif); }
 
 /* ── the rail ────────────────────────────────────────────────────────────── */
 .watch-page .w-rail { display:flex; flex-direction:column; min-height:0; background:var(--panel);
@@ -122,7 +141,7 @@ body.watch-open { overflow:hidden; }
 
 @media (prefers-reduced-motion: reduce) {
   .watch-page .w-typing i { animation:none; }
-  .watch-page .w-seg-bar { transition:none; }
+  .watch-page .w-seg, .watch-page .w-seg-tip { transition:none; }
 }
 /* A phone: the video first, the rail under it, the page scrolls. */
 @media (max-width:900px) {
@@ -130,7 +149,6 @@ body.watch-open { overflow:hidden; }
   .watch-page { grid-template-columns:minmax(0,1fr); grid-template-rows:auto auto minmax(480px,1fr); height:auto; min-height:100dvh; }
   .watch-page .w-left { padding:0 0 10px; }
   .watch-page .w-video { border-radius:0; box-shadow:none; }
-  .watch-page .w-strip { padding:0 16px; }
-  .watch-page .w-seg-t { display:none; }
+  .watch-page .w-chapters { padding:0 16px; }
   .watch-page .w-rail { border-left:0; border-top:1px solid var(--line); }
 }

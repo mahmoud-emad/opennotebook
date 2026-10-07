@@ -58,6 +58,22 @@ export function explainAt(
   return call<Rest.ExplainOut>("POST", `/sessions/${enc(sid)}/video/explain`, body);
 }
 
+function captionsOf(sid: string, style: VideoStyle, share: string | null): string {
+  return `${apiBase()}${base(sid, share)}/video/captions?style=${style}`;
+}
+
+// Captions over the video, on unless turned off in this browser: the voice
+// is the content, and a room is not always quiet (as the slides' player).
+const CAPTIONS_KEY = "watch-captions";
+
+function captionsWanted(): boolean {
+  try {
+    return storage()?.getItem(CAPTIONS_KEY) !== "off";
+  } catch {
+    return true;
+  }
+}
+
 function mediaUrl(sid: string, style: VideoStyle, share: string | null, download = false): string {
   return `${apiBase()}${base(sid, share)}/video?style=${style}${download ? "&download=true" : ""}`;
 }
@@ -145,6 +161,30 @@ export function WatchPage({ sid, style, share }: { sid: string; style: VideoStyl
   const [asking, setAsking] = useState(false);
   // The video was playing when a question paused it: Resume is offered.
   const [paused, setPaused] = useState(false);
+  const [captions, setCaptionsState] = useState(captionsWanted);
+  const setCaptions = useCallback((on: boolean) => {
+    setCaptionsState(on);
+    try {
+      storage()?.setItem(CAPTIONS_KEY, on ? "on" : "off");
+    } catch {
+      // Kept for this visit only.
+    }
+  }, []);
+  // The video's own captions track, shown or hidden: in full screen too.
+  const showCaptions = useCallback(() => {
+    const track = videoRef.current?.textTracks?.[0];
+    if (track) track.mode = captions ? "showing" : "hidden";
+  }, [captions]);
+  useEffect(showCaptions, [showCaptions]);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const el = e.target as HTMLElement | null;
+      if (el && (el.tagName === "TEXTAREA" || el.tagName === "INPUT" || el.isContentEditable)) return;
+      if (e.key === "c" || e.key === "C") setCaptions(!captions);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [captions, setCaptions]);
 
   useEffect(() => {
     document.body.classList.add("watch-open");
@@ -236,10 +276,20 @@ export function WatchPage({ sid, style, share }: { sid: string; style: VideoStyl
               setPaused(false);
             }}
             onPause={() => setPlaying(false)}
-          />
+            onLoadedMetadata={showCaptions}
+          >
+            <track kind="captions" src={captionsOf(sid, style, share)} srcLang="en" label="Captions"
+              default={captions} onLoad={showCaptions} />
+          </video>
         </div>
-        {chapters.length > 0 && duration > 0 && (
-          <Strip chapters={chapters} duration={duration} t={t} on={chapterOn} seek={seek} />
+        {chapters.length > 0 && duration > 0 ? (
+          <Strip chapters={chapters} duration={duration} t={t} on={chapterOn} seek={seek}
+            captions={captions} setCaptions={setCaptions} />
+        ) : (
+          <div className="w-under">
+            <span className="grow" />
+            <CaptionsButton on={captions} set={setCaptions} />
+          </div>
         )}
         {loadErr !== "" && (
           <div className="w-err" role="alert">
@@ -300,32 +350,58 @@ function TabButton({ id, tab, setTab, icon, children }: {
   );
 }
 
-/** The chapters as a strip under the video, each as wide as it is long:
- * how far the video is, and a click to jump to one. */
-function Strip({ chapters, duration, t, on, seek }: {
+/** The chapters under the video: one track cut into a segment per chapter,
+ * each as long as its chapter and filling as it plays (a hover names it, a
+ * click goes there), with the chapter playing named once beneath it. Never
+ * every title at once: eight titles in a row's width is a pile of words. */
+function Strip({ chapters, duration, t, on, seek, captions, setCaptions }: {
   chapters: Script["chapters"];
   duration: number;
   t: number;
   on: number;
   seek: (ms: number) => void;
+  captions: boolean;
+  setCaptions: (on: boolean) => void;
 }) {
+  const now = chapters[on];
   return (
-    <div className="w-strip" role="group" aria-label="Chapters">
-      {chapters.map((c, i) => {
-        const len = Math.max(c.end_ms - c.start_ms, 1);
-        const done = Math.min(Math.max((t - c.start_ms) / len, 0), 1);
-        return (
-          <button key={i} className={i === on ? "w-seg on" : "w-seg"} style={{ flexGrow: len / duration }}
-            title={`${clock(c.start_ms)} · ${c.title}`} aria-label={`${c.title}, at ${clock(c.start_ms)}`}
-            onClick={() => seek(c.start_ms)}>
-            <span className="w-seg-bar">
+    <div className="w-chapters">
+      <div className="w-track" role="group" aria-label="Chapters">
+        {chapters.map((c, i) => {
+          const len = Math.max(c.end_ms - c.start_ms, 1);
+          const done = Math.min(Math.max((t - c.start_ms) / len, 0), 1);
+          return (
+            <button key={i} className={i === on ? "w-seg on" : "w-seg"} style={{ flexGrow: len }}
+              aria-label={`${c.title}, at ${clock(c.start_ms)}`} onClick={() => seek(c.start_ms)}>
               <span className="w-seg-fill" style={{ width: `${done * 100}%` }} />
-            </span>
-            <span className="w-seg-t">{c.title}</span>
-          </button>
-        );
-      })}
+              <span className="w-seg-tip" aria-hidden="true">
+                <b>{clock(c.start_ms)}</b> {c.title}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+      <div className="w-under">
+        {now && (
+          <span className="w-chap-now">
+            <span className="w-chap-n">{`Chapter ${on + 1} of ${chapters.length}`}</span>
+            <span className="w-chap-t">{now.title}</span>
+          </span>
+        )}
+        <span className="grow" />
+        <span className="w-clock">{`${clock(t)} / ${clock(duration)}`}</span>
+        <CaptionsButton on={captions} set={setCaptions} />
+      </div>
     </div>
+  );
+}
+
+function CaptionsButton({ on, set }: { on: boolean; set: (on: boolean) => void }) {
+  return (
+    <button className={on ? "w-cc on" : "w-cc"} aria-pressed={on} title="Captions (C)"
+      aria-label="Captions" onClick={() => set(!on)}>
+      <Icon name="badge-cc" />
+    </button>
   );
 }
 

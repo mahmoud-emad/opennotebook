@@ -82,4 +82,21 @@ describe("the watch page", () => {
     expect((fetch.mock.calls[0] as unknown as [string])[0]).toMatch(/\/api\/shares\/h2\/sessions\/s1\/video\/script/);
     expect(document.querySelector("video")!.getAttribute("src")).toMatch(/\/shares\/h2\/sessions\/s1\/video\?style=slides$/);
   });
+
+  it("names only the chapter playing under the track, and turns captions on and off", async () => {
+    vi.stubGlobal("fetch", vi.fn(() => reply(200, SCRIPT)));
+    render(<WatchPage sid="s1" style="whiteboard" share={null} />);
+    expect(await screen.findByText("Chapter 1 of 2")).toBeTruthy();
+    // The other chapter's title is only in its hover tip, not on the page.
+    expect(document.querySelector(".w-chap-t")?.textContent).toBe("Light");
+    expect(document.querySelectorAll(".w-seg")).toHaveLength(2);
+    const cc = screen.getByRole("button", { name: "Captions" });
+    expect(cc.getAttribute("aria-pressed")).toBe("true");
+    expect(document.querySelector("track")?.getAttribute("src")).toMatch(/\/video\/captions\?style=whiteboard$/);
+    fireEvent.click(cc);
+    expect(cc.getAttribute("aria-pressed")).toBe("false");
+    expect(localStorage.getItem("watch-captions")).toBe("off");
+    fireEvent.keyDown(window, { key: "c" });
+    expect(cc.getAttribute("aria-pressed")).toBe("true");
+  });
 });
