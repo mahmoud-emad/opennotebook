@@ -717,6 +717,15 @@ A whiteboard video can now be made in a theme, as [plans/video-themes.md](plans/
 
 **Measured on lab01**, the vaccines session: Chalkboard 3:22, $0.35, 32/32 claims; Notebook 3:21, $0.34, 39/39; Blueprint 3:23, $0.27, 40/40.
 
+### 2026-10-07, illustrated themes
+
+Phase 4 of [plans/video-themes.md](plans/video-themes.md): **Watercolor, Anime, Heritage and Kawaii**. Each written scene gets a picture from an image model; the scene itself (plan, writing, grounding, claims check) is a drawn scene's, and only how it is shown changes.
+
+- **The picture** (`build/whiteboard/illustrate.py`): asked for by the theme's style, the scene's brief and its concepts, never its labels, with every kind of lettering forbidden and the bottom third kept calm. Through OpenRouter's chat completions with `modalities: ["image","text"]` and `image_config.aspect_ratio: "16:9"`; the AI client returns the pictures as `Completion.images`. The model is the setting `OPENNOTEBOOK_VIDEO_IMAGE_MODEL` (default Gemini 3.1 Flash Image; 2.5 Flash Image and 3 Pro Image offered).
+- **Checked** by the scene check model, given the picture: lettering of any kind, or anything the brief contradicts. A fault means one more try with the fault named; a second fault, or no picture, and the scene is drawn in the theme's drawn twin (Watercolor → Notebook, Anime → Whiteboard, Heritage → Retro Print, Kawaii → Paper-craft). The video state counts `illustrated` and `fallback` scenes.
+- **Shown** (`draw._illustrated_frames`): the picture fills the frame with a slow push-in (6 % over the scene, toward a point of its own), fading in from the paper; the scene's own words are set on paper cards in the calm band at its foot, each laid down on the word that names it, an arrow as the relation it asserts ("kernel runs processor"); the title on a card at the top. Nothing is drawn over the picture.
+- **Not yet seen with a real image model:** the studio's OpenRouter balance was below the $1 OpenRouter asks for before any image output. The code is tested end to end against the test model, which paints and checks pictures. The picker's thumbnails for these themes are stand-ins (a wash of the theme's inks under its cards) until real sample pictures are made.
+
 ## Appendix A. Scene JSON (draft)
 
 ```json

@@ -1,6 +1,6 @@
 # Plan: themes for video overviews
 
-Status: phases 0 to 3 done (2026-10-07), phase 4 (illustrated themes) to do. See the spec's amendment "themes".
+Status: phases 0 to 4 built (2026-10-07). Phase 4 is tested against the test model only, not yet a real image model (the account's balance was too low), and has no Custom style yet. See the spec's amendments "themes" and "illustrated themes".
 Read first: [video-overview-spec.md](../video-overview-spec.md) (how a video is made today), sections 4.4 to 4.9 and the amendments.
 
 ## 1. What and why
