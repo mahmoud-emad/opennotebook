@@ -6471,3 +6471,33 @@ export type MakeOverviewResponses = {
 };
 
 export type MakeOverviewResponse = MakeOverviewResponses[keyof MakeOverviewResponses];
+
+export type EstimateOverviewData = {
+    body: OverviewReq;
+    path: {
+        /**
+         * Cid
+         */
+        cid: string;
+    };
+    query?: never;
+    url: '/api/collections/{cid}/videos/estimate';
+};
+
+export type EstimateOverviewErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type EstimateOverviewError = EstimateOverviewErrors[keyof EstimateOverviewErrors];
+
+export type EstimateOverviewResponses = {
+    /**
+     * Successful Response
+     */
+    200: SessionEstimate;
+};
+
+export type EstimateOverviewResponse = EstimateOverviewResponses[keyof EstimateOverviewResponses];

@@ -625,6 +625,116 @@ def estimate(inp: Inputs, prices: dict[str, Price]) -> Estimate:
     return Estimate(lines, total, assumptions, total_chars)
 
 
+# ── a video overview's render ────────────────────────────────────────────────
+
+GROUP_VIDEO = "Making the video"
+
+# What a whiteboard render's model calls cost a part of its deck, in USD, low
+# / typical / high: the presenter's rewrite, the plan of scenes, and each
+# scene written, checked against the sources and repaired when a check fails.
+# Measured on five renders of a default-length overview (6 parts, 3 to 5
+# minutes, 8 to 13 scenes) on the default video models: $0.27, $0.34, $0.35,
+# $0.39 and $0.75, so $0.045 to $0.125 a part, about $0.06 a part typically.
+# Not priced call by call: how many scenes a part becomes, and how many need a
+# repair or the stronger model, is not known before it runs.
+WHITEBOARD_USD_PER_PART = (0.045, 0.06, 0.125)
+# Scenes a part becomes: 8 to 13 for the same six parts.
+SCENES_PER_PART = (1.3, 1.8, 2.2)
+# What a theme's family adds a scene, in USD. A drawn theme is drawn in
+# another paper, ink and hand by the same calls, so it adds nothing. An
+# illustrated one adds a picture a scene; reasoned, not measured.
+SCENE_USD_BY_FAMILY = {"drawn": 0.0, "illustrated": 0.04}
+
+# What to change to bring a whiteboard video under the limit.
+SHORTER_OR_SLIDES = "a shorter length or the Slides style"
+
+
+@dataclass(frozen=True)
+class Render:
+    """A video overview's render, priced on top of the deck it is made from."""
+
+    # "slides" or "whiteboard".
+    style: str
+    # A whiteboard's theme, as a person reads it, and its family.
+    theme: str = ""
+    family: str = "drawn"
+
+    @property
+    def fix(self) -> str:
+        """What to change to come under the spending limit."""
+        return SHORTER_OR_SLIDES if self.style == "whiteboard" else SHORTER
+
+
+def _scaled(per: tuple[float, float, float], n: float) -> tuple[float, float, float]:
+    return (per[0] * n, per[1] * n, per[2] * n)
+
+
+def render_lines(r: Render, parts: int, model: str) -> list[Line]:
+    """The render's steps for a deck of `parts`: none paid for slides, the
+    scenes' model calls for a whiteboard, and a theme's own cost a scene."""
+    if r.style != "whiteboard":
+        return [
+            free(
+                GROUP_VIDEO,
+                "Video",
+                "each slide on screen while it is narrated, with chapters and captions",
+                "ffmpeg · free",
+                0,
+            )
+        ]
+    scenes = Range(*(math.ceil(parts * k) for k in SCENES_PER_PART))
+    out = [
+        Line(
+            GROUP_VIDEO,
+            "Whiteboard scenes",
+            f"{parts} parts as about {scenes.typical} scenes: the presenter's script, a plan of "
+            "scenes, and each scene written, checked against your sources and repaired when a "
+            "check fails",
+            model,
+            SCRIPT_VIA,
+            # The script and the plan, then a write and a check a scene; at
+            # worst every scene repaired and checked again.
+            Range(2 + 2 * scenes.low, 2 + 2 * scenes.typical, 2 + 4 * scenes.high),
+            0,
+            Range.exact(0),
+            _scaled(WHITEBOARD_USD_PER_PART, parts),
+        )
+    ]
+    per_scene = SCENE_USD_BY_FAMILY.get(r.family, 0.0)
+    if per_scene > 0:
+        out.append(
+            Line(
+                GROUP_VIDEO,
+                "Illustrations",
+                f"a picture a scene, in the {r.theme} theme",
+                "",
+                SCRIPT_VIA,
+                scenes,
+                0,
+                Range.exact(0),
+                (per_scene * scenes.low, per_scene * scenes.typical, per_scene * scenes.high),
+            )
+        )
+    return out
+
+
+def with_render(e: Estimate, r: Render, parts: int, model: str) -> Estimate:
+    """A deck's estimate with its video's render added."""
+    lines = [*e.lines, *render_lines(r, parts, model)]
+    total = (
+        sum(ln.cost[0] for ln in lines),
+        sum(ln.cost[1] for ln in lines),
+        sum(ln.cost[2] for ln in lines),
+    )
+    said = (
+        "Estimated: the whiteboard's scenes, at about $0.06 a part on the default video models, "
+        "from five past renders of six parts ($0.27 to $0.75); the range covers them."
+        if r.style == "whiteboard"
+        else "The video is put together on the studio's machine and calls no model."
+    )
+    return Estimate(lines, total, [*e.assumptions, said], e.source_chars)
+
+
 # ── the live half ────────────────────────────────────────────────────────────
 
 
@@ -639,10 +749,19 @@ class Live:
     limit_usd: float
     # An audio overview's format, length and focus; None for a deck.
     audio: AudioSpec | None = None
+    # A video overview's render, priced with its deck; None otherwise.
+    video: Render | None = None
 
     @property
     def over_limit(self) -> bool:
         return self.limit_usd > 0 and self.estimate.total[2] > self.limit_usd
+
+    @property
+    def fix(self) -> str:
+        """What to change to come under the spending limit."""
+        if self.video is not None:
+            return self.video.fix
+        return SHORTER if self.audio is not None else FEWER_SLIDES
 
 
 class NoPrices(Exception):
@@ -672,10 +791,12 @@ async def compute(
     style: str,
     research: bool,
     prices: dict[str, Price] | None = None,
+    video: Render | None = None,
 ) -> Live:
-    """Gather the real inputs and price them. Nothing here calls a model:
-    the prices come from the endpoint's catalogue, which needs no key, or
-    are `prices` when the caller read them already (outside its lock)."""
+    """Gather the real inputs and price them, with a video overview's render
+    when there is one. Nothing here calls a model: the prices come from the
+    endpoint's catalogue, which needs no key, or are `prices` when the caller
+    read them already (outside its lock)."""
     v = await st.values(s, owner)
     # An audio overview runs as long as its format says, not the session
     # length setting.
@@ -699,7 +820,10 @@ async def compute(
         raise NoPrices
     limit = st.parse_limit(v[st.MAX_BUILD_USD_KEY]) or 0.0
     stamp = stamp_now()
-    return Live(estimate(inputs, prices), inputs, style, stamp, limit, sh.audio)
+    e = estimate(inputs, prices)
+    if video is not None:
+        e = with_render(e, video, slides, v[st.VIDEO_MODEL_KEY])
+    return Live(e, inputs, style, stamp, limit, sh.audio, video)
 
 
 def stamp_now() -> str:
@@ -737,9 +861,11 @@ async def refuse_over_limit(
     sh: Shape,
     research: bool,
     prices: dict[str, Price] | None = None,
+    video: Render | None = None,
 ) -> str | None:
     """Why a build whose HIGH estimate is over the person's spending limit is
-    refused, or None.
+    refused, or None. A video overview's is checked with its render, so it
+    is refused before its deck is built, not after.
 
     The high end, not the typical one: the limit is a promise about the most
     a build costs, and a build that usually fits but sometimes does not would
@@ -749,13 +875,9 @@ async def refuse_over_limit(
     if st.parse_limit(await st.value(s, owner, st.MAX_BUILD_USD_KEY)) is None:
         return None
     try:
-        live = await compute(s, owner, chars, sh, "", research, prices)
+        live = await compute(s, owner, chars, sh, "", research, prices, video)
     except NoPrices:
         return None
     if live.over_limit:
-        return over_limit_message(
-            live.estimate.total[2],
-            live.limit_usd,
-            SHORTER if sh.audio is not None else FEWER_SLIDES,
-        )
+        return over_limit_message(live.estimate.total[2], live.limit_usd, live.fix)
     return None

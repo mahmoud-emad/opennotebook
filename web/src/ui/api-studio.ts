@@ -47,6 +47,18 @@ export async function estimateOutput(cid: string, req: BuildReq, signal?: AbortS
   );
 }
 
+/** What a video overview would cost, itemised: its deck as a build's
+ * estimate prices it, and its render. A theme is sent for a whiteboard only. */
+export async function overviewEstimate(
+  cid: string,
+  req: { style: "whiteboard" | "slides"; length: "short" | "default" | "long"; theme?: string },
+  signal?: AbortSignal,
+): Promise<Estimate> {
+  return estimateOf(
+    await call<Record<string, unknown>>("POST", `/collections/${enc(cid)}/videos/estimate`, req, { signal }),
+  );
+}
+
 function estimateOf(v: Record<string, unknown>): Estimate {
   const lines = Array.isArray(v.lines) ? (v.lines as Record<string, unknown>[]) : [];
   const priceOrNull = (x: unknown) => (x === null || x === undefined ? null : num(x));

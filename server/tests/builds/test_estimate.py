@@ -2,7 +2,10 @@
 `opennotebook_server/src/estimate.rs` and `estimate_live.rs`. Plan §9: the
 estimates match the measured builds."""
 
+import math
 from dataclasses import replace
+
+import pytest
 
 from opennotebook.ai.prices import Price
 from opennotebook.domain import sessions_estimate as e
@@ -237,3 +240,51 @@ def test_counts_and_models_are_said_the_way_a_person_reads_them() -> None:
     assert e.model_name("google/gemini-2.5-flash-lite") == "Gemini 2.5 Flash Lite"
     assert e.model_name("local") == "Local"
     assert (e.sources_said(1), e.sources_said(3)) == ("1 source", "3 sources")
+
+
+def test_a_slides_video_adds_a_free_line_and_nothing_to_pay() -> None:
+    deck = estimate(inputs(), prices())
+    slides = e.with_render(deck, e.Render("slides"), 5, "anthropic/claude-sonnet-5.5")
+    assert slides.total == deck.total
+    video = [ln for ln in slides.lines if ln.group == e.GROUP_VIDEO]
+    assert len(video) == 1 and video[0].free
+
+
+def test_a_whiteboard_adds_its_measured_cost_a_part() -> None:
+    deck = estimate(inputs(), prices())
+    board = e.with_render(deck, e.Render("whiteboard", "Whiteboard"), 6, "m")
+    added = [b - d for b, d in zip(board.total, deck.total, strict=True)]
+    want = [6 * x for x in e.WHITEBOARD_USD_PER_PART]
+    assert added == pytest.approx(want)
+    # The five measured renders of six parts, $0.27 to $0.75, are the range.
+    assert added == pytest.approx([0.27, 0.36, 0.75])
+    assert step(board, "Whiteboard scenes").model == "m"
+    assert any("$0.06 a part" in a for a in board.assumptions)
+
+
+def test_a_whiteboard_costs_more_the_longer_it_is() -> None:
+    deck = estimate(inputs(), prices())
+    totals = [
+        e.with_render(deck, e.Render("whiteboard"), n, "m").total[1] - deck.total[1]
+        for n in (4, 6, 9)
+    ]
+    assert totals == pytest.approx([0.24, 0.36, 0.54])
+
+
+def test_a_drawn_theme_adds_nothing_and_an_illustrated_one_adds_a_cost_a_scene() -> None:
+    deck = estimate(inputs(), prices())
+    plain = e.with_render(deck, e.Render("whiteboard", "Whiteboard", "drawn"), 6, "m")
+    chalk = e.with_render(deck, e.Render("whiteboard", "Chalkboard", "drawn"), 6, "m")
+    assert chalk.total == plain.total
+    assert not any(ln.step == "Illustrations" for ln in chalk.lines)
+    drawn = e.with_render(deck, e.Render("whiteboard", "Watercolor", "illustrated"), 6, "m")
+    pictures = step(drawn, "Illustrations")
+    assert pictures.calls.typical == math.ceil(6 * e.SCENES_PER_PART[1])
+    assert pictures.cost[1] == pytest.approx(
+        pictures.calls.typical * e.SCENE_USD_BY_FAMILY["illustrated"]
+    )
+
+
+def test_a_video_over_the_limit_says_to_shorten_it_or_use_slides() -> None:
+    assert e.Render("whiteboard").fix == "a shorter length or the Slides style"
+    assert e.Render("slides").fix == "a shorter length"

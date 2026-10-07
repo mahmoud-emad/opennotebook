@@ -16,6 +16,7 @@ from httpx import AsyncClient
 from sqlalchemy import text
 
 from opennotebook.db.session import engine
+from opennotebook.domain import sessions_estimate as est
 from opennotebook.domain import sessions_events, sources
 from opennotebook.jobs import Progress
 from tests.builds.conftest import drain
@@ -181,6 +182,41 @@ async def test_a_build_over_the_limit_is_refused_and_leaves_nothing(
     # Nothing queued for the build; the source added before it queued its
     # naming and cover, which is not the build's.
     assert await _rows("SELECT id FROM procrastinate_jobs WHERE queue_name <> 'refresh'") == []
+
+
+async def test_a_video_overview_is_priced_as_its_deck_and_its_render(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch, files: Path
+) -> None:
+    install(monkeypatch, files)
+    cid = await _collection(client)
+
+    async def priced(path: str, body: dict[str, Any]) -> dict[str, Any]:
+        r = await client.post(f"/api/collections/{cid}/{path}", json=body)
+        assert r.status_code == 200, r.text
+        return r.json()
+
+    deck = await priced("outputs/estimate", {"kind": "slides", "speakers": 1, "slide_count": 6})
+    slides = await priced("videos/estimate", {"style": "slides"})
+    assert set(slides) == ESTIMATE_KEYS
+    # Slides are put together with no model call: the deck is the cost.
+    assert slides["total_typical_usd"] == pytest.approx(deck["total_typical_usd"])
+    assert (slides["slides"], slides["speakers"]) == (6, 1)
+    assert slides["facts"][-1] == "Slides video"
+    board = await priced("videos/estimate", {})
+    # The whiteboard's scenes, about six cents a part, on top of the deck.
+    added = board["total_typical_usd"] - deck["total_typical_usd"]
+    assert added == pytest.approx(6 * est.WHITEBOARD_USD_PER_PART[1])
+    scenes = next(ln for ln in board["lines"] if ln["step"] == "Whiteboard scenes")
+    assert scenes["model"] == "anthropic/claude-sonnet-5.5"
+    assert board["facts"][-2:] == ["Whiteboard video", "Whiteboard theme"]
+    short = await priced("videos/estimate", {"length": "short"})
+    long = await priced("videos/estimate", {"length": "long"})
+    assert (short["slides"], long["slides"]) == (4, 9)
+    assert short["total_typical_usd"] < board["total_typical_usd"] < long["total_typical_usd"]
+    # Every theme today is drawn, at no extra cost.
+    chalk = await priced("videos/estimate", {"theme": "chalkboard"})
+    assert chalk["total_high_usd"] == pytest.approx(board["total_high_usd"])
+    assert chalk["facts"][-1] == "Chalkboard theme"
 
 
 async def test_a_read_only_copy_is_not_built_from(

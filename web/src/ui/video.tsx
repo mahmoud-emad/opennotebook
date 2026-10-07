@@ -9,7 +9,10 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type * as Rest from "@/client/types.gen";
-import { apiBase, call, enc, errText, storage } from "./api";
+import { apiBase, call, enc, errText, isAbort, storage } from "./api";
+import { overviewEstimate } from "./api-studio";
+import { EstimateBanner } from "./cost";
+import { CostDialog, LimitNote, type Estimate } from "./dialogs";
 import { Icon } from "./Icon";
 import { follow, routeUrl, type View } from "./routes";
 import "../styles/video.css";
@@ -146,16 +149,47 @@ export function VideoTile({ on, disabled, title, onClick }: {
   );
 }
 
+/** What a video overview as chosen would cost, asked again whenever the
+ * choice changes. Null while it is asked, and when it could not be had, which
+ * `failed` says; an answer for an older choice is dropped. */
+function useOverviewEstimate(cid: string, style: VideoStyle, length: VideoLength, theme: string) {
+  const [tries, setTries] = useState(0);
+  // What was asked, as one key: an answer is shown only for the choice it
+  // was asked for, so a choice changed since reads as being asked.
+  const key = `${cid} ${style} ${length} ${style === "whiteboard" ? theme : ""} ${tries}`;
+  const [got, setGot] = useState<{ key: string; est: Estimate | null; err: string } | null>(null);
+  useEffect(() => {
+    const ask = new AbortController();
+    overviewEstimate(cid, { style, length, ...(style === "whiteboard" ? { theme } : {}) }, ask.signal)
+      .then((est) => setGot({ key, est, err: "" }))
+      .catch((e) => {
+        if (!isAbort(e)) setGot({ key, est: null, err: errText(e) });
+      });
+    return () => ask.abort();
+  }, [cid, style, length, theme, key]);
+  const now = got?.key === key ? got : null;
+  return {
+    est: now?.est ?? null,
+    loading: now === null,
+    err: now?.err ?? "",
+    retry: () => setTries((n) => n + 1),
+  };
+}
+
 /** The tool's options and its one button. The video is made in the
- * background: its deck appears in the list at once, its video under it. */
+ * background: its deck appears in the list at once, its video under it.
+ * What it costs is said before the click, as for every Studio tool. */
 export function VideoOptions({
   cid,
   onMade,
   onCancel,
+  showCost = true,
 }: {
   cid: string;
   onMade: () => void;
   onCancel: () => void;
+  /** Off in Settings, the cost is not said; over the limit still is. */
+  showCost?: boolean;
 }) {
   const [style, setStyle] = useState<VideoStyle>("whiteboard");
   const [length, setLength] = useState<VideoLength>("default");
@@ -175,8 +209,12 @@ export function VideoOptions({
   }, []);
   // A theme remembered that this studio no longer has is the whiteboard.
   const chosen = themes.some((t) => t.id === theme) ? theme : "whiteboard";
+  const cost = useOverviewEstimate(cid, style, length, chosen);
+  const [costOpen, setCostOpen] = useState(false);
+  // The video as chosen would be refused for its cost.
+  const over = !!cost.est?.over_limit;
   const go = () => {
-    if (making) return;
+    if (making || over) return;
     setMaking(true);
     setErr("");
     const asked = style === "whiteboard" ? chosen : undefined;
@@ -190,7 +228,7 @@ export function VideoOptions({
     <div className="opts" role="region" aria-label="Video overview options">
       <div className="opts-h">
         <span className="opts-t">Video overview</span>
-        <span className="opts-d">A few minutes · about 30 cents</span>
+        <span className="opts-d">A few minutes · tens of cents</span>
       </div>
       <div className="opt-l">Style</div>
       <div className="ao-formats" role="radiogroup" aria-label="Style">
@@ -232,20 +270,41 @@ export function VideoOptions({
         One narrator, in the first voice of Settings › Voices. Every label on the board is checked
         against your sources before it is drawn.
       </p>
+      {showCost && !over && (
+        <EstimateBanner est={cost.est} loading={cost.loading} failed={cost.err !== ""} />
+      )}
+      {cost.est?.over_limit && <LimitNote e={cost.est} className="opt-err" />}
       {err !== "" && (
         <div className="opt-err" role="alert">
           {err}
         </div>
       )}
       <div className="opts-a">
+        <button title="Every step and what it costs, before you start" onClick={() => setCostOpen(true)}>
+          Estimate cost
+        </button>
         <span className="grow" />
         <button className="ghost" onClick={onCancel}>
           Cancel
         </button>
-        <button className="primary" disabled={making} onClick={go}>
+        <button className="primary" disabled={making || over} onClick={go}>
           {making ? "Starting…" : "Make video"}
         </button>
       </div>
+      {costOpen && (
+        <CostDialog
+          est={cost.est}
+          verb="Make"
+          loading={cost.loading}
+          err={cost.err}
+          onClose={() => setCostOpen(false)}
+          onRetry={cost.retry}
+          onBuild={() => {
+            setCostOpen(false);
+            go();
+          }}
+        />
+      )}
     </div>
   );
 }

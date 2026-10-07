@@ -30,6 +30,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from opennotebook import storage
 from opennotebook.ai import client, ledger
 from opennotebook.ai.errors import AiError
+from opennotebook.api import sessions as sessions_api
 from opennotebook.api.deps import Db, Me
 from opennotebook.api.media import file_name_of
 from opennotebook.api.notes import Citation
@@ -37,6 +38,7 @@ from opennotebook.build import video
 from opennotebook.db.models import Job, Session, Source
 from opennotebook.db.session import release
 from opennotebook.domain import collections, reading, sessions, shares
+from opennotebook.domain import sessions_estimate as est
 from opennotebook.domain import settings as config
 from opennotebook.errors import Problem, not_found
 from opennotebook.script import explain
@@ -542,8 +544,6 @@ async def make_overview(cid: uuid.UUID, body: OverviewReq, s: Db, me: Me) -> Ove
     built as any deck is (and refused as one would be), then its video once
     it is ready. Follow the build on /api/sessions/{sid}/events and the video
     on /api/sessions/{sid}/videos."""
-    from opennotebook.api import sessions as sessions_api
-
     try:
         video.tool(video.FFMPEG_KEY, "ffmpeg")
         video.tool(video.FFPROBE_KEY, "ffprobe")
@@ -552,12 +552,7 @@ async def make_overview(cid: uuid.UUID, body: OverviewReq, s: Db, me: Me) -> Ove
     # Named for what it is about: the title asked for, else the collection's,
     # else its one source's. The video's opening slide shows it, so a generic
     # name ("Video overview", or a deck's "Editorial slides") will not do.
-    build = sessions_api.BuildReq(
-        kind="slides",
-        title=body.title.strip() or await _overview_title(s, me.id, cid),
-        speakers=1,
-        slide_count=LENGTHS[body.length],
-    )
+    build = _overview_build(body, body.title.strip() or await _overview_title(s, me.id, cid))
     made = await sessions_api.build(cid, build, s, me)
     o = await _owned(s, me.id, made.id, lock=True)
     asked: dict[str, Any] = {"state": video.WAITING}
@@ -565,6 +560,35 @@ async def make_overview(cid: uuid.UUID, body: OverviewReq, s: Db, me: Me) -> Ove
         asked["theme"] = body.theme
     o.video = {body.style: asked}
     return OverviewOut(session=made, video=VideoState.of(body.style, asked))
+
+
+@router.post("/collections/{cid}/videos/estimate")
+async def estimate_overview(
+    cid: uuid.UUID, body: OverviewReq, s: Db, me: Me
+) -> sessions_api.SessionEstimate:
+    """What a video overview with the same arguments would cost, step by
+    step, before it is made: its deck, priced as a deck is, and its render.
+    Makes no model call."""
+    return await sessions_api.priced(s, me.id, cid, _overview_build(body, ""), _render(body))
+
+
+def _overview_build(body: OverviewReq, title: str) -> sessions_api.BuildReq:
+    """The deck a video overview is narrated over: one narrator, its parts
+    as long as the length asked for."""
+    return sessions_api.BuildReq(
+        kind="slides", title=title, speakers=1, slide_count=LENGTHS[body.length]
+    )
+
+
+def _render(body: OverviewReq) -> est.Render:
+    """A video overview's render, as its estimate prices it: a whiteboard's
+    theme can add a cost a scene, by its family."""
+    if body.style != "whiteboard":
+        return est.Render(style=body.style)
+    from opennotebook.build.whiteboard import theme as th
+
+    t = th.theme_of(body.theme)
+    return est.Render(style=body.style, theme=t.label, family=t.family)
 
 
 async def _overview_title(s: AsyncSession, owner: uuid.UUID, cid: uuid.UUID) -> str:

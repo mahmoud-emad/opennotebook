@@ -88,7 +88,7 @@ describe("the Video overview tool", () => {
     await act(async () => {
       fireEvent.click(screen.getByText("Make video"));
     });
-    const post = fetch.mock.calls.find(([, init]) => init?.method === "POST")!;
+    const post = fetch.mock.calls.find(([url, init]) => init?.method === "POST" && url.endsWith("/videos"))!;
     expect(JSON.parse(String(post[1]!.body))).toMatchObject({ style: "whiteboard", theme: "chalkboard" });
     expect(localStorage.getItem("video-theme:c1")).toBe("chalkboard");
     // Slides have no theme to choose.
@@ -110,10 +110,48 @@ describe("the Video overview tool", () => {
       fireEvent.click(screen.getByText("Make video"));
     });
     const calls = fetch.mock.calls as unknown as [string, RequestInit | undefined][];
-    const [url, init] = calls.find(([, i]) => i?.method === "POST")!;
+    const [url, init] = calls.find(([u, i]) => i?.method === "POST" && !u.endsWith("/estimate"))!;
     expect(url).toMatch(/\/api\/collections\/c1\/videos$/);
     expect(JSON.parse(String(init!.body))).toEqual({ style: "slides", length: "short" });
     expect(made).toHaveBeenCalledOnce();
+  });
+
+  it("says what the video would cost, as the server prices it, and again for another length", async () => {
+    const priced = (low: number, high: number, over = false) => ({
+      total_low_usd: low, total_typical_usd: (low + high) / 2, total_high_usd: high, lines: [],
+      assumptions: [], limit_usd: 1, over_limit: over,
+      limit_note: over ? "This could cost up to $1.20, over your $1.00 limit." : null,
+    });  // prettier-ignore
+    const fetch = vi.fn((url: string, init?: RequestInit) => {
+      if (url.endsWith("/videos/estimate")) {
+        const { length } = JSON.parse(String(init?.body)) as { length: string };
+        return reply(200, length === "long" ? priced(0.6, 1.2, true) : priced(0.3, 0.8));
+      }
+      return url.endsWith("/video/themes") ? reply(200, THEMES) : reply(404, {});
+    });
+    vi.stubGlobal("fetch", fetch);
+    render(<VideoOptions cid="c1" onMade={() => {}} onCancel={() => {}} />);
+    const banner = await screen.findByRole("status", { name: "Estimated cost" });
+    await vi.waitFor(() => expect(banner.textContent).toBe("Estimated $0.30 – $0.80 · within your $1.00 limit."));
+    const asked = fetch.mock.calls.filter(([u]) => u.endsWith("/videos/estimate"));
+    expect(JSON.parse(String(asked.at(-1)?.[1]?.body))).toEqual({
+      style: "whiteboard", length: "default", theme: "whiteboard",
+    });  // prettier-ignore
+    // Longer is priced again, and over the limit it cannot be made.
+    fireEvent.click(screen.getByText("Longer"));
+    expect(await screen.findByText("This could cost up to $1.20, over your $1.00 limit.")).toBeTruthy();
+    expect((screen.getByText("Make video") as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(screen.getByText("Shorter"));
+    await vi.waitFor(() =>
+      expect(screen.getByRole("status", { name: "Estimated cost" }).textContent).toMatch(/\$0\.30 – \$0\.80/),
+    );
+  });
+
+  it("leaves the cost unsaid, not the tool broken, when it cannot be estimated", async () => {
+    vi.stubGlobal("fetch", vi.fn(() => reply(503, { detail: "The price list could not be read." })));
+    render(<VideoOptions cid="c1" onMade={() => {}} onCancel={() => {}} />);
+    expect(await screen.findByText("The cost could not be estimated.")).toBeTruthy();
+    expect((screen.getByText("Make video") as HTMLButtonElement).disabled).toBe(false);
   });
 
   it("says why it could not start", async () => {

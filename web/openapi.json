@@ -4458,6 +4458,60 @@
           }
         }
       }
+    },
+    "/api/collections/{cid}/videos/estimate": {
+      "post": {
+        "tags": [
+          "video"
+        ],
+        "summary": "Estimate Overview",
+        "description": "What a video overview with the same arguments would cost, step by\nstep, before it is made: its deck, priced as a deck is, and its render.\nMakes no model call.",
+        "operationId": "estimate_overview",
+        "parameters": [
+          {
+            "name": "cid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Cid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OverviewReq"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionEstimate"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {

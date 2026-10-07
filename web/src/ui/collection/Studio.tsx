@@ -27,6 +27,8 @@ export function Studio({ S, A, onOpen }: { S: PageState; A: PageActions; onOpen:
   // and never both.
   const [video, setVideo] = useState(false);
   const cid = useStore(S.props).cid;
+  // On while unknown: the cost is said unless the settings turn it off.
+  const showCost = useStoreSel(S.opts, (o) => o?.show_cost ?? true);
   return (
     <>
       <div className="sec-h">
@@ -56,7 +58,7 @@ export function Studio({ S, A, onOpen }: { S: PageState; A: PageActions; onOpen:
         <VideoTile
           on={video}
           disabled={nSrc === 0}
-          title={nSrc > 0 ? "A few minutes · about 30 cents" : srcsLoaded ? "Add a source first" : "Loading sources…"}
+          title={nSrc > 0 ? "A few minutes · tens of cents" : srcsLoaded ? "Add a source first" : "Loading sources…"}
           onClick={() => {
             S.chosen.set(null);
             setVideo(!video);
@@ -69,6 +71,7 @@ export function Studio({ S, A, onOpen }: { S: PageState; A: PageActions; onOpen:
       {video && kindNow === null && nSrc > 0 && (
         <VideoOptions
           cid={cid}
+          showCost={showCost}
           onMade={() => {
             setVideo(false);
             void A.load();

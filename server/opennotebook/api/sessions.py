@@ -261,6 +261,10 @@ class SessionEstimate(BaseModel):
             found = styles.style(live.style)
             facts.append(f"{found.label if found else live.style} style")
             facts.append(f"slides by {est.model_name(i.slide_model)}")
+        if live.video is not None:
+            facts.append(f"{live.video.style.capitalize()} video")
+            if live.video.theme:
+                facts.append(f"{live.video.theme} theme")
         return cls(
             total_low_usd=e.total[0],
             total_typical_usd=e.total[1],
@@ -277,9 +281,7 @@ class SessionEstimate(BaseModel):
             minutes=i.minutes,
             limit_usd=live.limit_usd,
             over_limit=live.over_limit,
-            limit_note=est.over_limit_message(
-                e.total[2], live.limit_usd, est.SHORTER if i.audio else est.FEWER_SLIDES
-            )
+            limit_note=est.over_limit_message(e.total[2], live.limit_usd, live.fix)
             if live.over_limit
             else None,
             model=i.script_model,
@@ -502,13 +504,20 @@ async def build(cid: uuid.UUID, body: BuildReq, s: Db, me: Me) -> SessionSummary
     sources, with the person's settings for what the request leaves out.
     Takes minutes; follow it on /api/sessions/{sid}/events. Refused when its
     high estimate is over the spending limit."""
-    return SessionSummary.of(await _start(s, me.id, cid, body))
+    return SessionSummary.of(await start(s, me.id, cid, body))
 
 
-async def _start(s: AsyncSession, owner: uuid.UUID, cid: uuid.UUID, body: BuildReq) -> Session:
+async def start(
+    s: AsyncSession,
+    owner: uuid.UUID,
+    cid: uuid.UUID,
+    body: BuildReq,
+    video: est.Render | None = None,
+) -> Session:
     """Check a build, write its row as `preparing` and queue its job: the
     one way an output starts, new or tried again. Nothing is written when it
-    is refused."""
+    is refused. A video overview's deck is checked against the limit with
+    the video's render (`video`)."""
     await collections.editable(s, owner, cid)
     if not client.ai().has_key:
         # Refused at once rather than queued: a build with no key fails at
@@ -534,7 +543,7 @@ async def _start(s: AsyncSession, owner: uuid.UUID, cid: uuid.UUID, body: BuildR
     # format's voices.
     if prices is not None and (
         why := await est.refuse_over_limit(
-            s, owner, chars, planned.shape(), bool(research), prices=prices
+            s, owner, chars, planned.shape(), bool(research), prices=prices, video=video
         )
     ):
         raise Problem(422, why)
@@ -585,22 +594,35 @@ async def estimate(cid: uuid.UUID, body: BuildReq, s: Db, me: Me) -> SessionEsti
     """What a build with the same arguments would cost, step by step, before
     running it. The same plan as the build, so the estimate describes exactly
     the build the button next to it starts. Makes no model call."""
-    await collections.editable(s, me.id, cid)
-    chars = await est.source_chars(s, me.id, cid)
+    return await priced(s, me.id, cid, body)
+
+
+async def priced(
+    s: AsyncSession,
+    owner: uuid.UUID,
+    cid: uuid.UUID,
+    body: BuildReq,
+    video: est.Render | None = None,
+) -> SessionEstimate:
+    """A build's estimate, on the plan the build would make, and with a video
+    overview's render (`video`) when it is one."""
+    await collections.editable(s, owner, cid)
+    chars = await est.source_chars(s, owner, cid)
     research = body.research.strip()
     if not chars and not research:
         raise Problem(422, NO_SOURCES)
-    planned = await _planned(s, me.id, body, len(chars))
+    planned = await _planned(s, owner, body, len(chars))
     # The price list can take seconds to read; no transaction waits for it.
     await release(s)
     try:
         live = await est.compute(
             s,
-            me.id,
+            owner,
             chars,
             planned.shape(),
             "" if planned.audio else planned.style,
             bool(research),
+            video=video,
         )
     except est.NoPrices as e:
         raise Problem(503, e.sentence) from e
@@ -714,8 +736,8 @@ async def retry_session(sid: uuid.UUID, s: Db, me: Me, after: BackgroundTasks) -
     old = await sessions.reconcile(s, await _one(s, me.id, sid))
     if old.state != "failed":
         raise Problem(409, NOT_FAILED)
-    o = await _start(s, me.id, old.collection_id, retry_request(old))
-    # Read again under the collection's lock `_start` holds: another tab may
+    o = await start(s, me.id, old.collection_id, retry_request(old))
+    # Read again under the collection's lock `start` holds: another tab may
     # have removed or retried it while the price list was read.
     gone = await s.execute(
         delete(Session).where(
