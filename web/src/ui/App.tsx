@@ -37,6 +37,8 @@ const LIST_FALLBACK_MS = 30_000;
 const SettingsDialog = lazy(() => import("./SettingsDialog").then((m) => ({ default: m.SettingsDialog })));
 // The player is a page of its own, loaded when an output is first played.
 const PlayerPage = lazy(() => import("./player").then((m) => ({ default: m.PlayerPage })));
+// A video's watch page, loaded when a video is first watched.
+const WatchPage = lazy(() => import("./watch").then((m) => ({ default: m.WatchPage })));
 
 export function App() {
   const [view, setViewRaw] = useState<View>(routeFromLocation);
@@ -266,6 +268,18 @@ export function App() {
     return (
       <Suspense fallback={<PageSkel />}>
         <PlayerPage key={`${view.sid}|${view.share ?? ""}`} sid={view.sid} share={view.share} />
+      </Suspense>
+    );
+
+  if (view.kind === "watch")
+    return (
+      <Suspense fallback={<PageSkel />}>
+        <WatchPage
+          key={`${view.sid}|${view.style}|${view.share ?? ""}`}
+          sid={view.sid}
+          style={view.style}
+          share={view.share}
+        />
       </Suspense>
     );
 

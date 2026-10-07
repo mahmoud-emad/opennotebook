@@ -375,6 +375,138 @@ export type CollectionSummary = {
 };
 
 /**
+ * CollectionVideo
+ */
+export type CollectionVideo = {
+    /**
+     * Style
+     */
+    style: 'slides' | 'whiteboard';
+    /**
+     * State
+     *
+     * `waiting`: asked for with its output, and starts when that is ready
+     */
+    state: 'none' | 'waiting' | 'rendering' | 'ready' | 'failed';
+    /**
+     * Job Id
+     *
+     * The render's job, to follow
+     */
+    job_id?: string | null;
+    /**
+     * Failure
+     *
+     * Why it failed, in a sentence
+     */
+    failure?: string | null;
+    /**
+     * Bytes
+     */
+    bytes?: number;
+    /**
+     * Duration Ms
+     */
+    duration_ms?: number;
+    /**
+     * Chapters
+     */
+    chapters?: number;
+    /**
+     * Scenes
+     *
+     * A whiteboard's scenes
+     */
+    scenes?: number;
+    /**
+     * First Try
+     *
+     * A whiteboard's scenes that passed every check as first written
+     */
+    first_try?: number;
+    /**
+     * Plain
+     *
+     * A whiteboard's scenes drawn plain after their repair failed
+     */
+    plain?: number;
+    /**
+     * Repaired
+     *
+     * A whiteboard's scenes fixed by a repair round
+     */
+    repaired?: number;
+    /**
+     * Escalated
+     *
+     * A whiteboard's scenes written again by the stronger model
+     */
+    escalated?: number;
+    /**
+     * Texts
+     *
+     * Pieces of text a whiteboard writes on its board
+     */
+    texts?: number;
+    /**
+     * Grounded
+     *
+     * Of those, the ones the narration or the sources say
+     */
+    grounded?: number;
+    /**
+     * Claims
+     *
+     * What a whiteboard's scenes assert
+     */
+    claims?: number;
+    /**
+     * Supported
+     *
+     * Of those, the ones the check found supported
+     */
+    supported?: number;
+    /**
+     * Unchecked
+     *
+     * Scenes the check could not be made for (the checker was down)
+     */
+    unchecked?: number;
+    /**
+     * Spent Usd
+     *
+     * What the render's model calls cost
+     */
+    spent_usd?: number | null;
+    /**
+     * Measured Words
+     *
+     * Every word's time came from the speech server rather than an estimate
+     */
+    measured_words?: boolean;
+    /**
+     * Rendered At
+     */
+    rendered_at?: string | null;
+    /**
+     * Playable
+     *
+     * A video can be played now: this one, or while a new one is made or after it failed, the one made before it
+     */
+    playable?: boolean;
+    /**
+     * Waiting
+     *
+     * Why a render has not started, in a sentence: it is queued and no worker is running. Null otherwise
+     */
+    waiting?: string | null;
+    /**
+     * Session Id
+     */
+    session_id: string;
+};
+
+/**
  * Command
  */
 export type Command = {
@@ -492,6 +624,58 @@ export type CostLine = {
      * Price Out Per Million
      */
     price_out_per_million: number | null;
+};
+
+/**
+ * ExplainOut
+ */
+export type ExplainOut = {
+    /**
+     * Answer
+     *
+     * Markdown with [n] markers that match the citations, and [m:ss] moments
+     */
+    answer: string;
+    /**
+     * Citations
+     */
+    citations: Array<Citation>;
+    /**
+     * T Ms
+     *
+     * The moment answered about
+     */
+    t_ms: number;
+};
+
+/**
+ * ExplainReq
+ */
+export type ExplainReq = {
+    /**
+     * Style
+     */
+    style?: 'slides' | 'whiteboard';
+    /**
+     * T Ms
+     *
+     * The moment of the video asked about
+     */
+    t_ms: number;
+    /**
+     * Mode
+     *
+     * `ask` answers `question`; the others are the quick prompts
+     */
+    mode?: 'ask' | 'explain' | 'example' | 'why' | 'quiz';
+    /**
+     * Question
+     */
+    question?: string;
+    /**
+     * History
+     */
+    history?: Array<Turn>;
 };
 
 /**
@@ -1158,6 +1342,37 @@ export type NotesSummary = {
 };
 
 /**
+ * OverviewOut
+ */
+export type OverviewOut = {
+    /**
+     * Session
+     *
+     * The output being made, as /api/sessions lists it
+     */
+    session: unknown;
+    video: VideoState;
+};
+
+/**
+ * OverviewReq
+ */
+export type OverviewReq = {
+    /**
+     * Style
+     */
+    style?: 'slides' | 'whiteboard';
+    /**
+     * Length
+     */
+    length?: 'short' | 'default' | 'long';
+    /**
+     * Title
+     */
+    title?: string;
+};
+
+/**
  * Playhead
  */
 export type Playhead = {
@@ -1316,6 +1531,72 @@ export type Say = {
      * Whether the agent may search and research the web; off, it reads only the links it is given
      */
     research?: boolean;
+};
+
+/**
+ * ScriptChapter
+ */
+export type ScriptChapter = {
+    /**
+     * Title
+     */
+    title: string;
+    /**
+     * Start Ms
+     */
+    start_ms: number;
+    /**
+     * End Ms
+     */
+    end_ms: number;
+};
+
+/**
+ * ScriptLine
+ */
+export type ScriptLine = {
+    /**
+     * Start Ms
+     */
+    start_ms: number;
+    /**
+     * End Ms
+     */
+    end_ms: number;
+    /**
+     * Text
+     */
+    text: string;
+};
+
+/**
+ * ScriptScene
+ */
+export type ScriptScene = {
+    /**
+     * Title
+     */
+    title?: string;
+    /**
+     * Start Ms
+     */
+    start_ms: number;
+    /**
+     * End Ms
+     */
+    end_ms: number;
+    /**
+     * Labels
+     *
+     * What its board writes
+     */
+    labels?: Array<string>;
+    /**
+     * Claims
+     *
+     * What it asserts
+     */
+    claims?: Array<string>;
 };
 
 /**
@@ -2497,6 +2778,20 @@ export type StyleChoice = {
 };
 
 /**
+ * Turn
+ */
+export type Turn = {
+    /**
+     * Role
+     */
+    role: 'user' | 'assistant';
+    /**
+     * Text
+     */
+    text: string;
+};
+
+/**
  * UploadRules
  *
  * What the sources panel takes. The server refuses anything else.
@@ -2576,6 +2871,178 @@ export type ValidationError = {
     ctx?: {
         [key: string]: unknown;
     };
+};
+
+/**
+ * VideoReq
+ */
+export type VideoReq = {
+    /**
+     * Style
+     */
+    style?: 'slides' | 'whiteboard';
+};
+
+/**
+ * VideoScript
+ *
+ * What a video says and shows, and when.
+ */
+export type VideoScript = {
+    /**
+     * Title
+     */
+    title: string;
+    /**
+     * Duration Ms
+     */
+    duration_ms: number;
+    /**
+     * Chapters
+     */
+    chapters: Array<ScriptChapter>;
+    /**
+     * Lines
+     *
+     * The narration, line by line
+     */
+    lines: Array<ScriptLine>;
+    /**
+     * Scenes
+     *
+     * A whiteboard's scenes; empty for slides
+     */
+    scenes: Array<ScriptScene>;
+};
+
+/**
+ * VideoState
+ *
+ * One style's video of an output, and how far it is.
+ */
+export type VideoState = {
+    /**
+     * Style
+     */
+    style: 'slides' | 'whiteboard';
+    /**
+     * State
+     *
+     * `waiting`: asked for with its output, and starts when that is ready
+     */
+    state: 'none' | 'waiting' | 'rendering' | 'ready' | 'failed';
+    /**
+     * Job Id
+     *
+     * The render's job, to follow
+     */
+    job_id?: string | null;
+    /**
+     * Failure
+     *
+     * Why it failed, in a sentence
+     */
+    failure?: string | null;
+    /**
+     * Bytes
+     */
+    bytes?: number;
+    /**
+     * Duration Ms
+     */
+    duration_ms?: number;
+    /**
+     * Chapters
+     */
+    chapters?: number;
+    /**
+     * Scenes
+     *
+     * A whiteboard's scenes
+     */
+    scenes?: number;
+    /**
+     * First Try
+     *
+     * A whiteboard's scenes that passed every check as first written
+     */
+    first_try?: number;
+    /**
+     * Plain
+     *
+     * A whiteboard's scenes drawn plain after their repair failed
+     */
+    plain?: number;
+    /**
+     * Repaired
+     *
+     * A whiteboard's scenes fixed by a repair round
+     */
+    repaired?: number;
+    /**
+     * Escalated
+     *
+     * A whiteboard's scenes written again by the stronger model
+     */
+    escalated?: number;
+    /**
+     * Texts
+     *
+     * Pieces of text a whiteboard writes on its board
+     */
+    texts?: number;
+    /**
+     * Grounded
+     *
+     * Of those, the ones the narration or the sources say
+     */
+    grounded?: number;
+    /**
+     * Claims
+     *
+     * What a whiteboard's scenes assert
+     */
+    claims?: number;
+    /**
+     * Supported
+     *
+     * Of those, the ones the check found supported
+     */
+    supported?: number;
+    /**
+     * Unchecked
+     *
+     * Scenes the check could not be made for (the checker was down)
+     */
+    unchecked?: number;
+    /**
+     * Spent Usd
+     *
+     * What the render's model calls cost
+     */
+    spent_usd?: number | null;
+    /**
+     * Measured Words
+     *
+     * Every word's time came from the speech server rather than an estimate
+     */
+    measured_words?: boolean;
+    /**
+     * Rendered At
+     */
+    rendered_at?: string | null;
+    /**
+     * Playable
+     *
+     * A video can be played now: this one, or while a new one is made or after it failed, the one made before it
+     */
+    playable?: boolean;
+    /**
+     * Waiting
+     *
+     * Why a render has not started, in a sentence: it is queued and no worker is running. Null otherwise
+     */
+    waiting?: string | null;
 };
 
 /**
@@ -5472,3 +5939,407 @@ export type ShareCollectionResponses = {
 };
 
 export type ShareCollectionResponse = ShareCollectionResponses[keyof ShareCollectionResponses];
+
+export type GetVideoData = {
+    body?: never;
+    path: {
+        /**
+         * Sid
+         */
+        sid: string;
+    };
+    query?: {
+        /**
+         * Style
+         *
+         * The video's style
+         */
+        style?: 'slides' | 'whiteboard';
+        /**
+         * Download
+         *
+         * Send it as a download rather than to play
+         */
+        download?: boolean;
+    };
+    url: '/api/sessions/{sid}/video';
+};
+
+export type GetVideoErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetVideoError = GetVideoErrors[keyof GetVideoErrors];
+
+export type GetVideoResponses = {
+    /**
+     * An MP4 file
+     */
+    200: Blob | File;
+    /**
+     * The byte range asked for
+     */
+    206: unknown;
+};
+
+export type GetVideoResponse = GetVideoResponses[keyof GetVideoResponses];
+
+export type MakeVideoData = {
+    body: VideoReq;
+    path: {
+        /**
+         * Sid
+         */
+        sid: string;
+    };
+    query?: never;
+    url: '/api/sessions/{sid}/video';
+};
+
+export type MakeVideoErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type MakeVideoError = MakeVideoErrors[keyof MakeVideoErrors];
+
+export type MakeVideoResponses = {
+    /**
+     * Successful Response
+     */
+    202: VideoState;
+};
+
+export type MakeVideoResponse = MakeVideoResponses[keyof MakeVideoResponses];
+
+export type ListVideosData = {
+    body?: never;
+    path: {
+        /**
+         * Sid
+         */
+        sid: string;
+    };
+    query?: never;
+    url: '/api/sessions/{sid}/videos';
+};
+
+export type ListVideosErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type ListVideosError = ListVideosErrors[keyof ListVideosErrors];
+
+export type ListVideosResponses = {
+    /**
+     * Response List Videos
+     *
+     * Successful Response
+     */
+    200: Array<VideoState>;
+};
+
+export type ListVideosResponse = ListVideosResponses[keyof ListVideosResponses];
+
+export type GetCaptionsData = {
+    body?: never;
+    path: {
+        /**
+         * Sid
+         */
+        sid: string;
+    };
+    query?: {
+        /**
+         * Style
+         *
+         * The video's style
+         */
+        style?: 'slides' | 'whiteboard';
+    };
+    url: '/api/sessions/{sid}/video/captions';
+};
+
+export type GetCaptionsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetCaptionsError = GetCaptionsErrors[keyof GetCaptionsErrors];
+
+export type GetCaptionsResponses = {
+    /**
+     * The narration as WebVTT captions
+     */
+    200: unknown;
+};
+
+export type SharedVideoData = {
+    body?: never;
+    path: {
+        /**
+         * Share Id
+         */
+        share_id: string;
+        /**
+         * Sid
+         */
+        sid: string;
+    };
+    query?: {
+        /**
+         * Style
+         *
+         * The video's style
+         */
+        style?: 'slides' | 'whiteboard';
+        /**
+         * Download
+         *
+         * Send it as a download rather than to play
+         */
+        download?: boolean;
+    };
+    url: '/api/shares/{share_id}/sessions/{sid}/video';
+};
+
+export type SharedVideoErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type SharedVideoError = SharedVideoErrors[keyof SharedVideoErrors];
+
+export type SharedVideoResponses = {
+    /**
+     * An MP4 file
+     */
+    200: Blob | File;
+    /**
+     * The byte range asked for
+     */
+    206: unknown;
+};
+
+export type SharedVideoResponse = SharedVideoResponses[keyof SharedVideoResponses];
+
+export type SharedCaptionsData = {
+    body?: never;
+    path: {
+        /**
+         * Share Id
+         */
+        share_id: string;
+        /**
+         * Sid
+         */
+        sid: string;
+    };
+    query?: {
+        /**
+         * Style
+         *
+         * The video's style
+         */
+        style?: 'slides' | 'whiteboard';
+    };
+    url: '/api/shares/{share_id}/sessions/{sid}/video/captions';
+};
+
+export type SharedCaptionsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type SharedCaptionsError = SharedCaptionsErrors[keyof SharedCaptionsErrors];
+
+export type SharedCaptionsResponses = {
+    /**
+     * The narration as WebVTT captions
+     */
+    200: unknown;
+};
+
+export type GetScriptData = {
+    body?: never;
+    path: {
+        /**
+         * Sid
+         */
+        sid: string;
+    };
+    query?: {
+        /**
+         * Style
+         *
+         * The video's style
+         */
+        style?: 'slides' | 'whiteboard';
+    };
+    url: '/api/sessions/{sid}/video/script';
+};
+
+export type GetScriptErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetScriptError = GetScriptErrors[keyof GetScriptErrors];
+
+export type GetScriptResponses = {
+    /**
+     * Successful Response
+     */
+    200: VideoScript;
+};
+
+export type GetScriptResponse = GetScriptResponses[keyof GetScriptResponses];
+
+export type SharedScriptData = {
+    body?: never;
+    path: {
+        /**
+         * Share Id
+         */
+        share_id: string;
+        /**
+         * Sid
+         */
+        sid: string;
+    };
+    query?: {
+        /**
+         * Style
+         *
+         * The video's style
+         */
+        style?: 'slides' | 'whiteboard';
+    };
+    url: '/api/shares/{share_id}/sessions/{sid}/video/script';
+};
+
+export type SharedScriptErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type SharedScriptError = SharedScriptErrors[keyof SharedScriptErrors];
+
+export type SharedScriptResponses = {
+    /**
+     * Successful Response
+     */
+    200: VideoScript;
+};
+
+export type SharedScriptResponse = SharedScriptResponses[keyof SharedScriptResponses];
+
+export type ExplainMomentData = {
+    body: ExplainReq;
+    path: {
+        /**
+         * Sid
+         */
+        sid: string;
+    };
+    query?: never;
+    url: '/api/sessions/{sid}/video/explain';
+};
+
+export type ExplainMomentErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type ExplainMomentError = ExplainMomentErrors[keyof ExplainMomentErrors];
+
+export type ExplainMomentResponses = {
+    /**
+     * Successful Response
+     */
+    200: ExplainOut;
+};
+
+export type ExplainMomentResponse = ExplainMomentResponses[keyof ExplainMomentResponses];
+
+export type CollectionVideosData = {
+    body?: never;
+    path: {
+        /**
+         * Cid
+         */
+        cid: string;
+    };
+    query?: never;
+    url: '/api/collections/{cid}/videos';
+};
+
+export type CollectionVideosErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type CollectionVideosError = CollectionVideosErrors[keyof CollectionVideosErrors];
+
+export type CollectionVideosResponses = {
+    /**
+     * Response Collection Videos
+     *
+     * Successful Response
+     */
+    200: Array<CollectionVideo>;
+};
+
+export type CollectionVideosResponse = CollectionVideosResponses[keyof CollectionVideosResponses];
+
+export type MakeOverviewData = {
+    body: OverviewReq;
+    path: {
+        /**
+         * Cid
+         */
+        cid: string;
+    };
+    query?: never;
+    url: '/api/collections/{cid}/videos';
+};
+
+export type MakeOverviewErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type MakeOverviewError = MakeOverviewErrors[keyof MakeOverviewErrors];
+
+export type MakeOverviewResponses = {
+    /**
+     * Successful Response
+     */
+    202: OverviewOut;
+};
+
+export type MakeOverviewResponse = MakeOverviewResponses[keyof MakeOverviewResponses];

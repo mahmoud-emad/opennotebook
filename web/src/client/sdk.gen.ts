@@ -2,7 +2,7 @@
 
 import { type Client, type ClientMeta, formDataBodySerializer, type Options as Options2, type RequestResult, type ServerSentEventsResult, type TDataShape } from './client';
 import { client } from './client.gen';
-import type { AddFilesData, AddFilesErrors, AddFilesResponses, AddSourcesData, AddSourcesErrors, AddSourcesResponses, AskSourcesData, AskSourcesErrors, AskSourcesResponses, BuildData, BuildErrors, BuildResponses, ClearChatData, ClearChatErrors, ClearChatResponses, CollectionEventsData, CollectionEventsErrors, CollectionEventsResponses, CreateCollectionData, CreateCollectionErrors, CreateCollectionResponses, DeepResearchData, DeepResearchErrors, DeepResearchResponses, DeleteCollectionData, DeleteCollectionErrors, DeleteCollectionResponses, DeleteMindmapData, DeleteMindmapErrors, DeleteMindmapResponses, DeleteNotesData, DeleteNotesErrors, DeleteNotesResponses, DeleteSessionData, DeleteSessionErrors, DeleteSessionResponses, DeleteShareData, DeleteShareErrors, DeleteShareResponses, EpisodeData, EpisodeErrors, EpisodeResponses, EstimateData, EstimateErrors, EstimateMindmapData, EstimateMindmapErrors, EstimateMindmapResponses, EstimateNotesData, EstimateNotesErrors, EstimateNotesResponses, EstimateResponses, GetCollectionData, GetCollectionErrors, GetCollectionResponses, GetCollectionShareData, GetCollectionShareErrors, GetCollectionShareResponses, GetJobData, GetJobErrors, GetJobResponses, GetMindmapData, GetMindmapErrors, GetMindmapResponses, GetNotesData, GetNotesErrors, GetNotesResponses, GetPlaybackData, GetPlaybackErrors, GetPlaybackResponses, GetSessionData, GetSessionErrors, GetSessionResponses, GetSettingsData, GetSettingsResponses, GetShareData, GetShareErrors, GetShareResponses, GetStudioOptionsData, GetStudioOptionsErrors, GetStudioOptionsResponses, HealthData, HealthResponses, LineAudioData, LineAudioErrors, LineAudioResponses, ListCollectionsData, ListCollectionsErrors, ListCollectionsResponses, ListCommandsData, ListCommandsResponses, ListKeysData, ListKeysErrors, ListKeysResponses, ListMindmapsData, ListMindmapsErrors, ListMindmapsResponses, ListNotesData, ListNotesErrors, ListNotesResponses, ListSessionsData, ListSessionsErrors, ListSessionsResponses, ListSharedItemsData, ListSharedItemsErrors, ListSharedItemsResponses, ListSharesData, ListSharesErrors, ListSharesResponses, ListSourcesData, ListSourcesErrors, ListSourcesResponses, ListStylesData, ListStylesResponses, MakeKeyData, MakeKeyErrors, MakeKeyResponses, MakeMindmapData, MakeMindmapErrors, MakeMindmapResponses, MakeNotesData, MakeNotesErrors, MakeNotesResponses, MeData, MeResponses, ReadChatData, ReadChatErrors, ReadChatResponses, ReadCoverData, ReadCoverErrors, ReadCoverResponses, ReadShareCoverData, ReadShareCoverErrors, ReadShareCoverResponses, ReadSharedMindmapData, ReadSharedMindmapErrors, ReadSharedMindmapResponses, ReadSharedNotesData, ReadSharedNotesErrors, ReadSharedNotesResponses, ReadSharedSessionData, ReadSharedSessionErrors, ReadSharedSessionResponses, ReadSharedSourceData, ReadSharedSourceErrors, ReadSharedSourceResponses, ReadSourceData, ReadSourceErrors, ReadSourceResponses, ReadyData, ReadyErrors, ReadyResponses, RefreshCoverData, RefreshCoverErrors, RefreshCoverResponses, RemoveSourceData, RemoveSourceErrors, RemoveSourceResponses, RetitleMindmapData, RetitleMindmapErrors, RetitleMindmapResponses, RetitleNotesData, RetitleNotesErrors, RetitleNotesResponses, RetrySessionData, RetrySessionErrors, RetrySessionResponses, ReuseShareData, ReuseShareErrors, ReuseShareResponses, RevokeKeyData, RevokeKeyErrors, RevokeKeyResponses, RunCommandData, RunCommandErrors, RunCommandResponses, SayData, SayErrors, SayResponses, SessionEventsData, SessionEventsErrors, SessionEventsResponses, SetPlaybackData, SetPlaybackErrors, SetPlaybackResponses, SetSettingData, SetSettingErrors, SetSettingResponses, ShareCollectionData, ShareCollectionErrors, ShareCollectionResponses, SharedEpisodeData, SharedEpisodeErrors, SharedEpisodeResponses, SharedLineAudioData, SharedLineAudioErrors, SharedLineAudioResponses, SharedSlideData, SharedSlideErrors, SharedSlideResponses, SlideData, SlideErrors, SlideResponses, UpdateCollectionData, UpdateCollectionErrors, UpdateCollectionResponses, UpdateSessionData, UpdateSessionErrors, UpdateSessionResponses, UpdateShareData, UpdateShareErrors, UpdateShareResponses, VoiceAskData, VoiceAskErrors, VoiceAskResponses, WebSearchData, WebSearchErrors, WebSearchResponses } from './types.gen';
+import type { AddFilesData, AddFilesErrors, AddFilesResponses, AddSourcesData, AddSourcesErrors, AddSourcesResponses, AskSourcesData, AskSourcesErrors, AskSourcesResponses, BuildData, BuildErrors, BuildResponses, ClearChatData, ClearChatErrors, ClearChatResponses, CollectionEventsData, CollectionEventsErrors, CollectionEventsResponses, CollectionVideosData, CollectionVideosErrors, CollectionVideosResponses, CreateCollectionData, CreateCollectionErrors, CreateCollectionResponses, DeepResearchData, DeepResearchErrors, DeepResearchResponses, DeleteCollectionData, DeleteCollectionErrors, DeleteCollectionResponses, DeleteMindmapData, DeleteMindmapErrors, DeleteMindmapResponses, DeleteNotesData, DeleteNotesErrors, DeleteNotesResponses, DeleteSessionData, DeleteSessionErrors, DeleteSessionResponses, DeleteShareData, DeleteShareErrors, DeleteShareResponses, EpisodeData, EpisodeErrors, EpisodeResponses, EstimateData, EstimateErrors, EstimateMindmapData, EstimateMindmapErrors, EstimateMindmapResponses, EstimateNotesData, EstimateNotesErrors, EstimateNotesResponses, EstimateResponses, ExplainMomentData, ExplainMomentErrors, ExplainMomentResponses, GetCaptionsData, GetCaptionsErrors, GetCaptionsResponses, GetCollectionData, GetCollectionErrors, GetCollectionResponses, GetCollectionShareData, GetCollectionShareErrors, GetCollectionShareResponses, GetJobData, GetJobErrors, GetJobResponses, GetMindmapData, GetMindmapErrors, GetMindmapResponses, GetNotesData, GetNotesErrors, GetNotesResponses, GetPlaybackData, GetPlaybackErrors, GetPlaybackResponses, GetScriptData, GetScriptErrors, GetScriptResponses, GetSessionData, GetSessionErrors, GetSessionResponses, GetSettingsData, GetSettingsResponses, GetShareData, GetShareErrors, GetShareResponses, GetStudioOptionsData, GetStudioOptionsErrors, GetStudioOptionsResponses, GetVideoData, GetVideoErrors, GetVideoResponses, HealthData, HealthResponses, LineAudioData, LineAudioErrors, LineAudioResponses, ListCollectionsData, ListCollectionsErrors, ListCollectionsResponses, ListCommandsData, ListCommandsResponses, ListKeysData, ListKeysErrors, ListKeysResponses, ListMindmapsData, ListMindmapsErrors, ListMindmapsResponses, ListNotesData, ListNotesErrors, ListNotesResponses, ListSessionsData, ListSessionsErrors, ListSessionsResponses, ListSharedItemsData, ListSharedItemsErrors, ListSharedItemsResponses, ListSharesData, ListSharesErrors, ListSharesResponses, ListSourcesData, ListSourcesErrors, ListSourcesResponses, ListStylesData, ListStylesResponses, ListVideosData, ListVideosErrors, ListVideosResponses, MakeKeyData, MakeKeyErrors, MakeKeyResponses, MakeMindmapData, MakeMindmapErrors, MakeMindmapResponses, MakeNotesData, MakeNotesErrors, MakeNotesResponses, MakeOverviewData, MakeOverviewErrors, MakeOverviewResponses, MakeVideoData, MakeVideoErrors, MakeVideoResponses, MeData, MeResponses, ReadChatData, ReadChatErrors, ReadChatResponses, ReadCoverData, ReadCoverErrors, ReadCoverResponses, ReadShareCoverData, ReadShareCoverErrors, ReadShareCoverResponses, ReadSharedMindmapData, ReadSharedMindmapErrors, ReadSharedMindmapResponses, ReadSharedNotesData, ReadSharedNotesErrors, ReadSharedNotesResponses, ReadSharedSessionData, ReadSharedSessionErrors, ReadSharedSessionResponses, ReadSharedSourceData, ReadSharedSourceErrors, ReadSharedSourceResponses, ReadSourceData, ReadSourceErrors, ReadSourceResponses, ReadyData, ReadyErrors, ReadyResponses, RefreshCoverData, RefreshCoverErrors, RefreshCoverResponses, RemoveSourceData, RemoveSourceErrors, RemoveSourceResponses, RetitleMindmapData, RetitleMindmapErrors, RetitleMindmapResponses, RetitleNotesData, RetitleNotesErrors, RetitleNotesResponses, RetrySessionData, RetrySessionErrors, RetrySessionResponses, ReuseShareData, ReuseShareErrors, ReuseShareResponses, RevokeKeyData, RevokeKeyErrors, RevokeKeyResponses, RunCommandData, RunCommandErrors, RunCommandResponses, SayData, SayErrors, SayResponses, SessionEventsData, SessionEventsErrors, SessionEventsResponses, SetPlaybackData, SetPlaybackErrors, SetPlaybackResponses, SetSettingData, SetSettingErrors, SetSettingResponses, ShareCollectionData, ShareCollectionErrors, ShareCollectionResponses, SharedCaptionsData, SharedCaptionsErrors, SharedCaptionsResponses, SharedEpisodeData, SharedEpisodeErrors, SharedEpisodeResponses, SharedLineAudioData, SharedLineAudioErrors, SharedLineAudioResponses, SharedScriptData, SharedScriptErrors, SharedScriptResponses, SharedSlideData, SharedSlideErrors, SharedSlideResponses, SharedVideoData, SharedVideoErrors, SharedVideoResponses, SlideData, SlideErrors, SlideResponses, UpdateCollectionData, UpdateCollectionErrors, UpdateCollectionResponses, UpdateSessionData, UpdateSessionErrors, UpdateSessionResponses, UpdateShareData, UpdateShareErrors, UpdateShareResponses, VoiceAskData, VoiceAskErrors, VoiceAskResponses, WebSearchData, WebSearchErrors, WebSearchResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -768,6 +768,112 @@ export const getCollectionShare = <ThrowOnError extends boolean = false>(options
  */
 export const shareCollection = <ThrowOnError extends boolean = false>(options: Options<ShareCollectionData, ThrowOnError>): RequestResult<ShareCollectionResponses, ShareCollectionErrors, ThrowOnError> => (options.client ?? client).post<ShareCollectionResponses, ShareCollectionErrors, ThrowOnError>({
     url: '/api/collections/{cid}/shares',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Get Video
+ *
+ * The video, to play (with range requests) or to download.
+ */
+export const getVideo = <ThrowOnError extends boolean = false>(options: Options<GetVideoData, ThrowOnError>): RequestResult<GetVideoResponses, GetVideoErrors, ThrowOnError> => (options.client ?? client).get<GetVideoResponses, GetVideoErrors, ThrowOnError>({ url: '/api/sessions/{sid}/video', ...options });
+
+/**
+ * Make Video
+ *
+ * Make a video of a finished output: its narration over its slides (an
+ * audio overview's chapters as title cards), with chapters and a caption
+ * track. Takes about a minute; follow it on /api/jobs/{job_id}. Asking
+ * again while one is being made returns that one.
+ */
+export const makeVideo = <ThrowOnError extends boolean = false>(options: Options<MakeVideoData, ThrowOnError>): RequestResult<MakeVideoResponses, MakeVideoErrors, ThrowOnError> => (options.client ?? client).post<MakeVideoResponses, MakeVideoErrors, ThrowOnError>({
+    url: '/api/sessions/{sid}/video',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * List Videos
+ *
+ * Every style's video of an output and how far it is.
+ */
+export const listVideos = <ThrowOnError extends boolean = false>(options: Options<ListVideosData, ThrowOnError>): RequestResult<ListVideosResponses, ListVideosErrors, ThrowOnError> => (options.client ?? client).get<ListVideosResponses, ListVideosErrors, ThrowOnError>({ url: '/api/sessions/{sid}/videos', ...options });
+
+/**
+ * Get Captions
+ *
+ * The video's narration as WebVTT captions.
+ */
+export const getCaptions = <ThrowOnError extends boolean = false>(options: Options<GetCaptionsData, ThrowOnError>): RequestResult<GetCaptionsResponses, GetCaptionsErrors, ThrowOnError> => (options.client ?? client).get<GetCaptionsResponses, GetCaptionsErrors, ThrowOnError>({ url: '/api/sessions/{sid}/video/captions', ...options });
+
+/**
+ * Shared Video
+ *
+ * The video of an output a share includes.
+ */
+export const sharedVideo = <ThrowOnError extends boolean = false>(options: Options<SharedVideoData, ThrowOnError>): RequestResult<SharedVideoResponses, SharedVideoErrors, ThrowOnError> => (options.client ?? client).get<SharedVideoResponses, SharedVideoErrors, ThrowOnError>({ url: '/api/shares/{share_id}/sessions/{sid}/video', ...options });
+
+/**
+ * Shared Captions
+ *
+ * The captions of a video of an output a share includes.
+ */
+export const sharedCaptions = <ThrowOnError extends boolean = false>(options: Options<SharedCaptionsData, ThrowOnError>): RequestResult<SharedCaptionsResponses, SharedCaptionsErrors, ThrowOnError> => (options.client ?? client).get<SharedCaptionsResponses, SharedCaptionsErrors, ThrowOnError>({ url: '/api/shares/{share_id}/sessions/{sid}/video/captions', ...options });
+
+/**
+ * Get Script
+ *
+ * The video's chapters, narration and scenes, with their times.
+ */
+export const getScript = <ThrowOnError extends boolean = false>(options: Options<GetScriptData, ThrowOnError>): RequestResult<GetScriptResponses, GetScriptErrors, ThrowOnError> => (options.client ?? client).get<GetScriptResponses, GetScriptErrors, ThrowOnError>({ url: '/api/sessions/{sid}/video/script', ...options });
+
+/**
+ * Shared Script
+ *
+ * The script of a video of an output a share includes.
+ */
+export const sharedScript = <ThrowOnError extends boolean = false>(options: Options<SharedScriptData, ThrowOnError>): RequestResult<SharedScriptResponses, SharedScriptErrors, ThrowOnError> => (options.client ?? client).get<SharedScriptResponses, SharedScriptErrors, ThrowOnError>({ url: '/api/shares/{share_id}/sessions/{sid}/video/script', ...options });
+
+/**
+ * Explain Moment
+ *
+ * Explain a moment of the video, or answer a question about it, from
+ * the video's script and the collection's sources. Takes a few seconds.
+ */
+export const explainMoment = <ThrowOnError extends boolean = false>(options: Options<ExplainMomentData, ThrowOnError>): RequestResult<ExplainMomentResponses, ExplainMomentErrors, ThrowOnError> => (options.client ?? client).post<ExplainMomentResponses, ExplainMomentErrors, ThrowOnError>({
+    url: '/api/sessions/{sid}/video/explain',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Collection Videos
+ *
+ * Every video asked for of a collection's outputs, and how far each is:
+ * what an outputs list shows on its cards, in one request.
+ */
+export const collectionVideos = <ThrowOnError extends boolean = false>(options: Options<CollectionVideosData, ThrowOnError>): RequestResult<CollectionVideosResponses, CollectionVideosErrors, ThrowOnError> => (options.client ?? client).get<CollectionVideosResponses, CollectionVideosErrors, ThrowOnError>({ url: '/api/collections/{cid}/videos', ...options });
+
+/**
+ * Make Overview
+ *
+ * Make a video overview of a collection's sources: one narrator's deck,
+ * built as any deck is (and refused as one would be), then its video once
+ * it is ready. Follow the build on /api/sessions/{sid}/events and the video
+ * on /api/sessions/{sid}/videos.
+ */
+export const makeOverview = <ThrowOnError extends boolean = false>(options: Options<MakeOverviewData, ThrowOnError>): RequestResult<MakeOverviewResponses, MakeOverviewErrors, ThrowOnError> => (options.client ?? client).post<MakeOverviewResponses, MakeOverviewErrors, ThrowOnError>({
+    url: '/api/collections/{cid}/videos',
     ...options,
     headers: {
         'Content-Type': 'application/json',

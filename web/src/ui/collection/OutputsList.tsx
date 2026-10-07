@@ -17,6 +17,7 @@ import {
 } from "../outputs";
 import type { Open } from "../routes";
 import { useStore } from "../store";
+import { VideoLine } from "../video";
 import type { PageActions } from "./actions";
 import type { PageState } from "./state";
 
@@ -185,6 +186,7 @@ const SessionItem = memo(function SessionItem({
       busy={busy}
       err={err}
       onDismissErr={() => A.setRowErr(`session:${s.sid}`, "")}
+      extra={<VideoLine sid={s.sid} ready={s.state === "ready"} ro={ro} />}
     />
   );
 });

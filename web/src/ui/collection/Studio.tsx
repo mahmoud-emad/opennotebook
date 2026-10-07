@@ -3,7 +3,7 @@
 // makes it. What it costs is said before the click, and itemised behind
 // Estimate cost.
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { EstimateBanner } from "../cost";
 import { CostDialog, LimitNote } from "../dialogs";
 import { Icon } from "../Icon";
@@ -14,6 +14,7 @@ import { assetUrl } from "../api-studio";
 import { SettingsLink } from "../settings";
 import { OUTPUTS, isBuild, outputBlurb, outputHint, outputIcon, outputLabel, type Output } from "../shell";
 import { useStore, useStoreSel, type Store } from "../store";
+import { VideoOptions, VideoTile } from "../video";
 import type { PageActions } from "./actions";
 import { fitLength, staged, stagedCount, type PageState } from "./state";
 
@@ -22,6 +23,10 @@ export function Studio({ S, A, onOpen }: { S: PageState; A: PageActions; onOpen:
   const kindNow = useStore(S.chosen);
   const nSrc = useStoreSel(S.srcs, stagedCount);
   const srcsLoaded = useStore(S.srcsLoaded);
+  // The Video overview tool: open or not. Its own, beside the chosen tile,
+  // and never both.
+  const [video, setVideo] = useState(false);
+  const cid = useStore(S.props).cid;
   return (
     <>
       <div className="sec-h">
@@ -38,6 +43,7 @@ export function Studio({ S, A, onOpen }: { S: PageState; A: PageActions; onOpen:
             onClick={() => {
               S.chosen.set(S.chosen.get() === k ? null : k);
               S.genErr.set("");
+              setVideo(false);
             }}
           >
             <span className="tile-i">
@@ -47,10 +53,29 @@ export function Studio({ S, A, onOpen }: { S: PageState; A: PageActions; onOpen:
             <span className="tile-d">{outputBlurb[k]}</span>
           </button>
         ))}
+        <VideoTile
+          on={video}
+          disabled={nSrc === 0}
+          title={nSrc > 0 ? "A few minutes · about 30 cents" : srcsLoaded ? "Add a source first" : "Loading sources…"}
+          onClick={() => {
+            S.chosen.set(null);
+            setVideo(!video);
+          }}
+        />
       </div>
       {nSrc === 0 && srcsLoaded && <p className="tiles-hint">Add a source first.</p>}
 
       {kindNow !== null && nSrc > 0 && <Options k={kindNow} S={S} A={A} onOpen={onOpen} />}
+      {video && kindNow === null && nSrc > 0 && (
+        <VideoOptions
+          cid={cid}
+          onMade={() => {
+            setVideo(false);
+            void A.load();
+          }}
+          onCancel={() => setVideo(false)}
+        />
+      )}
     </>
   );
 }

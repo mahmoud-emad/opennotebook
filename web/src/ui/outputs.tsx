@@ -2,7 +2,7 @@
 // an audio overview, a map or a set of notes, each saying where it is. A port
 // of the old app's `outputs.rs`.
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { errText, type OutputProgress, type SessionSummary } from "./api";
 import {
   mindmapDelete,
@@ -276,8 +276,11 @@ export function SessionRow({
   busy = "",
   err = "",
   onDismissErr,
+  extra = null,
 }: {
   s: SessionSummary;
+  /** Shown under the row: its videos (ui/video.tsx). */
+  extra?: ReactNode;
   /** How far its prep is, from the collection's event stream; null until it
    * says. */
   at?: OutputProgress | null;
@@ -392,6 +395,7 @@ export function SessionRow({
           )
         )}
       </div>
+      {extra}
       {retryErr !== "" && <RowErr text={retryErr} onDismiss={() => setRetryErr("")} />}
       {err !== "" && <RowErr text={err} onDismiss={() => onDismissErr?.()} />}
       {why && why[1] !== "" && (

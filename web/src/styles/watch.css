@@ -1,0 +1,136 @@
+/* The watch page of a video (ui/watch.tsx): the video leads on a backdrop,
+   its chapters a strip under it, and the rail beside it is the tutor, the
+   transcript and the chapters. One viewport tall on a desktop; on a phone
+   the video comes first and the rail follows. Every rule is scoped to
+   .watch-page, and the colours are the studio's tokens. */
+body.watch-open { overflow:hidden; }
+.watch-page {
+  --line:var(--bs-border-color-translucent); --panel:var(--bs-tertiary-bg); --raise:var(--bs-secondary-bg);
+  --soft:var(--st-hover-bg); --dim:var(--bs-secondary-color); --em:var(--bs-emphasis-color);
+  --accent:var(--bs-primary); --link:var(--bs-primary-text-emphasis);
+  display:grid; grid-template-columns:minmax(0,1fr) 400px; grid-template-rows:auto minmax(0,1fr);
+  height:100vh; height:100dvh; background:var(--bs-body-bg); color:var(--bs-body-color);
+}
+.watch-page * { box-sizing:border-box; }
+.watch-page .grow { flex:1; }
+
+/* ── top bar ─────────────────────────────────────────────────────────────── */
+.watch-page .w-top { grid-column:1 / -1; display:flex; align-items:center; gap:12px; padding:8px 16px;
+  min-height:56px; border-bottom:1px solid var(--line); background:var(--panel); }
+.watch-page .w-back, .watch-page .w-icon { display:grid; place-items:center; width:36px; height:36px; padding:0;
+  border-radius:var(--bs-border-radius); background:transparent; border:0; color:var(--dim); }
+.watch-page .w-back:hover, .watch-page .w-icon:hover { background:var(--soft); color:var(--em); }
+.watch-page .w-titles { flex:1; min-width:0; }
+.watch-page .w-title { font-weight:650; font-size:16px; color:var(--em); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.watch-page .w-sub { font-size:12.5px; color:var(--dim); }
+
+/* ── the video ───────────────────────────────────────────────────────────── */
+.watch-page .w-left { display:flex; flex-direction:column; gap:12px; min-width:0; min-height:0;
+  padding:16px 18px 14px; background:var(--st-backdrop); margin:0; max-width:none; width:auto; }
+.watch-page .w-stage { flex:1; min-height:0; display:flex; align-items:center; justify-content:center; }
+.watch-page .w-video { max-width:100%; max-height:100%; width:100%; aspect-ratio:16 / 9; background:#000;
+  border-radius:var(--bs-border-radius-lg); box-shadow:var(--bs-box-shadow-lg); }
+.watch-page .w-err { color:var(--bs-danger-text-emphasis); font-size:13px; }
+
+/* The chapters, each as wide as it is long: YouTube's chapter bar, with names. */
+.watch-page .w-strip { display:flex; gap:3px; }
+.watch-page .w-seg { flex:1 1 0; min-width:0; display:flex; flex-direction:column; gap:6px; padding:4px 0;
+  background:none; border:0; cursor:pointer; text-align:left; color:var(--dim); }
+.watch-page .w-seg-bar { position:relative; display:block; height:5px; border-radius:3px; overflow:hidden;
+  background:var(--bs-border-color); transition:height .12s; }
+.watch-page .w-seg:hover .w-seg-bar { height:8px; }
+.watch-page .w-seg-fill { position:absolute; inset:0 auto 0 0; background:var(--accent); }
+.watch-page .w-seg-t { font-size:11.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.watch-page .w-seg.on .w-seg-t { color:var(--em); font-weight:600; }
+
+/* ── the rail ────────────────────────────────────────────────────────────── */
+.watch-page .w-rail { display:flex; flex-direction:column; min-height:0; background:var(--panel);
+  border-left:1px solid var(--line); }
+.watch-page .w-tabs { display:flex; gap:2px; padding:8px 10px 0; border-bottom:1px solid var(--line); }
+.watch-page .w-tab { display:inline-flex; align-items:center; gap:7px; padding:9px 12px; background:transparent;
+  border:0; border-bottom:2px solid transparent; border-radius:0; color:var(--dim); font-weight:600; font-size:13.5px; }
+.watch-page .w-tab:hover { color:var(--bs-body-color); }
+.watch-page .w-tab.on { color:var(--em); border-bottom-color:var(--link); }
+
+.watch-page .w-pane { position:relative; flex:1; min-height:0; display:flex; flex-direction:column; }
+.watch-page .w-lines { flex:1; min-height:0; overflow-y:auto; padding:10px; display:flex; flex-direction:column; gap:2px; }
+.watch-page :is(.w-line, .w-chap, .w-scene) { display:flex; gap:10px; width:100%; text-align:left; padding:7px 10px;
+  border:0; border-radius:var(--bs-border-radius); background:transparent; color:inherit; font:inherit;
+  line-height:1.5; cursor:pointer; justify-content:flex-start; align-items:flex-start; height:auto;
+  white-space:normal; font-weight:inherit; }
+.watch-page :is(.w-line, .w-chap, .w-scene):hover { background:var(--soft); }
+.watch-page .w-line.seen { color:var(--dim); }
+.watch-page :is(.w-line, .w-chap, .w-scene).on { background:var(--bs-primary-bg-subtle); color:var(--em); }
+.watch-page .w-line-t { flex:0 0 auto; min-width:38px; font-size:12px; color:var(--link);
+  font-variant-numeric:tabular-nums; padding-top:2px; }
+.watch-page .w-chap { font-weight:650; margin-top:6px; }
+.watch-page .w-scene { padding-left:22px; font-size:13.5px; }
+.watch-page .w-scene > span:last-child { display:flex; flex-direction:column; }
+.watch-page .w-scene-l { font-size:12px; color:var(--dim); }
+.watch-page .w-none { color:var(--dim); padding:10px; }
+.watch-page .w-follow { position:absolute; left:50%; bottom:12px; transform:translateX(-50%);
+  display:inline-flex; align-items:center; gap:6px; padding:6px 14px; border-radius:var(--bs-border-radius-pill);
+  background:var(--accent); color:var(--st-on-primary); border:0; box-shadow:var(--bs-box-shadow); font-size:13px; }
+
+/* ── the tutor ───────────────────────────────────────────────────────────── */
+.watch-page .w-explain { flex:1; min-height:0; display:flex; flex-direction:column; }
+.watch-page .w-log { flex:1; min-height:0; overflow-y:auto; padding:14px 12px; display:flex; flex-direction:column; gap:10px; }
+.watch-page .w-hello { margin:auto 8px; text-align:center; color:var(--dim); font-size:14px; }
+.watch-page .w-hello .ic, .watch-page .w-hello svg { font-size:22px; color:var(--accent); }
+.watch-page .w-msg { padding:9px 12px; border-radius:var(--bs-border-radius-lg); font-size:14px; line-height:1.55;
+  overflow-wrap:anywhere; }
+.watch-page .w-msg.you { align-self:flex-end; max-width:88%; background:var(--bs-primary-bg-subtle);
+  border:1px solid var(--bs-primary-border-subtle); display:flex; flex-direction:column; gap:3px; }
+.watch-page .w-msg.tutor { background:var(--raise); border:1px solid var(--bs-border-color); }
+.watch-page .w-msg.err { background:var(--bs-danger-bg-subtle); border-color:var(--bs-danger); color:var(--bs-danger-text-emphasis); }
+.watch-page .w-msg .md p { margin:0 0 .5em; }
+.watch-page .w-msg .md p:last-child { margin-bottom:0; }
+.watch-page .moment { display:inline; padding:0 5px; margin:0 1px; border:0; border-radius:var(--bs-border-radius-sm);
+  background:var(--bs-primary-bg-subtle); color:var(--link); font:inherit; font-size:.9em; font-weight:600;
+  font-variant-numeric:tabular-nums; cursor:pointer; }
+.watch-page .moment:hover { background:var(--bs-primary-border-subtle); }
+.watch-page .moment.at { align-self:flex-end; font-size:11.5px; }
+.watch-page .w-typing { display:inline-flex; gap:4px; }
+.watch-page .w-typing i { width:6px; height:6px; border-radius:50%; background:var(--dim); animation:w-dot 1.2s infinite; }
+.watch-page .w-typing i:nth-child(2) { animation-delay:.15s; }
+.watch-page .w-typing i:nth-child(3) { animation-delay:.3s; }
+@keyframes w-dot { 0%, 80%, 100% { opacity:.3 } 40% { opacity:1 } }
+
+.watch-page .w-ask { border-top:1px solid var(--line); padding:10px 12px 12px; display:flex; flex-direction:column; gap:8px; }
+.watch-page .w-now { display:flex; align-items:center; gap:8px; min-height:28px; }
+.watch-page .w-now-chip { font-size:12.5px; font-weight:600; color:var(--link); padding:3px 10px;
+  border-radius:var(--bs-border-radius-pill); background:var(--bs-primary-bg-subtle); overflow:hidden;
+  text-overflow:ellipsis; white-space:nowrap; min-width:0; font-variant-numeric:tabular-nums; }
+.watch-page .w-now-where { font-weight:500; }
+.watch-page :is(.w-resume, .w-clear) { display:inline-flex; align-items:center; gap:5px; padding:3px 10px; font-size:12.5px;
+  border-radius:var(--bs-border-radius-pill); border:1px solid var(--bs-border-color); background:var(--raise); color:inherit; }
+.watch-page .w-resume { border-color:var(--accent); color:var(--link); }
+.watch-page .w-clear { border-color:transparent; background:transparent; color:var(--dim); }
+.watch-page .w-quick { display:flex; flex-wrap:wrap; gap:6px; }
+.watch-page .w-q { padding:5px 11px; font-size:12.5px; border-radius:var(--bs-border-radius-pill);
+  border:1px solid var(--bs-border-color); background:var(--bs-body-bg); color:inherit; }
+.watch-page .w-q:hover:not(:disabled) { background:var(--soft); }
+.watch-page .w-q:disabled, .watch-page .w-send:disabled { opacity:.45; cursor:default; }
+.watch-page .w-composer { display:flex; align-items:flex-end; gap:8px; }
+.watch-page .w-composer textarea { flex:1; resize:none; min-height:40px; max-height:120px; padding:9px 12px;
+  border-radius:var(--bs-border-radius-lg); border:1px solid var(--bs-border-color); background:var(--bs-body-bg);
+  color:inherit; font:inherit; font-size:14px; field-sizing:content; }
+.watch-page .w-composer textarea:focus { outline:2px solid var(--st-focus); outline-offset:0; }
+.watch-page .w-send { display:grid; place-items:center; width:40px; height:40px; padding:0; border:0;
+  border-radius:var(--bs-border-radius-lg); background:var(--accent); color:var(--st-on-primary); }
+.watch-page button:focus-visible { outline:2px solid var(--st-focus); outline-offset:2px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .watch-page .w-typing i { animation:none; }
+  .watch-page .w-seg-bar { transition:none; }
+}
+/* A phone: the video first, the rail under it, the page scrolls. */
+@media (max-width:900px) {
+  body.watch-open { overflow:auto; }
+  .watch-page { grid-template-columns:minmax(0,1fr); grid-template-rows:auto auto minmax(480px,1fr); height:auto; min-height:100dvh; }
+  .watch-page .w-left { padding:0 0 10px; }
+  .watch-page .w-video { border-radius:0; box-shadow:none; }
+  .watch-page .w-strip { padding:0 16px; }
+  .watch-page .w-seg-t { display:none; }
+  .watch-page .w-rail { border-left:0; border-top:1px solid var(--line); }
+}

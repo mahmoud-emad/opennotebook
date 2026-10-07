@@ -3774,6 +3774,664 @@
           }
         }
       }
+    },
+    "/api/sessions/{sid}/video": {
+      "post": {
+        "tags": [
+          "video"
+        ],
+        "summary": "Make Video",
+        "description": "Make a video of a finished output: its narration over its slides (an\naudio overview's chapters as title cards), with chapters and a caption\ntrack. Takes about a minute; follow it on /api/jobs/{job_id}. Asking\nagain while one is being made returns that one.",
+        "operationId": "make_video",
+        "parameters": [
+          {
+            "name": "sid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Sid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VideoReq"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VideoState"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "video"
+        ],
+        "summary": "Get Video",
+        "description": "The video, to play (with range requests) or to download.",
+        "operationId": "get_video",
+        "parameters": [
+          {
+            "name": "sid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Sid"
+            }
+          },
+          {
+            "name": "style",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "slides",
+                "whiteboard"
+              ],
+              "type": "string",
+              "description": "The video's style",
+              "default": "slides",
+              "title": "Style"
+            },
+            "description": "The video's style"
+          },
+          {
+            "name": "download",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Send it as a download rather than to play",
+              "default": false,
+              "title": "Download"
+            },
+            "description": "Send it as a download rather than to play"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "An MP4 file",
+            "content": {
+              "video/mp4": {}
+            }
+          },
+          "206": {
+            "description": "The byte range asked for"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/sessions/{sid}/videos": {
+      "get": {
+        "tags": [
+          "video"
+        ],
+        "summary": "List Videos",
+        "description": "Every style's video of an output and how far it is.",
+        "operationId": "list_videos",
+        "parameters": [
+          {
+            "name": "sid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Sid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/VideoState"
+                  },
+                  "title": "Response List Videos"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/sessions/{sid}/video/captions": {
+      "get": {
+        "tags": [
+          "video"
+        ],
+        "summary": "Get Captions",
+        "description": "The video's narration as WebVTT captions.",
+        "operationId": "get_captions",
+        "parameters": [
+          {
+            "name": "sid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Sid"
+            }
+          },
+          {
+            "name": "style",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "slides",
+                "whiteboard"
+              ],
+              "type": "string",
+              "description": "The video's style",
+              "default": "slides",
+              "title": "Style"
+            },
+            "description": "The video's style"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The narration as WebVTT captions",
+            "content": {
+              "text/vtt": {}
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/shares/{share_id}/sessions/{sid}/video": {
+      "get": {
+        "tags": [
+          "video"
+        ],
+        "summary": "Shared Video",
+        "description": "The video of an output a share includes.",
+        "operationId": "shared_video",
+        "parameters": [
+          {
+            "name": "share_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Share Id"
+            }
+          },
+          {
+            "name": "sid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Sid"
+            }
+          },
+          {
+            "name": "style",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "slides",
+                "whiteboard"
+              ],
+              "type": "string",
+              "description": "The video's style",
+              "default": "slides",
+              "title": "Style"
+            },
+            "description": "The video's style"
+          },
+          {
+            "name": "download",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Send it as a download rather than to play",
+              "default": false,
+              "title": "Download"
+            },
+            "description": "Send it as a download rather than to play"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "An MP4 file",
+            "content": {
+              "video/mp4": {}
+            }
+          },
+          "206": {
+            "description": "The byte range asked for"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/shares/{share_id}/sessions/{sid}/video/captions": {
+      "get": {
+        "tags": [
+          "video"
+        ],
+        "summary": "Shared Captions",
+        "description": "The captions of a video of an output a share includes.",
+        "operationId": "shared_captions",
+        "parameters": [
+          {
+            "name": "share_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Share Id"
+            }
+          },
+          {
+            "name": "sid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Sid"
+            }
+          },
+          {
+            "name": "style",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "slides",
+                "whiteboard"
+              ],
+              "type": "string",
+              "description": "The video's style",
+              "default": "slides",
+              "title": "Style"
+            },
+            "description": "The video's style"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The narration as WebVTT captions",
+            "content": {
+              "text/vtt": {}
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/sessions/{sid}/video/script": {
+      "get": {
+        "tags": [
+          "video"
+        ],
+        "summary": "Get Script",
+        "description": "The video's chapters, narration and scenes, with their times.",
+        "operationId": "get_script",
+        "parameters": [
+          {
+            "name": "sid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Sid"
+            }
+          },
+          {
+            "name": "style",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "slides",
+                "whiteboard"
+              ],
+              "type": "string",
+              "description": "The video's style",
+              "default": "slides",
+              "title": "Style"
+            },
+            "description": "The video's style"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VideoScript"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/shares/{share_id}/sessions/{sid}/video/script": {
+      "get": {
+        "tags": [
+          "video"
+        ],
+        "summary": "Shared Script",
+        "description": "The script of a video of an output a share includes.",
+        "operationId": "shared_script",
+        "parameters": [
+          {
+            "name": "share_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Share Id"
+            }
+          },
+          {
+            "name": "sid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Sid"
+            }
+          },
+          {
+            "name": "style",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "slides",
+                "whiteboard"
+              ],
+              "type": "string",
+              "description": "The video's style",
+              "default": "slides",
+              "title": "Style"
+            },
+            "description": "The video's style"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VideoScript"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/sessions/{sid}/video/explain": {
+      "post": {
+        "tags": [
+          "video"
+        ],
+        "summary": "Explain Moment",
+        "description": "Explain a moment of the video, or answer a question about it, from\nthe video's script and the collection's sources. Takes a few seconds.",
+        "operationId": "explain_moment",
+        "parameters": [
+          {
+            "name": "sid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Sid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExplainReq"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExplainOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/collections/{cid}/videos": {
+      "post": {
+        "tags": [
+          "video"
+        ],
+        "summary": "Make Overview",
+        "description": "Make a video overview of a collection's sources: one narrator's deck,\nbuilt as any deck is (and refused as one would be), then its video once\nit is ready. Follow the build on /api/sessions/{sid}/events and the video\non /api/sessions/{sid}/videos.",
+        "operationId": "make_overview",
+        "parameters": [
+          {
+            "name": "cid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Cid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OverviewReq"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OverviewOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "video"
+        ],
+        "summary": "Collection Videos",
+        "description": "Every video asked for of a collection's outputs, and how far each is:\nwhat an outputs list shows on its cards, in one request.",
+        "operationId": "collection_videos",
+        "parameters": [
+          {
+            "name": "cid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Cid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CollectionVideo"
+                  },
+                  "title": "Response Collection Videos"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -4327,6 +4985,190 @@
         ],
         "title": "CollectionSummary"
       },
+      "CollectionVideo": {
+        "properties": {
+          "style": {
+            "type": "string",
+            "enum": [
+              "slides",
+              "whiteboard"
+            ],
+            "title": "Style"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "none",
+              "waiting",
+              "rendering",
+              "ready",
+              "failed"
+            ],
+            "title": "State",
+            "description": "`waiting`: asked for with its output, and starts when that is ready"
+          },
+          "job_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Id",
+            "description": "The render's job, to follow"
+          },
+          "failure": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Failure",
+            "description": "Why it failed, in a sentence"
+          },
+          "bytes": {
+            "type": "integer",
+            "title": "Bytes",
+            "default": 0
+          },
+          "duration_ms": {
+            "type": "integer",
+            "title": "Duration Ms",
+            "default": 0
+          },
+          "chapters": {
+            "type": "integer",
+            "title": "Chapters",
+            "default": 0
+          },
+          "scenes": {
+            "type": "integer",
+            "title": "Scenes",
+            "description": "A whiteboard's scenes",
+            "default": 0
+          },
+          "first_try": {
+            "type": "integer",
+            "title": "First Try",
+            "description": "A whiteboard's scenes that passed every check as first written",
+            "default": 0
+          },
+          "plain": {
+            "type": "integer",
+            "title": "Plain",
+            "description": "A whiteboard's scenes drawn plain after their repair failed",
+            "default": 0
+          },
+          "repaired": {
+            "type": "integer",
+            "title": "Repaired",
+            "description": "A whiteboard's scenes fixed by a repair round",
+            "default": 0
+          },
+          "escalated": {
+            "type": "integer",
+            "title": "Escalated",
+            "description": "A whiteboard's scenes written again by the stronger model",
+            "default": 0
+          },
+          "texts": {
+            "type": "integer",
+            "title": "Texts",
+            "description": "Pieces of text a whiteboard writes on its board",
+            "default": 0
+          },
+          "grounded": {
+            "type": "integer",
+            "title": "Grounded",
+            "description": "Of those, the ones the narration or the sources say",
+            "default": 0
+          },
+          "claims": {
+            "type": "integer",
+            "title": "Claims",
+            "description": "What a whiteboard's scenes assert",
+            "default": 0
+          },
+          "supported": {
+            "type": "integer",
+            "title": "Supported",
+            "description": "Of those, the ones the check found supported",
+            "default": 0
+          },
+          "unchecked": {
+            "type": "integer",
+            "title": "Unchecked",
+            "description": "Scenes the check could not be made for (the checker was down)",
+            "default": 0
+          },
+          "spent_usd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spent Usd",
+            "description": "What the render's model calls cost"
+          },
+          "measured_words": {
+            "type": "boolean",
+            "title": "Measured Words",
+            "description": "Every word's time came from the speech server rather than an estimate",
+            "default": false
+          },
+          "rendered_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rendered At"
+          },
+          "playable": {
+            "type": "boolean",
+            "title": "Playable",
+            "description": "A video can be played now: this one, or while a new one is made or after it failed, the one made before it",
+            "default": false
+          },
+          "waiting": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Waiting",
+            "description": "Why a render has not started, in a sentence: it is queued and no worker is running. Null otherwise"
+          },
+          "session_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Session Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "style",
+          "state",
+          "session_id"
+        ],
+        "title": "CollectionVideo"
+      },
       "Command": {
         "properties": {
           "name": {
@@ -4479,6 +5321,85 @@
         ],
         "title": "CostLine",
         "description": "One step of a build and what it costs: low, typical and high."
+      },
+      "ExplainOut": {
+        "properties": {
+          "answer": {
+            "type": "string",
+            "title": "Answer",
+            "description": "Markdown with [n] markers that match the citations, and [m:ss] moments"
+          },
+          "citations": {
+            "items": {
+              "$ref": "#/components/schemas/Citation"
+            },
+            "type": "array",
+            "title": "Citations"
+          },
+          "t_ms": {
+            "type": "integer",
+            "title": "T Ms",
+            "description": "The moment answered about"
+          }
+        },
+        "type": "object",
+        "required": [
+          "answer",
+          "citations",
+          "t_ms"
+        ],
+        "title": "ExplainOut"
+      },
+      "ExplainReq": {
+        "properties": {
+          "style": {
+            "type": "string",
+            "enum": [
+              "slides",
+              "whiteboard"
+            ],
+            "title": "Style",
+            "default": "whiteboard"
+          },
+          "t_ms": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "T Ms",
+            "description": "The moment of the video asked about"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "ask",
+              "explain",
+              "example",
+              "why",
+              "quiz"
+            ],
+            "title": "Mode",
+            "description": "`ask` answers `question`; the others are the quick prompts",
+            "default": "ask"
+          },
+          "question": {
+            "type": "string",
+            "maxLength": 4000,
+            "title": "Question",
+            "default": ""
+          },
+          "history": {
+            "items": {
+              "$ref": "#/components/schemas/Turn"
+            },
+            "type": "array",
+            "maxItems": 40,
+            "title": "History"
+          }
+        },
+        "type": "object",
+        "required": [
+          "t_ms"
+        ],
+        "title": "ExplainReq"
       },
       "FormatChoice": {
         "properties": {
@@ -5458,6 +6379,54 @@
         ],
         "title": "NotesSummary"
       },
+      "OverviewOut": {
+        "properties": {
+          "session": {
+            "title": "Session",
+            "description": "The output being made, as /api/sessions lists it"
+          },
+          "video": {
+            "$ref": "#/components/schemas/VideoState"
+          }
+        },
+        "type": "object",
+        "required": [
+          "session",
+          "video"
+        ],
+        "title": "OverviewOut"
+      },
+      "OverviewReq": {
+        "properties": {
+          "style": {
+            "type": "string",
+            "enum": [
+              "slides",
+              "whiteboard"
+            ],
+            "title": "Style",
+            "default": "whiteboard"
+          },
+          "length": {
+            "type": "string",
+            "enum": [
+              "short",
+              "default",
+              "long"
+            ],
+            "title": "Length",
+            "default": "default"
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 200,
+            "title": "Title",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "title": "OverviewReq"
+      },
       "Playhead": {
         "properties": {
           "slide_ordinal": {
@@ -5732,6 +6701,91 @@
           "text"
         ],
         "title": "Say"
+      },
+      "ScriptChapter": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "start_ms": {
+            "type": "integer",
+            "title": "Start Ms"
+          },
+          "end_ms": {
+            "type": "integer",
+            "title": "End Ms"
+          }
+        },
+        "type": "object",
+        "required": [
+          "title",
+          "start_ms",
+          "end_ms"
+        ],
+        "title": "ScriptChapter"
+      },
+      "ScriptLine": {
+        "properties": {
+          "start_ms": {
+            "type": "integer",
+            "title": "Start Ms"
+          },
+          "end_ms": {
+            "type": "integer",
+            "title": "End Ms"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          }
+        },
+        "type": "object",
+        "required": [
+          "start_ms",
+          "end_ms",
+          "text"
+        ],
+        "title": "ScriptLine"
+      },
+      "ScriptScene": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "title": "Title",
+            "default": ""
+          },
+          "start_ms": {
+            "type": "integer",
+            "title": "Start Ms"
+          },
+          "end_ms": {
+            "type": "integer",
+            "title": "End Ms"
+          },
+          "labels": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Labels",
+            "description": "What its board writes"
+          },
+          "claims": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Claims",
+            "description": "What it asserts"
+          }
+        },
+        "type": "object",
+        "required": [
+          "start_ms",
+          "end_ms"
+        ],
+        "title": "ScriptScene"
       },
       "SearchReq": {
         "properties": {
@@ -7342,6 +8396,29 @@
         ],
         "title": "StyleChoice"
       },
+      "Turn": {
+        "properties": {
+          "role": {
+            "type": "string",
+            "enum": [
+              "user",
+              "assistant"
+            ],
+            "title": "Role"
+          },
+          "text": {
+            "type": "string",
+            "maxLength": 8000,
+            "title": "Text"
+          }
+        },
+        "type": "object",
+        "required": [
+          "role",
+          "text"
+        ],
+        "title": "Turn"
+      },
       "UploadRules": {
         "properties": {
           "extensions": {
@@ -7440,6 +8517,245 @@
           "type"
         ],
         "title": "ValidationError"
+      },
+      "VideoReq": {
+        "properties": {
+          "style": {
+            "type": "string",
+            "enum": [
+              "slides",
+              "whiteboard"
+            ],
+            "title": "Style",
+            "default": "slides"
+          }
+        },
+        "type": "object",
+        "title": "VideoReq"
+      },
+      "VideoScript": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "duration_ms": {
+            "type": "integer",
+            "title": "Duration Ms"
+          },
+          "chapters": {
+            "items": {
+              "$ref": "#/components/schemas/ScriptChapter"
+            },
+            "type": "array",
+            "title": "Chapters"
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/ScriptLine"
+            },
+            "type": "array",
+            "title": "Lines",
+            "description": "The narration, line by line"
+          },
+          "scenes": {
+            "items": {
+              "$ref": "#/components/schemas/ScriptScene"
+            },
+            "type": "array",
+            "title": "Scenes",
+            "description": "A whiteboard's scenes; empty for slides"
+          }
+        },
+        "type": "object",
+        "required": [
+          "title",
+          "duration_ms",
+          "chapters",
+          "lines",
+          "scenes"
+        ],
+        "title": "VideoScript",
+        "description": "What a video says and shows, and when."
+      },
+      "VideoState": {
+        "properties": {
+          "style": {
+            "type": "string",
+            "enum": [
+              "slides",
+              "whiteboard"
+            ],
+            "title": "Style"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "none",
+              "waiting",
+              "rendering",
+              "ready",
+              "failed"
+            ],
+            "title": "State",
+            "description": "`waiting`: asked for with its output, and starts when that is ready"
+          },
+          "job_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Id",
+            "description": "The render's job, to follow"
+          },
+          "failure": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Failure",
+            "description": "Why it failed, in a sentence"
+          },
+          "bytes": {
+            "type": "integer",
+            "title": "Bytes",
+            "default": 0
+          },
+          "duration_ms": {
+            "type": "integer",
+            "title": "Duration Ms",
+            "default": 0
+          },
+          "chapters": {
+            "type": "integer",
+            "title": "Chapters",
+            "default": 0
+          },
+          "scenes": {
+            "type": "integer",
+            "title": "Scenes",
+            "description": "A whiteboard's scenes",
+            "default": 0
+          },
+          "first_try": {
+            "type": "integer",
+            "title": "First Try",
+            "description": "A whiteboard's scenes that passed every check as first written",
+            "default": 0
+          },
+          "plain": {
+            "type": "integer",
+            "title": "Plain",
+            "description": "A whiteboard's scenes drawn plain after their repair failed",
+            "default": 0
+          },
+          "repaired": {
+            "type": "integer",
+            "title": "Repaired",
+            "description": "A whiteboard's scenes fixed by a repair round",
+            "default": 0
+          },
+          "escalated": {
+            "type": "integer",
+            "title": "Escalated",
+            "description": "A whiteboard's scenes written again by the stronger model",
+            "default": 0
+          },
+          "texts": {
+            "type": "integer",
+            "title": "Texts",
+            "description": "Pieces of text a whiteboard writes on its board",
+            "default": 0
+          },
+          "grounded": {
+            "type": "integer",
+            "title": "Grounded",
+            "description": "Of those, the ones the narration or the sources say",
+            "default": 0
+          },
+          "claims": {
+            "type": "integer",
+            "title": "Claims",
+            "description": "What a whiteboard's scenes assert",
+            "default": 0
+          },
+          "supported": {
+            "type": "integer",
+            "title": "Supported",
+            "description": "Of those, the ones the check found supported",
+            "default": 0
+          },
+          "unchecked": {
+            "type": "integer",
+            "title": "Unchecked",
+            "description": "Scenes the check could not be made for (the checker was down)",
+            "default": 0
+          },
+          "spent_usd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spent Usd",
+            "description": "What the render's model calls cost"
+          },
+          "measured_words": {
+            "type": "boolean",
+            "title": "Measured Words",
+            "description": "Every word's time came from the speech server rather than an estimate",
+            "default": false
+          },
+          "rendered_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rendered At"
+          },
+          "playable": {
+            "type": "boolean",
+            "title": "Playable",
+            "description": "A video can be played now: this one, or while a new one is made or after it failed, the one made before it",
+            "default": false
+          },
+          "waiting": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Waiting",
+            "description": "Why a render has not started, in a sentence: it is queued and no worker is running. Null otherwise"
+          }
+        },
+        "type": "object",
+        "required": [
+          "style",
+          "state"
+        ],
+        "title": "VideoState",
+        "description": "One style's video of an output, and how far it is."
       },
       "WebHit": {
         "properties": {

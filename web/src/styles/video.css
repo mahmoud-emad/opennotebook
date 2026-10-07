@@ -1,0 +1,15 @@
+/* Videos of outputs (ui/video.tsx): a video's line under its output's row,
+   and the dialog that plays it. Kept apart from style.css, which another
+   session edits. */
+
+.out-video { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin: -2px 0 6px 18px;
+  font-size: .85rem; color: var(--bs-secondary-color); }
+.out-video .ic { flex: none; }
+.out-video .link-btn { display: inline-flex; align-items: center; gap: 4px; }
+.out-video .out-d.bad { color: var(--bs-danger-text-emphasis); }
+
+.set-dialog.video-dialog { display: flex; flex-direction: column; width: min(1100px, 96vw); height: auto;
+  max-height: 92vh; }
+.video-dialog .set-head { display: flex; align-items: center; gap: 6px; }
+.video-dialog .set-head h3 { flex: 1; }
+.video-player { display: block; width: 100%; aspect-ratio: 16 / 9; background: #000; border-radius: 0 0 8px 8px; }

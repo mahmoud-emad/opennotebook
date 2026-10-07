@@ -30,7 +30,10 @@ export type View =
   | { kind: "new"; output: Output }
   /** The player, a page of its own: an output of yours, or one a share
    * includes (`?share=<share_id>`). */
-  | { kind: "play"; sid: string; share: string | null };
+  | { kind: "play"; sid: string; share: string | null }
+  /** A video's watch page, with the tutor beside it: an output's video in
+   * one style (`?style=`), of yours or one a share includes. */
+  | { kind: "watch"; sid: string; style: "whiteboard" | "slides"; share: string | null };
 
 /** The path segment of the page listing every collection of yours. */
 export const MY_COLLECTIONS_ROUTE = "my-collections";
@@ -43,6 +46,8 @@ export const MIND_MAP_ROUTE = "mind-map";
 export const STUDY_NOTES_ROUTE = "study-notes";
 /** The path segment of the player: play/<sid>. */
 export const PLAY_ROUTE = "play";
+/** The path segment of a video's watch page: watch/<sid>?style=<style>. */
+export const WATCH_ROUTE = "watch";
 
 export function routeFromLocation(): View {
   const path = window.location.pathname;
@@ -66,6 +71,12 @@ export function parseRoute(rest: string, search = ""): View {
   if (a === PLAY_ROUTE && parts.length === 2 && ok(b)) {
     const share = new URLSearchParams(search).get("share") ?? "";
     return { kind: "play", sid: b, share: ok(share) ? share : null };
+  }
+  if (a === WATCH_ROUTE && parts.length === 2 && ok(b)) {
+    const q = new URLSearchParams(search);
+    const share = q.get("share") ?? "";
+    const style = q.get("style") === "slides" ? "slides" : "whiteboard";
+    return { kind: "watch", sid: b, style, share: ok(share) ? share : null };
   }
   if (parts.length === 1 && a === "") return { kind: "discover" };
   if (parts.length === 1 && a === MY_COLLECTIONS_ROUTE) return { kind: "mine" };
@@ -107,6 +118,8 @@ export function routePath(v: View): string {
       return `/ui/c/${v.cid}/${v.open.kind === "map" ? MIND_MAP_ROUTE : STUDY_NOTES_ROUTE}/${v.open.id}`;
     case "play":
       return `/ui/${PLAY_ROUTE}/${v.sid}${v.share ? `?share=${v.share}` : ""}`;
+    case "watch":
+      return `/ui/${WATCH_ROUTE}/${v.sid}?style=${v.style}${v.share ? `&share=${v.share}` : ""}`;
   }
 }
 

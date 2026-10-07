@@ -30,6 +30,14 @@ describe("routes", () => {
     expect(parseRoute("/shared/a b")).toEqual(DISCOVER);
     expect(parseRoute("/shared/s1/extra")).toEqual(DISCOVER);
   });
+  // A video's watch page: its style in the query, whiteboard unless slides.
+  it("gives a video's watch page its address", () => {
+    const v = { kind: "watch", sid: "s1", style: "slides", share: null } as const;
+    expect(routePath(v)).toBe("/ui/watch/s1?style=slides");
+    expect(parseRoute("/watch/s1", "?style=slides")).toEqual(v);
+    expect(parseRoute("/watch/s1", "?style=odd&share=h2")).toEqual({ ...v, style: "whiteboard", share: "h2" });
+    expect(parseRoute("/watch/")).toEqual(DISCOVER);
+  });
   it("keeps the addresses from before collections", () => {
     expect(parseRoute("/new-session")).toEqual({ kind: "new", output: "session" });
     expect(parseRoute("/new-audio-overview")).toEqual({ kind: "new", output: "audio" });
