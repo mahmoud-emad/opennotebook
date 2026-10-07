@@ -1847,6 +1847,12 @@ export type SessionEstimate = {
      */
     over_limit: boolean;
     /**
+     * Limited Usd
+     *
+     * What the limit is held against: the high estimate, or for a video overview its deck's (its render is not held to the limit)
+     */
+    limited_usd?: number;
+    /**
      * Limit Note
      *
      * Over the limit: why it would be refused and what to change, ending with where the limit is set (`Settings › Costs & limits.`), as a refusal says it. Null when it is within the limit

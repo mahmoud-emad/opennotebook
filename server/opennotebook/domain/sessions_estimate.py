@@ -754,7 +754,19 @@ class Live:
 
     @property
     def over_limit(self) -> bool:
-        return self.limit_usd > 0 and self.estimate.total[2] > self.limit_usd
+        return self.limit_usd > 0 and self.limited_usd > self.limit_usd
+
+    @property
+    def limited_usd(self) -> float:
+        """The most the spending limit is held against: the whole estimate's
+        high end, but for a video overview only its deck's. The limit is
+        checked on the deck's build; the render is not stopped by it yet,
+        and its high end alone ($0.67 for a short whiteboard) would refuse
+        every whiteboard video at the default $0.50 limit."""
+        if self.video is None:
+            return self.estimate.total[2]
+        render = sum(ln.cost[2] for ln in self.estimate.lines if ln.group == GROUP_VIDEO)
+        return self.estimate.total[2] - render
 
     @property
     def fix(self) -> str:

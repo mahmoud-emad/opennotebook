@@ -25,6 +25,7 @@ from tests.conftest import other_person
 from tests.model import add_note
 
 ESTIMATE_KEYS = {
+    "limited_usd",
     "total_low_usd",
     "total_typical_usd",
     "total_high_usd",
@@ -213,10 +214,17 @@ async def test_a_video_overview_is_priced_as_its_deck_and_its_render(
     long = await priced("videos/estimate", {"length": "long"})
     assert (short["slides"], long["slides"]) == (4, 9)
     assert short["total_typical_usd"] < board["total_typical_usd"] < long["total_typical_usd"]
-    # Every theme today is drawn, at no extra cost.
+    # A drawn theme costs nothing more; an illustrated one adds its pictures.
     chalk = await priced("videos/estimate", {"theme": "chalkboard"})
     assert chalk["total_high_usd"] == pytest.approx(board["total_high_usd"])
     assert chalk["facts"][-1] == "Chalkboard theme"
+    painted = await priced("videos/estimate", {"theme": "watercolor"})
+    assert painted["total_typical_usd"] > board["total_typical_usd"]
+    # Only the deck is held to the spending limit: the render is not stopped
+    # by it, so a whiteboard is not refused for the render's high end.
+    assert board["limited_usd"] == pytest.approx(deck["total_high_usd"])
+    assert board["limited_usd"] < board["total_high_usd"]
+    assert not board["over_limit"]
 
 
 async def test_a_read_only_copy_is_not_built_from(

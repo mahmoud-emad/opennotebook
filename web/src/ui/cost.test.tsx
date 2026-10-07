@@ -54,6 +54,14 @@ describe("the cost of a tool", () => {
     expect(screen.getByRole("status").textContent).toBe("Estimated $0.00040 – $0.00080 · within your $0.50 limit.");
   });
 
+  it("says only a video's deck is held to the limit, when the whole could go over it", () => {
+    const video = { ...e, total_low_usd: 0.34, total_high_usd: 0.98, limited_usd: 0.23 };
+    render(<EstimateBanner est={video} loading={false} failed={false} />);
+    expect(screen.getByRole("status").textContent).toBe(
+      "Estimated $0.34 – $0.98 · the deck is within your $0.50 limit; the video itself can cost more.",
+    );
+  });
+
   it("names no limit when there is none", () => {
     render(<EstimateBanner est={{ ...e, limit_usd: 0 }} loading={false} failed={false} />);
     expect(screen.getByRole("status").textContent).toBe("Estimated $0.00040 – $0.00080.");

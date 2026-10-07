@@ -7203,6 +7203,12 @@
             "title": "Over Limit",
             "description": "The high estimate is over the limit: a build is refused"
           },
+          "limited_usd": {
+            "type": "number",
+            "title": "Limited Usd",
+            "description": "What the limit is held against: the high estimate, or for a video overview its deck's (its render is not held to the limit)",
+            "default": 0.0
+          },
           "limit_note": {
             "anyOf": [
               {

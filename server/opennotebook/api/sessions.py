@@ -233,6 +233,11 @@ class SessionEstimate(BaseModel):
     minutes: int
     limit_usd: float = Field(description="The spending limit; 0 is none")
     over_limit: bool = Field(description="The high estimate is over the limit: a build is refused")
+    limited_usd: float = Field(
+        default=0.0,
+        description="What the limit is held against: the high estimate, or for a video "
+        "overview its deck's (its render is not held to the limit)",
+    )
     limit_note: str | None = Field(
         default=None,
         description="Over the limit: why it would be refused and what to change, ending with "
@@ -281,7 +286,8 @@ class SessionEstimate(BaseModel):
             minutes=i.minutes,
             limit_usd=live.limit_usd,
             over_limit=live.over_limit,
-            limit_note=est.over_limit_message(e.total[2], live.limit_usd, live.fix)
+            limited_usd=live.limited_usd,
+            limit_note=est.over_limit_message(live.limited_usd, live.limit_usd, live.fix)
             if live.over_limit
             else None,
             model=i.script_model,
