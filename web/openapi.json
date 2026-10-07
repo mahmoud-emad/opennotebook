@@ -4333,6 +4333,32 @@
         }
       }
     },
+    "/api/video/themes": {
+      "get": {
+        "tags": [
+          "video"
+        ],
+        "summary": "Video Themes",
+        "description": "The looks a whiteboard video can be made in, the default first.",
+        "operationId": "video_themes",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ThemeOut"
+                  },
+                  "type": "array",
+                  "title": "Response Video Themes"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/collections/{cid}/videos": {
       "post": {
         "tags": [
@@ -5136,6 +5162,18 @@
               }
             ],
             "title": "Rendered At"
+          },
+          "theme": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Theme",
+            "description": "A whiteboard's theme; null for slides and older videos"
           },
           "playable": {
             "type": "boolean",
@@ -6422,6 +6460,18 @@
             "maxLength": 200,
             "title": "Title",
             "default": ""
+          },
+          "theme": {
+            "type": "string",
+            "enum": [
+              "whiteboard",
+              "notebook",
+              "chalkboard",
+              "blueprint"
+            ],
+            "title": "Theme",
+            "description": "A whiteboard's look",
+            "default": "whiteboard"
           }
         },
         "type": "object",
@@ -8396,6 +8446,34 @@
         ],
         "title": "StyleChoice"
       },
+      "ThemeOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "family": {
+            "type": "string",
+            "enum": [
+              "drawn",
+              "illustrated"
+            ],
+            "title": "Family",
+            "description": "`drawn`: the scenes drawn in another paper, ink and hand, at no extra cost; `illustrated`: a picture per scene, at a cost per scene"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "label",
+          "family"
+        ],
+        "title": "ThemeOut"
+      },
       "Turn": {
         "properties": {
           "role": {
@@ -8528,6 +8606,18 @@
             ],
             "title": "Style",
             "default": "slides"
+          },
+          "theme": {
+            "type": "string",
+            "enum": [
+              "whiteboard",
+              "notebook",
+              "chalkboard",
+              "blueprint"
+            ],
+            "title": "Theme",
+            "description": "A whiteboard's look",
+            "default": "whiteboard"
           }
         },
         "type": "object",
@@ -8729,6 +8819,18 @@
               }
             ],
             "title": "Rendered At"
+          },
+          "theme": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Theme",
+            "description": "A whiteboard's theme; null for slides and older videos"
           },
           "playable": {
             "type": "boolean",

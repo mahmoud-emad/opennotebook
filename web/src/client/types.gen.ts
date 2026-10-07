@@ -489,6 +489,12 @@ export type CollectionVideo = {
      */
     rendered_at?: string | null;
     /**
+     * Theme
+     *
+     * A whiteboard's theme; null for slides and older videos
+     */
+    theme?: string | null;
+    /**
      * Playable
      *
      * A video can be played now: this one, or while a new one is made or after it failed, the one made before it
@@ -1370,6 +1376,12 @@ export type OverviewReq = {
      * Title
      */
     title?: string;
+    /**
+     * Theme
+     *
+     * A whiteboard's look
+     */
+    theme?: 'whiteboard' | 'notebook' | 'chalkboard' | 'blueprint';
 };
 
 /**
@@ -2778,6 +2790,26 @@ export type StyleChoice = {
 };
 
 /**
+ * ThemeOut
+ */
+export type ThemeOut = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Label
+     */
+    label: string;
+    /**
+     * Family
+     *
+     * `drawn`: the scenes drawn in another paper, ink and hand, at no extra cost; `illustrated`: a picture per scene, at a cost per scene
+     */
+    family: 'drawn' | 'illustrated';
+};
+
+/**
  * Turn
  */
 export type Turn = {
@@ -2881,6 +2913,12 @@ export type VideoReq = {
      * Style
      */
     style?: 'slides' | 'whiteboard';
+    /**
+     * Theme
+     *
+     * A whiteboard's look
+     */
+    theme?: 'whiteboard' | 'notebook' | 'chalkboard' | 'blueprint';
 };
 
 /**
@@ -3031,6 +3069,12 @@ export type VideoState = {
      * Rendered At
      */
     rendered_at?: string | null;
+    /**
+     * Theme
+     *
+     * A whiteboard's theme; null for slides and older videos
+     */
+    theme?: string | null;
     /**
      * Playable
      *
@@ -6281,6 +6325,24 @@ export type ExplainMomentResponses = {
 };
 
 export type ExplainMomentResponse = ExplainMomentResponses[keyof ExplainMomentResponses];
+
+export type VideoThemesData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/video/themes';
+};
+
+export type VideoThemesResponses = {
+    /**
+     * Response Video Themes
+     *
+     * Successful Response
+     */
+    200: Array<ThemeOut>;
+};
+
+export type VideoThemesResponse = VideoThemesResponses[keyof VideoThemesResponses];
 
 export type CollectionVideosData = {
     body?: never;

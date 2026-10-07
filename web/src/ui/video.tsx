@@ -15,6 +15,8 @@ import { follow, routeUrl, type View } from "./routes";
 import "../styles/video.css";
 
 export type VideoStyle = "whiteboard" | "slides";
+/** A whiteboard's look (the server's build/whiteboard/theme.py). */
+export type VideoTheme = Rest.ThemeOut;
 export type VideoLength = "short" | "default" | "long";
 export type Video = Rest.VideoState;
 
@@ -38,16 +40,26 @@ export async function makeOverview(
   cid: string,
   style: VideoStyle,
   length: VideoLength,
+  theme?: string,
 ): Promise<Rest.OverviewOut> {
-  return call<Rest.OverviewOut>("POST", `/collections/${enc(cid)}/videos`, { style, length });
+  return call<Rest.OverviewOut>("POST", `/collections/${enc(cid)}/videos`, {
+    style,
+    length,
+    ...(theme ? { theme } : {}),
+  });
+}
+
+/** The looks a whiteboard video can be made in, the default first. */
+export async function videoThemes(): Promise<VideoTheme[]> {
+  return call<VideoTheme[]>("GET", "/video/themes");
 }
 
 export async function videosOf(sid: string): Promise<Video[]> {
   return call<Video[]>("GET", `/sessions/${enc(sid)}/videos`);
 }
 
-export async function makeVideo(sid: string, style: VideoStyle): Promise<Video> {
-  return call<Video>("POST", `/sessions/${enc(sid)}/video`, { style });
+export async function makeVideo(sid: string, style: VideoStyle, theme?: string): Promise<Video> {
+  return call<Video>("POST", `/sessions/${enc(sid)}/video`, { style, ...(theme ? { theme } : {}) });
 }
 
 export function videoUrl(sid: string, style: VideoStyle, download = false): string {
