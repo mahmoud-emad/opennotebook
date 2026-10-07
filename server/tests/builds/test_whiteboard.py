@@ -687,6 +687,11 @@ async def test_a_video_keeps_its_script_and_explains_a_moment_of_it(
     assert script["scenes"][0]["labels"] == [c["title"] for c in script["chapters"][1:-1]]
     assert script["scenes"][-1]["labels"] == ["The kernel manages memory."]
     assert script["lines"] and all(ln["text"] for ln in script["lines"])
+    # Every word is timed, in order, within its line, for the captions.
+    for ln in script["lines"]:
+        assert " ".join(w for w, _, _ in ln["words"]).split() == ln["text"].split()
+        starts = [s for _, s, _ in ln["words"]]
+        assert starts == sorted(starts) and ln["start_ms"] <= starts[0] <= ln["end_ms"]
     assert all(sc["labels"] for sc in script["scenes"])
     scene = script["scenes"][-1]
     at = (scene["start_ms"] + scene["end_ms"]) // 2

@@ -153,7 +153,15 @@ def script_of(title: str, timing: tl.Timeline, board: list[dict[str, Any]]) -> d
             {"title": c.title, "start_ms": c.start_ms, "end_ms": c.end_ms} for c in timing.chapters
         ],
         "lines": [
-            {"start_ms": sp.start_ms, "end_ms": sp.end_ms, "text": sp.text, "part": sp.part_ordinal}
+            {
+                "start_ms": sp.start_ms,
+                "end_ms": sp.end_ms,
+                "text": sp.text,
+                "part": sp.part_ordinal,
+                # Each word as shown and when it is said: the watch page
+                # lights each one up as it is spoken.
+                "words": [[w.text, w.start_ms, w.end_ms] for w in sp.words],
+            }
             for sp in timing.lines
         ],
         "scenes": board,

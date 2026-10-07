@@ -58,10 +58,6 @@ export function explainAt(
   return call<Rest.ExplainOut>("POST", `/sessions/${enc(sid)}/video/explain`, body);
 }
 
-function captionsOf(sid: string, style: VideoStyle, share: string | null): string {
-  return `${apiBase()}${base(sid, share)}/video/captions?style=${style}`;
-}
-
 // Captions over the video, on unless turned off in this browser: the voice
 // is the content, and a room is not always quiet (as the slides' player).
 const CAPTIONS_KEY = "watch-captions";
@@ -170,12 +166,22 @@ export function WatchPage({ sid, style, share }: { sid: string; style: VideoStyl
       // Kept for this visit only.
     }
   }, []);
-  // The video's own captions track, shown or hidden: in full screen too.
-  const showCaptions = useCallback(() => {
-    const track = videoRef.current?.textTracks?.[0];
-    if (track) track.mode = captions ? "showing" : "hidden";
-  }, [captions]);
-  useEffect(showCaptions, [showCaptions]);
+  // Full screen is the frame around the video, not the video, so the
+  // captions drawn over it come along: the video's own button is redirected.
+  const frameRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const onFull = () => {
+      const frame = frameRef.current;
+      if (frame && document.fullscreenElement === videoRef.current) {
+        void document
+          .exitFullscreen()
+          .then(() => frame.requestFullscreen())
+          .catch(() => {});
+      }
+    };
+    document.addEventListener("fullscreenchange", onFull);
+    return () => document.removeEventListener("fullscreenchange", onFull);
+  }, []);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const el = e.target as HTMLElement | null;
@@ -262,6 +268,7 @@ export function WatchPage({ sid, style, share }: { sid: string; style: VideoStyl
 
       <main className="w-left">
         <div className="w-stage">
+          <div className="w-frame" ref={frameRef}>
           <video
             ref={videoRef}
             className="w-video"
@@ -276,11 +283,9 @@ export function WatchPage({ sid, style, share }: { sid: string; style: VideoStyl
               setPaused(false);
             }}
             onPause={() => setPlaying(false)}
-            onLoadedMetadata={showCaptions}
-          >
-            <track kind="captions" src={captionsOf(sid, style, share)} srcLang="en" label="Captions"
-              default={captions} onLoad={showCaptions} />
-          </video>
+          />
+          {captions && script && <Captions lines={script.lines} videoRef={videoRef} />}
+          </div>
         </div>
         {chapters.length > 0 && duration > 0 ? (
           <Strip chapters={chapters} duration={duration} t={t} on={chapterOn} seek={seek}
@@ -347,6 +352,78 @@ function TabButton({ id, tab, setTab, icon, children }: {
       <Icon name={icon} />
       {children}
     </button>
+  );
+}
+
+// ── captions over the video ──────────────────────────────────────────────────
+
+type Timed = [string, number, number];
+
+/** A line's words with their times: as the video kept them, or for a video
+ * made before words were kept, its words spread evenly over the line. */
+export function wordsOf(line: Script["lines"][number]): Timed[] {
+  const kept = (line.words ?? []) as Timed[];
+  if (kept.length > 0) return kept;
+  const words = line.text.split(/\s+/).filter(Boolean);
+  const each = (line.end_ms - line.start_ms) / Math.max(words.length, 1);
+  return words.map((w, i) => [w, line.start_ms + i * each, line.start_ms + (i + 1) * each]);
+}
+
+// A caption is a phrase, not a paragraph: at most this many words, broken
+// after a sentence's or a clause's end where one falls near.
+const CAPTION_WORDS = 12;
+
+/** A line's words cut into captions, as index ranges [from, to). */
+export function phrases(words: string[]): [number, number][] {
+  const out: [number, number][] = [];
+  let from = 0;
+  for (let i = 0; i < words.length; i++) {
+    const n = i - from + 1;
+    const end = /[.!?;:,]$/.test(words[i]!) && n >= 5;
+    if (end || n >= CAPTION_WORDS || i === words.length - 1) {
+      out.push([from, i + 1]);
+      from = i + 1;
+    }
+  }
+  return out;
+}
+
+/** The narration over the video, a phrase at a time: the words said so
+ * far bright, the one being said marked, the rest dim. Its own clock reads
+ * the video every frame while it plays, so a word lights as it is spoken. */
+function Captions({ lines, videoRef }: {
+  lines: Script["lines"];
+  videoRef: React.RefObject<HTMLVideoElement | null>;
+}) {
+  const [now, setNow] = useState(0);
+  useEffect(() => {
+    let raf = 0;
+    const tick = () => {
+      const v = videoRef.current;
+      if (v) setNow(Math.round(v.currentTime * 1000));
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [videoRef]);
+  const i = onAt(lines, now);
+  const line = lines[i];
+  // Nothing between lines, once the last word has been said.
+  if (!line || now > line.end_ms + 600) return null;
+  const words = wordsOf(line);
+  const said = words.filter(([, start]) => start <= now).length - 1;
+  const [from, to] = phrases(words.map(([w]) => w)).find(([, b]) => said < b) ?? [0, words.length];
+  return (
+    <div className="w-cap" aria-hidden="true">
+      {words.slice(from, to).map(([w], k) => {
+        const at = from + k;
+        return (
+          <span key={at} className={at < said ? "past" : at === said ? "now" : undefined}>
+            {w}
+          </span>
+        );
+      })}
+    </div>
   );
 }
 

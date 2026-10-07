@@ -1591,6 +1591,16 @@ export type ScriptLine = {
      * Text
      */
     text: string;
+    /**
+     * Words
+     *
+     * Each word as shown, and when it starts and ends; empty for a video made before words were kept
+     */
+    words?: Array<[
+        string,
+        number,
+        number
+    ]>;
 };
 
 /**

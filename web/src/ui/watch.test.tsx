@@ -1,6 +1,6 @@
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { WatchPage, clock, onAt, withMoments, type Script } from "./watch";
+import { WatchPage, clock, onAt, phrases, withMoments, wordsOf, type Script } from "./watch";
 
 function reply(status: number, body: unknown) {
   return Promise.resolve(
@@ -16,7 +16,10 @@ const SCRIPT: Script = {
     { title: "Sugar", start_ms: 40_000, end_ms: 90_000 },
   ],
   lines: [
-    { start_ms: 0, end_ms: 20_000, text: "Leaves catch light." },
+    {
+      start_ms: 0, end_ms: 20_000, text: "Leaves catch light.",
+      words: [["Leaves", 0, 400], ["catch", 400, 800], ["light.", 800, 1300]],
+    },
     { start_ms: 40_000, end_ms: 60_000, text: "They make sugar." },
   ],
   scenes: [{ title: "Making sugar", start_ms: 40_000, end_ms: 90_000, labels: ["glucose"], claims: [] }],
@@ -92,11 +95,37 @@ describe("the watch page", () => {
     expect(document.querySelectorAll(".w-seg")).toHaveLength(2);
     const cc = screen.getByRole("button", { name: "Captions" });
     expect(cc.getAttribute("aria-pressed")).toBe("true");
-    expect(document.querySelector("track")?.getAttribute("src")).toMatch(/\/video\/captions\?style=whiteboard$/);
     fireEvent.click(cc);
     expect(cc.getAttribute("aria-pressed")).toBe("false");
     expect(localStorage.getItem("watch-captions")).toBe("off");
     fireEvent.keyDown(window, { key: "c" });
     expect(cc.getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("lights the word being said in the captions over the video", async () => {
+    vi.stubGlobal("fetch", vi.fn(() => reply(200, SCRIPT)));
+    render(<WatchPage sid="s1" style="whiteboard" share={null} />);
+    await screen.findByText("Chapter 1 of 2");
+    const video = document.querySelector("video")!;
+    video.currentTime = 0.5;
+    await vi.waitFor(() => expect(document.querySelector(".w-cap .now")?.textContent).toBe("catch"));
+    expect(document.querySelector(".w-cap .past")?.textContent).toBe("Leaves");
+    expect(document.querySelector(".w-cap")?.textContent).toBe("Leavescatchlight.");
+    // Turned off, there are none.
+    fireEvent.click(screen.getByRole("button", { name: "Captions" }));
+    expect(document.querySelector(".w-cap")).toBeNull();
+  });
+});
+
+describe("captions", () => {
+  it("cut a line into phrases, after a clause where one falls near", () => {
+    const words = "One two three four five, six seven eight nine ten eleven twelve thirteen fourteen.".split(" ");
+    expect(phrases(words)).toEqual([[0, 5], [5, 14]]);
+    expect(phrases("a b c".split(" "))).toEqual([[0, 3]]);
+  });
+
+  it("spread a line's words over it when the video kept no times", () => {
+    const got = wordsOf({ start_ms: 1000, end_ms: 3000, text: "Two words" });
+    expect(got).toEqual([["Two", 1000, 2000], ["words", 2000, 3000]]);
   });
 });

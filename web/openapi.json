@@ -6860,6 +6860,27 @@
           "text": {
             "type": "string",
             "title": "Text"
+          },
+          "words": {
+            "items": {
+              "prefixItems": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "integer"
+                }
+              ],
+              "type": "array",
+              "maxItems": 3,
+              "minItems": 3
+            },
+            "type": "array",
+            "title": "Words",
+            "description": "Each word as shown, and when it starts and ends; empty for a video made before words were kept"
           }
         },
         "type": "object",

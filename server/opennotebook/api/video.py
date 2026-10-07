@@ -338,6 +338,11 @@ class ScriptLine(BaseModel):
     start_ms: int
     end_ms: int
     text: str
+    words: list[tuple[str, int, int]] = Field(
+        default_factory=list[tuple[str, int, int]],
+        description="Each word as shown, and when it starts and ends; empty for a video made "
+        "before words were kept",
+    )
 
 
 class ScriptScene(BaseModel):
