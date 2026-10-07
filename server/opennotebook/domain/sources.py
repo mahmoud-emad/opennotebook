@@ -205,9 +205,11 @@ def _extension(name: str) -> str:
     return PurePosixPath(name).suffix.lstrip(".").lower()
 
 
-def convert_file(name: str, data: bytes) -> str:
-    """A file's text, verbatim, or `Refused` saying why there is none."""
-    ext = _extension(name)
+def convert_file(name: str, data: bytes, ext: str | None = None) -> str:
+    """A file's text, verbatim, or `Refused` saying why there is none. Its
+    kind is its name's extension, or `ext` for a file whose name is not a
+    file name (a PDF from a link)."""
+    ext = ext or _extension(name)
     if len(data) > MAX_UPLOAD_BYTES:
         raise Refused(f"{name} is larger than 25 MB. Split it, or upload the part you need.")
     if ext in TEXT_EXTENSIONS:
@@ -377,7 +379,9 @@ async def read_page(http: httpx.AsyncClient, url: str) -> Page:
         )
     # A linked PDF is a document, read like an uploaded one.
     if "application/pdf" in ctype or data.startswith(b"%PDF-"):
-        md = await asyncio.to_thread(convert_file, "the linked PDF", data)
+        # Typed by what it is, not by its name: "the linked PDF" has no
+        # extension, and was refused as a kind the studio does not read.
+        md = await asyncio.to_thread(convert_file, "the linked PDF", data, "pdf")
         heading = next((ln[2:] for ln in md.splitlines() if ln.startswith("# ")), "")
         return Page(heading or fallback_title(final_url), md)
     if ctype and not ("html" in ctype or "xml" in ctype or ctype.startswith("text/")):

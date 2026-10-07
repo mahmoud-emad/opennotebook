@@ -242,3 +242,16 @@ async def test_too_many_files_at_once_are_refused(client: AsyncClient) -> None:
     r = await client.post(f"/api/collections/{cid}/sources/files", files=files)
     assert r.status_code == 422
     assert r.json()["detail"].startswith("That is 11 files; at most 10 can be added at once.")
+
+
+async def test_a_linked_pdf_is_read_whatever_its_address(monkeypatch: pytest.MonkeyPatch) -> None:
+    """arXiv serves a paper at /pdf/1706.03762: no extension, only its type."""
+    pdf = (FIXTURES / "verbatim.pdf").read_bytes()
+
+    def serve(r: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, content=pdf, headers={"Content-Type": "application/pdf"})
+
+    fake_web(monkeypatch, serve)
+    async with sources.http_client() as http:
+        page = await sources.read_page(http, "https://arxiv.example/pdf/1706.03762")
+    assert len(page.text.split()) > 20
