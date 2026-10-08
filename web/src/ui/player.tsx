@@ -6,6 +6,7 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import "../styles/player.css";
 import { Icon } from "./Icon";
+import { Logo } from "./Logo";
 import { PlayerEngine } from "./playerEngine";
 import { displayName, fitBox, initialsOf, metaOf, slideName, speakerName, tocLine, transcript, voiceIndex } from "./playerModel";
 import { useStore } from "./store";
@@ -98,10 +99,9 @@ export function PlayerPage({ sid, share }: { sid: string; share: string | null }
           {/* The same mark as the studio's own header, and the same way home.
               Here it asks first, because leaving drops the place. */}
           <button id="leave" className="brand" title="Back to the collection" onClick={() => engine.leave()}>
-            <span className="mark">
-              <Icon name="collection-play" />
-            </span>
-            <span>Studio</span>
+            <Logo />
+            <span>OpenNotebook</span>
+            <span className="brand-tag">Studio</span>
           </button>
           <div id="titlebox">
             <div id="title">{s?.title ?? ""}</div>

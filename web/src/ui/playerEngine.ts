@@ -353,7 +353,7 @@ export class PlayerEngine {
     this.v.clock = `00:00 / ${hhmmss(totalMs(this.v.flat))}`;
     this.v.fills = this.v.parts.map(() => 0);
     this.v.episode = s.audio ? episodeUrl(this.src) : "";
-    document.title = s.title ? `${s.title} · Studio` : "Studio";
+    document.title = s.title ? `${s.title} · OpenNotebook` : "OpenNotebook";
   }
 
   private becameReady(): void {

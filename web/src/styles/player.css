@@ -85,8 +85,7 @@ body.player-open { overflow:hidden; }
 .player-page .brand { display:inline-flex; align-items:center; gap:9px; background:none; border:0;
          padding:4px 6px; margin-left:-6px; color:var(--em); font-weight:700; font-size:15px; }
 .player-page .brand:hover:not(:disabled) { background:var(--soft); }
-.player-page .brand .mark { width:24px; height:24px; border-radius:7px; display:grid; place-items:center;
-               background:var(--accent); color:var(--st-on-primary); font-size:14px; }
+.player-page .brand .logo { width:24px; height:24px; flex:none; }
 .player-page .ghost { background:transparent; border-color:transparent; color:var(--dim);
          display:inline-flex; align-items:center; gap:7px; padding:6px 10px; }
 .player-page .ghost:hover:not(:disabled) { background:var(--raise); color:var(--fg); }
@@ -317,7 +316,7 @@ body.player-open { overflow:hidden; }
   .player-page .veil-card h2 { font-size:16px; }
   .player-page #start { width:58px; height:58px; font-size:26px; }
   .player-page #now { top:8px; left:8px; }
-  .player-page #leave span:not(.mark) { display:none; }
+  .player-page #leave span { display:none; }
   .player-page #sub { display:none; }
 }
 

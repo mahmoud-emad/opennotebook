@@ -208,7 +208,7 @@ describe("addresses", () => {
 describe("what the old page's tests kept", () => {
   it("uses the studio's icons, every one of them there, and no emoji", () => {
     const names = [...pageSrc.matchAll(/<Icon name="([a-z0-9-]+)"/g)].map((m) => m[1]!);
-    for (const n of ["mic-fill", "send-fill", "x-lg", "badge-cc", "collection-play"]) expect(names).toContain(n);
+    for (const n of ["mic-fill", "send-fill", "x-lg", "badge-cc"]) expect(names).toContain(n);
     for (const n of names) expect(ICONS[n], n).toBeDefined();
     for (const n of ["pause-fill", "play-fill", "fullscreen", "fullscreen-exit"]) expect(ICONS[n], n).toBeDefined();
     for (const src of [pageSrc, cssSrc]) {

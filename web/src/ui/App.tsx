@@ -17,6 +17,7 @@ import {
   type Sort,
 } from "./home";
 import { Icon } from "./Icon";
+import { Logo } from "./Logo";
 import { EMPTY, ORDER, PICKS, PickBar, keep, start } from "./pick";
 import { follow, routeFromLocation, routeUrl, sameView, setNav, setRoute, type Open, type View } from "./routes";
 import { GENERAL, SETTINGS, openSettings, reloadSettings } from "./settings";
@@ -290,13 +291,15 @@ export function App() {
         <button
           className="brand"
           title="Discover"
-          aria-label="Studio: Discover"
+          aria-label="OpenNotebook: Discover"
           onClick={() => setView({ kind: "discover" })}
         >
-          <span className="mark">
-            <Icon name="collection-play" />
-          </span>
-          <h1 className="hide-sm">Studio</h1>
+          <Logo />
+          <h1 className="hide-sm">OpenNotebook</h1>
+          {/* A collection is where things are made: the studio. */}
+          {(view.kind === "collection" || view.kind === "shared") && (
+            <span className="brand-tag hide-sm">Studio</span>
+          )}
         </button>
         {/* The two places to be; the one you are on says so. */}
         <nav className="nav" aria-label="Main">

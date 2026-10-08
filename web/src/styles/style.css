@@ -86,15 +86,14 @@ header {
   color: var(--bs-emphasis-color);
 }
 .brand:hover:not(:disabled) { background: var(--st-hover-bg); border-color: transparent; }
-/* The studio's mark: only inside the brand button, since `.mark` also names
-   the cited paragraphs in the source drawer. */
-.brand .mark {
-  width: 24px; height: 24px; border-radius: 7px; display: grid; place-items: center;
-  background: var(--bs-primary); color: var(--st-on-primary);
+.brand .logo { width: 24px; height: 24px; flex: none; }
+/* "Studio" beside the name, where things are made. */
+.brand-tag {
+  padding: 1px 7px; border-radius: 999px; font-size: 11px; font-weight: 600; line-height: 18px;
+  color: var(--bs-primary); background: rgba(var(--bs-primary-rgb), .12);
 }
-.brand .mark .ic { width: 14px; height: 14px; }
 h1 { font-size: 14px; margin: 0; font-weight: 600; letter-spacing: -.005em; }
-/* Where you are, after the brand: "Studio / <the collection's name>". */
+/* Where you are, after the brand: "OpenNotebook / <the collection's name>". */
 .crumb { display: flex; align-items: center; gap: 8px; color: var(--bs-secondary-color); font-size: 13px; font-weight: 500; min-width: 0; }
 .crumb .sep { color: var(--bs-tertiary-color); }
 .crumb .here { color: var(--bs-body-color); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
