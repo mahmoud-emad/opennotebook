@@ -15,7 +15,7 @@ import json
 import re
 from functools import cache
 from importlib import resources
-from typing import Any
+from typing import TypedDict
 
 import skia
 
@@ -23,6 +23,9 @@ from opennotebook.build.whiteboard.geometry import svg_path
 
 # The icons' own grid.
 SIZE = 24
+# A concept's word that is part of an icon's name counts this many times as
+# much as one among its tags.
+NAME_MATCH = 3.0
 
 WORD = re.compile(r"[a-z0-9]+")
 # Words that name nothing to draw.
@@ -34,10 +37,21 @@ STOP = frozenset(
 )
 
 
+class Icon(TypedDict):
+    """One icon as the library holds it."""
+
+    # Its outline, as SVG path data on the icon's grid.
+    d: list[str]
+    # What it is found by: words, and a few numbers or blanks.
+    tags: list[str | int | None]
+    category: str
+
+
 @cache
-def library() -> dict[str, dict[str, Any]]:
+def library() -> dict[str, Icon]:
+    """Every icon, by name."""
     ref = resources.files("opennotebook.build.whiteboard") / "assets" / "icons.json.gz"
-    data: dict[str, dict[str, Any]] = json.loads(gzip.decompress(ref.read_bytes()))
+    data: dict[str, Icon] = json.loads(gzip.decompress(ref.read_bytes()))
     return data
 
 
@@ -50,7 +64,7 @@ def _index() -> dict[str, set[str]]:
         words = set(WORD.findall(name.replace("-", " ")))
         for t in v.get("tags", []):
             words.update(WORD.findall(str(t).lower()))
-        words.update(WORD.findall(str(v.get("category", "")).lower()))
+        words.update(WORD.findall(v.get("category", "").lower()))
         for w in words:
             out.setdefault(w, set()).add(name)
     return out
@@ -85,7 +99,9 @@ def _parts_of(w: str) -> list[str]:
 
 
 def category(name: str) -> str:
-    return str(library().get(name, {}).get("category", "")) or "Other"
+    """An icon's category, or "Other" for one that has none."""
+    icon = library().get(name)
+    return (icon["category"] if icon else "") or "Other"
 
 
 def exists(name: str) -> bool:
@@ -106,7 +122,7 @@ def search(query: str, limit: int = 8) -> list[str]:
         for cand in _forms(w):
             for name in index.get(cand, ()):
                 parts = name.split("-")
-                bonus = 3.0 if cand in parts else 1.0
+                bonus = NAME_MATCH if cand in parts else 1.0
                 scores[name] = scores.get(name, 0.0) + bonus
                 matched.setdefault(name, set()).add(w)
 
@@ -122,6 +138,8 @@ def search(query: str, limit: int = 8) -> list[str]:
 
 
 def candidates(concepts: list[str], limit: int = 8) -> dict[str, list[str]]:
+    """The icons that best match each concept, for the scene writer to
+    choose from."""
     return {c: search(c, limit) for c in concepts if c.strip()}
 
 

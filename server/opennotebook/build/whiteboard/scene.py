@@ -10,7 +10,7 @@ cannot overlap by a pixel it chose.
 """
 
 import re
-from typing import Literal
+from typing import Literal, get_args
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -24,7 +24,8 @@ Layout = Literal[
     "stack", "flow", "hub", "compare", "equation", "timeline", "cycle", "illustration", "free"
 ]
 
-LAYOUTS: tuple[str, ...] = Layout.__args__  # pyright: ignore[reportAttributeAccessIssue]
+TONES: tuple[str, ...] = get_args(Tone)
+LAYOUTS: tuple[str, ...] = get_args(Layout)
 
 # Labels are names, not sentences: the narration says the sentence.
 LABEL_CHARS = 28
@@ -41,6 +42,9 @@ class Beat(BaseModel):
 
 
 class Element(BaseModel):
+    """One thing on the board: a shape, an icon, a label or a figure in its
+    cells, or an arrow or line joining two of them."""
+
     model_config = ConfigDict(extra="ignore", populate_by_name=True)
 
     id: str = ""
@@ -64,7 +68,7 @@ class Element(BaseModel):
     @classmethod
     def _tone(cls, v: object) -> object:
         # A colour the board does not have is drawn in ink, not refused.
-        return v if v in ("ink", "blue", "red", "amber", "green") else "ink"
+        return v if v in TONES else "ink"
 
     @field_validator("at")
     @classmethod
@@ -91,6 +95,8 @@ class Element(BaseModel):
 
 
 class Highlight(BaseModel):
+    """An element washed with the highlighter on a word."""
+
     model_config = ConfigDict(extra="ignore")
 
     target: str
@@ -98,8 +104,8 @@ class Highlight(BaseModel):
 
 
 class Claim(BaseModel):
-    """What a scene asserts, with the passages that support it; checked in
-    phase 3."""
+    """What a scene asserts, with the passages that support it; checked
+    against them before the scene is drawn (`check.py`)."""
 
     model_config = ConfigDict(extra="ignore")
 
@@ -107,13 +113,15 @@ class Claim(BaseModel):
     passages: list[str] = Field(default_factory=list[str])
 
 
-def _layout(v: object) -> object:
+def _known_layout(v: object) -> object:
     """A layout the list does not name (a model may describe one in words)
     is "free": a hint, not worth refusing a scene over."""
     return v if v in LAYOUTS else "free"
 
 
 class Scene(BaseModel):
+    """One scene as the model writes it: what to draw, and on which words."""
+
     model_config = ConfigDict(extra="ignore")
 
     title: str = ""
@@ -126,7 +134,7 @@ class Scene(BaseModel):
     @field_validator("layout", mode="before")
     @classmethod
     def _layout(cls, v: object) -> object:
-        return _layout(v)
+        return _known_layout(v)
 
 
 class PlannedScene(BaseModel):
@@ -145,10 +153,12 @@ class PlannedScene(BaseModel):
     @field_validator("layout", mode="before")
     @classmethod
     def _layout(cls, v: object) -> object:
-        return _layout(v)
+        return _known_layout(v)
 
 
 class Plan(BaseModel):
+    """The whole video's scenes, in order."""
+
     model_config = ConfigDict(extra="ignore")
 
     scenes: list[PlannedScene] = Field(min_length=1)

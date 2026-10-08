@@ -40,6 +40,22 @@ logging.getLogger("fontTools").setLevel(logging.ERROR)
 # curve at 1080p, large enough that a 5-minute video stays cheap to draw.
 STEP = 4.0
 
+# A wobble's two waves, by their frequency per px of line, and how far in
+# from each end it fades in, px.
+SLOW_WAVE = (0.004, 0.009)
+FAST_WAVE = (0.013, 0.025)
+EASE_PX = 12
+
+# A box's corner radius, px.
+CORNER = 14
+# An arrowhead's barbs: their length, px, and their angle off the shaft.
+HEAD_PX = 22
+HEAD_ANGLE = 0.45
+
+# A space is this share of the size wide; so is a letter the font set
+# turns out to lack.
+SPACE = 0.3
+
 type Point = tuple[float, float]
 type Poly = list[Point]
 
@@ -72,6 +88,7 @@ class _SkiaPen(BasePen):  # pyright: ignore[reportMissingTypeArgument]
 
 
 def svg_path(ds: list[str]) -> skia.Path:
+    """SVG path data, one or more `d` attributes, as one skia path."""
     pen = _SkiaPen()
     for d in ds:
         parse_path(d, pen)
@@ -96,6 +113,18 @@ def polylines(path: skia.Path, step: float = STEP) -> list[Poly]:
     return out
 
 
+def path_of(points: Poly, closed: bool = False) -> skia.Path:
+    """A polyline as a skia path, closed back to its start or not."""
+    path = skia.Path()
+    if points:
+        path.moveTo(*points[0])
+        for pt in points[1:]:
+            path.lineTo(*pt)
+        if closed:
+            path.close()
+    return path
+
+
 def length_of(poly: Poly) -> float:
     return sum(math.dist(a, b) for a, b in itertools.pairwise(poly))
 
@@ -109,7 +138,7 @@ def wobble(poly: Poly, seed: int, amp: float = 1.3) -> Poly:
     # The theme's hand: steadier for a technical pen, looser for chalk.
     amp *= th.current().wobble
     rnd = random.Random(seed)
-    f1, f2 = rnd.uniform(0.004, 0.009), rnd.uniform(0.013, 0.025)
+    f1, f2 = rnd.uniform(*SLOW_WAVE), rnd.uniform(*FAST_WAVE)
     p1, p2 = rnd.uniform(0, math.tau), rnd.uniform(0, math.tau)
     total = length_of(poly) or 1.0
     out: Poly = []
@@ -120,14 +149,14 @@ def wobble(poly: Poly, seed: int, amp: float = 1.3) -> Poly:
         a, b = poly[max(i - 1, 0)], poly[min(i + 1, len(poly) - 1)]
         dx, dy = b[0] - a[0], b[1] - a[1]
         norm = math.hypot(dx, dy) or 1.0
-        # Fades in and out over the first and last 12 px.
-        ease = min(1.0, s / 12, (total - s) / 12)
+        ease = min(1.0, s / EASE_PX, (total - s) / EASE_PX)
         off = amp * ease * (0.7 * math.sin(f1 * s + p1) + 0.3 * math.sin(f2 * s + p2))
         out.append((x - dy / norm * off, y + dx / norm * off))
     return out
 
 
 def transform(path: skia.Path, scale: float, dx: float, dy: float) -> skia.Path:
+    """A copy of `path`, scaled about the origin and then moved."""
     m = skia.Matrix()
     m.setScale(scale, scale)
     m.postTranslate(dx, dy)
@@ -136,28 +165,31 @@ def transform(path: skia.Path, scale: float, dx: float, dy: float) -> skia.Path:
     return out
 
 
+def _drawn_round(p: skia.Path, overshoot: int, seed: int, amp: float) -> list[Poly]:
+    """A closed shape drawn in one go, the pen running on past its start by
+    `1 / overshoot` of the way round (two points at least)."""
+    found = polylines(p)
+    if not found:
+        return []
+    poly = found[0]
+    over = poly[: max(len(poly) // overshoot, 2)]
+    return [wobble(poly + over, seed, amp)]
+
+
 def rough_rect(x: float, y: float, w: float, h: float, seed: int) -> list[Poly]:
     """A box drawn in one go, its corners slightly rounded, with a small
     overshoot where the pen comes back to its start."""
     p = skia.Path()
-    p.addRoundRect(skia.Rect.MakeXYWH(x, y, w, h), 14, 14)
-    found = polylines(p)
-    if not found:
-        return []
-    poly = found[0]
-    over = poly[: max(len(poly) // 30, 2)]
-    return [wobble(poly + over, seed, 1.6)]
+    p.addRoundRect(skia.Rect.MakeXYWH(x, y, w, h), CORNER, CORNER)
+    return _drawn_round(p, 30, seed, 1.6)
 
 
 def rough_ellipse(cx: float, cy: float, rx: float, ry: float, seed: int) -> list[Poly]:
+    """An ellipse drawn in one go, overshooting its start a little more than
+    a box does."""
     p = skia.Path()
     p.addOval(skia.Rect.MakeLTRB(cx - rx, cy - ry, cx + rx, cy + ry))
-    found = polylines(p)
-    if not found:
-        return []
-    poly = found[0]
-    over = poly[: max(len(poly) // 18, 2)]
-    return [wobble(poly + over, seed, 1.8)]
+    return _drawn_round(p, 18, seed, 1.8)
 
 
 def arrow(a: Point, b: Point, seed: int, head: bool = True, bend: float = 0.12) -> list[Poly]:
@@ -165,10 +197,10 @@ def arrow(a: Point, b: Point, seed: int, head: bool = True, bend: float = 0.12) 
     mx, my = (a[0] + b[0]) / 2, (a[1] + b[1]) / 2
     dx, dy = b[0] - a[0], b[1] - a[1]
     c = (mx - dy * bend, my + dx * bend)
-    p = skia.Path()
-    p.moveTo(*a)
-    p.quadTo(*c, *b)
-    shaft = polylines(p)
+    curve = skia.Path()
+    curve.moveTo(*a)
+    curve.quadTo(*c, *b)
+    shaft = polylines(curve)
     if not shaft:
         # Its ends are one point: there is no arrow to draw.
         return []
@@ -176,12 +208,9 @@ def arrow(a: Point, b: Point, seed: int, head: bool = True, bend: float = 0.12) 
     if head:
         ang = math.atan2(b[1] - c[1], b[0] - c[0])
         for side in (-1, 1):
-            t = ang + math.pi - side * 0.45
-            tip = (b[0] + 22 * math.cos(t), b[1] + 22 * math.sin(t))
-            q = skia.Path()
-            q.moveTo(*b)
-            q.lineTo(*tip)
-            out += polylines(q)
+            t = ang + math.pi - side * HEAD_ANGLE
+            tip = (b[0] + HEAD_PX * math.cos(t), b[1] + HEAD_PX * math.sin(t))
+            out += polylines(path_of([b, tip]))
     return out
 
 
@@ -214,6 +243,7 @@ FONT_DIRS = (
 
 @cache
 def _font_files() -> tuple[str, ...]:
+    """Every font file to look in for a missing letter, the setting's first."""
     listed = [p for p in os.environ.get(FALLBACK_KEY, "").split(os.pathsep) if p.strip()]
     found: list[str] = []
     for d in FONT_DIRS:
@@ -262,6 +292,7 @@ def fallback(ch: str) -> TTFont | None:
 
 
 def _needs_shaping(ch: str) -> bool:
+    """Whether `ch` belongs to a script whose letters join or reorder."""
     cp = ord(ch)
     return (
         0x0590 <= cp <= 0x08FF  # Hebrew, Arabic, Syriac, Thaana, NKo
@@ -273,7 +304,7 @@ def _needs_shaping(ch: str) -> bool:
 
 
 @cache
-def _font(name: str = "Caveat-Bold.ttf") -> TTFont:
+def _font(name: str) -> TTFont:
     """A hand under `assets/`, open for the process: each theme has one."""
     ref = resources.files("opennotebook.build.whiteboard") / "assets" / name
     with resources.as_file(ref) as f:
@@ -292,7 +323,7 @@ def text(s: str, size: float) -> Text:
     missing: list[str] = []
     for ch in s:
         if ch.isspace():
-            x += size * 0.3
+            x += size * SPACE
             continue
         use = font if ord(ch) in (font.getBestCmap() or {}) else fallback(ch)
         if use is None:
@@ -307,9 +338,9 @@ def _glyph(font: TTFont, ch: str, size: float, x: float, into: skia.Path) -> flo
     cmap = font.getBestCmap() or {}
     g = cmap.get(ord(ch))
     if g is None:
-        return size * 0.3
+        return size * SPACE
     glyphs = font.getGlyphSet()
-    scale = size / font["head"].unitsPerEm  # pyright: ignore[reportAttributeAccessIssue]
+    scale = _scale(font, size)
     pen = _SkiaPen(glyphs)
     glyphs[g].draw(pen)
     m = skia.Matrix()
@@ -321,8 +352,15 @@ def _glyph(font: TTFont, ch: str, size: float, x: float, into: skia.Path) -> flo
     return font["hmtx"][g][0] * scale  # pyright: ignore[reportIndexIssue]
 
 
+def _scale(font: TTFont, size: float) -> float:
+    """Px per font unit, for letters `size` px tall."""
+    return size / font["head"].unitsPerEm  # pyright: ignore[reportAttributeAccessIssue]
+
+
 def _metrics(font: TTFont, size: float) -> tuple[float, float]:
-    scale = size / font["head"].unitsPerEm  # pyright: ignore[reportAttributeAccessIssue]
+    """A label's ascent and descent, as shares of the font's own: the box
+    its letters fill, tighter than the font's line."""
+    scale = _scale(font, size)
     hhea = font["hhea"]
     return (
         hhea.ascent * scale * 0.72,  # pyright: ignore[reportAttributeAccessIssue]

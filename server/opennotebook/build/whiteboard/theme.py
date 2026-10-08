@@ -23,8 +23,6 @@ from typing import Literal
 
 type RGB = tuple[int, int, int]
 
-TONES = ("ink", "blue", "red", "amber", "green")
-
 
 @dataclass(frozen=True)
 class Slides:
@@ -44,6 +42,8 @@ class Slides:
 
 @dataclass(frozen=True)
 class Theme:
+    """One look, whole: every colour, pen and hand a video is drawn with."""
+
     id: str
     label: str
     family: Literal["drawn", "illustrated"] = "drawn"
@@ -55,7 +55,7 @@ class Theme:
     rule: RGB = (0xC7, 0xDB, 0xF5)
     spacing: int = 40
     margin: RGB | None = None
-    # Each tone's colour.
+    # Each tone's colour, for every tone a scene may name (`scene.TONES`).
     ink: dict[str, RGB] = field(
         default_factory=lambda: {
             "ink": (0x1F, 0x29, 0x37),
@@ -264,6 +264,10 @@ PAPER_CRAFT = Theme(
     ),
 )  # fmt: skip
 
+THEMES_DRAWN: dict[str, Theme] = {
+    t.id: t for t in (WHITEBOARD, NOTEBOOK, CHALKBOARD, BLUEPRINT, RETRO_PRINT, PAPER_CRAFT)
+}
+
 # ── illustrated: a picture per scene, under the studio's own labels ─────────
 #
 # The picture is painted by an image model in the theme's style, from the
@@ -276,6 +280,8 @@ def _illustrated(
     id: str, label: str, style: str, twin: str, paper: RGB, accent: str,
     ink: dict[str, RGB] | None = None, highlight: RGB | None = None,
 ) -> Theme:  # fmt: skip
+    """An illustrated theme built on its drawn twin: the twin's hand, and
+    its inks unless given, on plain paper."""
     base = THEMES_DRAWN[twin]
     return dataclasses.replace(
         base, id=id, label=label, family="illustrated", style=style, twin=twin, paper=paper,
@@ -284,10 +290,6 @@ def _illustrated(
         slides=dataclasses.replace(base.slides, accent=accent),
     )  # fmt: skip
 
-
-THEMES_DRAWN: dict[str, Theme] = {
-    t.id: t for t in (WHITEBOARD, NOTEBOOK, CHALKBOARD, BLUEPRINT, RETRO_PRINT, PAPER_CRAFT)
-}
 
 WATERCOLOR = _illustrated(
     "watercolor", "Watercolor",
@@ -337,15 +339,16 @@ _current: ContextVar[Theme] = ContextVar("whiteboard_theme", default=WHITEBOARD)
 
 
 def current() -> Theme:
+    """The theme in use: the whiteboard unless `using` says otherwise."""
     return _current.get()
 
 
 @contextmanager
 def using(t: Theme | str | None) -> Generator[Theme]:
     """Draw with `t` (a theme or its id) until the block ends."""
-    th = t if isinstance(t, Theme) else theme_of(t)
-    token = _current.set(th)
+    look = t if isinstance(t, Theme) else theme_of(t)
+    token = _current.set(look)
     try:
-        yield th
+        yield look
     finally:
         _current.reset(token)

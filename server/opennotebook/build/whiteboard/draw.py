@@ -2,10 +2,9 @@
 (docs/video-overview-spec.md, section 4.8).
 
 Each frame is drawn with skia on the CPU: deterministic, and well under a
-millisecond for a board (measured 2026-10-05), so the encoder sets the
-pace. What is finished is kept on a board image and drawn once; a frame
-copies the board and adds what is being drawn at that moment, and the
-marker at its tip.
+millisecond for a board, so the encoder sets the pace. What is finished is
+kept on a board image and drawn once; a frame copies the board and adds
+what is being drawn at that moment, and the marker at its tip.
 
 Scenes are rendered in separate processes, one segment each, and joined
 without re-encoding. A segment is described by plain data (`Segment`), so a
@@ -17,18 +16,19 @@ process can be handed one, and it compiles the scene itself.
 # pyright: reportUnknownParameterType=false, reportUnknownVariableType=false, reportUnknownMemberType=false, reportUnknownArgumentType=false
 
 import contextlib
+import dataclasses
 import functools
 import json
 import math
 import subprocess
 import sys
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from dataclasses import asdict, dataclass
-from typing import Any
 
 import numpy as np
 import skia
 
+from opennotebook.build.whiteboard import geometry as g
 from opennotebook.build.whiteboard import theme as th
 from opennotebook.build.whiteboard.compile import H, Piece, W, compile_illustrated, compile_scene
 from opennotebook.build.whiteboard.scene import Beat, Scene
@@ -39,6 +39,41 @@ BOARD = th.WHITEBOARD.paper
 # The board is wiped in this long at the end of a scene.
 WIPE_MS = 280
 
+# Lined paper: ruled from under the title band, as a notebook's first line
+# is, with its margin line this far in; the widths of both, px.
+RULE_TOP = 160
+MARGIN_X = 88
+RULE_WIDTH = 1.6
+MARGIN_WIDTH = 2.5
+
+# How strong a halftone screen is printed: its dots cover about a seventh of
+# the shape, at this strength.
+HALFTONE_ALPHA = 0.42
+
+# A print's second impression: how far it is off the first, px, and how
+# strong.
+GHOST_OFFSET = (2.4, 1.8)
+GHOST_ALPHA = 0.32
+
+# A label being written is revealed through a clip that reaches this far
+# before it and above and below it, as shares of its ascent and descent,
+# so no letter's flourish is cut; the pen's tip rides this share of the
+# ascent above the baseline.
+CLIP_LEFT = 12
+CLIP_ASCENT = 1.8
+CLIP_DESCENT = 2.5
+TIP_HEIGHT = 0.3
+
+# How much an illustrated scene's picture is pushed in over the scene, how
+# long it fades in from the paper, and where the point it is pushed toward
+# may fall, as shares of the frame's width and height.
+PUSH_IN = 0.06
+FADE_IN_MS = 400
+FOCUS_X = (0.3, 0.7)
+FOCUS_Y = (0.25, 0.6)
+
+type Frames = Iterator[tuple[bytes, bool]]
+
 
 @dataclass(frozen=True)
 class Segment:
@@ -46,7 +81,7 @@ class Segment:
     (line id to each word's start, ms from the start of the video), and the
     frames it covers."""
 
-    scene: dict[str, Any]
+    scene: dict[str, object]
     words: dict[str, list[float]]
     line_starts: dict[str, float]
     start_ms: float
@@ -66,7 +101,10 @@ class Segment:
     picture: str = ""
 
 
-def when_of(seg: Segment) -> Any:
+def when_of(seg: Segment) -> Callable[[Beat], float]:
+    """The ms a beat's word is said: its line's start for a line whose words
+    are not timed, the segment's start for a line it does not know."""
+
     def when(b: Beat) -> float:
         ws = seg.words.get(b.line)
         if ws:
@@ -76,8 +114,17 @@ def when_of(seg: Segment) -> Any:
     return when
 
 
-def _paint(color: tuple[int, int, int], kind: str, width: float = 5.0) -> skia.Paint:
-    p = skia.Paint(AntiAlias=True, Color=skia.ColorSetRGB(*color))
+# ── the paper ────────────────────────────────────────────────────────────────
+
+
+def _solid(color: th.RGB) -> skia.Paint:
+    return skia.Paint(AntiAlias=True, Color=skia.ColorSetRGB(*color))
+
+
+def _paint(color: th.RGB, kind: str, width: float = 0.0) -> skia.Paint:
+    """The paint for a piece of `kind` in the theme's pen; `width` is a
+    line's."""
+    p = _solid(color)
     if kind in ("line", "text") and th.current().pen == "chalk":
         # Chalk: the ink only where the grain lets it through. The grain is in
         # the board's own coordinates, so it stays put from frame to frame.
@@ -101,16 +148,15 @@ def paper(c: skia.Canvas) -> None:
     c.clear(skia.ColorSetRGB(*look.paper))
     if look.background == "plain":
         return
-    rule = skia.Paint(AntiAlias=True, Color=skia.ColorSetRGB(*look.rule), StrokeWidth=1.6)
+    rule = skia.Paint(AntiAlias=True, Color=skia.ColorSetRGB(*look.rule), StrokeWidth=RULE_WIDTH)
     step = look.spacing
     if look.background == "lined":
-        # Ruled under the title band, as a notebook's first line is.
-        for y in range(160, H, step):
+        for y in range(RULE_TOP, H, step):
             c.drawLine(0, y, W, y, rule)
         if look.margin is not None:
             red = skia.ColorSetRGB(*look.margin)
-            margin = skia.Paint(AntiAlias=True, Color=red, StrokeWidth=2.5)
-            c.drawLine(88, 0, 88, H, margin)
+            margin = skia.Paint(AntiAlias=True, Color=red, StrokeWidth=MARGIN_WIDTH)
+            c.drawLine(MARGIN_X, 0, MARGIN_X, H, margin)
     elif look.background == "grid":
         for y in range(step, H, step):
             c.drawLine(0, y, W, y, rule)
@@ -127,27 +173,37 @@ def _noise(size: int, seed: int) -> np.ndarray:
     return np.random.default_rng(seed).random((size, size), dtype=np.float32)
 
 
+def _mask(alpha: np.ndarray) -> skia.Image:
+    """A tile of premultiplied white, as opaque as `alpha` says (0 to 1)."""
+    rgba = np.zeros((*alpha.shape, 4), dtype=np.uint8)
+    rgba[..., 3] = (alpha * 255).astype(np.uint8)
+    rgba[..., :3] = rgba[..., 3:4]
+    return skia.Image.fromarray(rgba, colorType=skia.kRGBA_8888_ColorType)
+
+
+def _screened(color: th.RGB, tile: skia.Image) -> skia.Shader:
+    """`color`, only where the repeated `tile` lets it through."""
+    screen = tile.makeShader(skia.TileMode.kRepeat, skia.TileMode.kRepeat)
+    return skia.Shaders.Blend(
+        skia.BlendMode.kDstIn, skia.Shaders.Color(skia.ColorSetRGB(*color)), screen
+    )
+
+
 @functools.cache
 def _grain() -> skia.Image:
     """Chalk's grain: a tile that is mostly solid, with pits where the chalk
     skipped the slate's surface."""
     n = _noise(256, 7)
-    alpha = np.where(n < 0.16, 0.18, 0.62 + 0.38 * _noise(256, 11))
-    rgba = np.zeros((256, 256, 4), dtype=np.uint8)
-    rgba[..., 3] = (alpha * 255).astype(np.uint8)
-    rgba[..., :3] = rgba[..., 3:4]  # premultiplied white
-    return skia.Image.fromarray(rgba, colorType=skia.kRGBA_8888_ColorType)
+    return _mask(np.where(n < 0.16, 0.18, 0.62 + 0.38 * _noise(256, 11)))
 
 
 @functools.cache
-def _chalk(color: tuple[int, int, int]) -> skia.Shader:
-    grain = _grain().makeShader(skia.TileMode.kRepeat, skia.TileMode.kRepeat)
-    ink = skia.Shaders.Color(skia.ColorSetRGB(*color))
-    return skia.Shaders.Blend(skia.BlendMode.kDstIn, ink, grain)
+def _chalk(color: th.RGB) -> skia.Shader:
+    return _screened(color, _grain())
 
 
 @functools.cache
-def _stock(base: tuple[int, int, int], kind: str) -> skia.Image:
+def _stock(base: th.RGB, kind: str) -> skia.Image:
     """Paper with a grain: newsprint's fine specks, or card's soft fibres."""
     n = _noise(512, 5 if kind == "newsprint" else 9)
     if kind == "card":
@@ -165,34 +221,22 @@ def _stock(base: tuple[int, int, int], kind: str) -> skia.Image:
     return surface.makeImageSnapshot()
 
 
-# How strong a halftone screen is printed: its dots cover about a seventh of
-# the shape, at this strength.
-HALFTONE_ALPHA = 0.42
-
-
 @functools.cache
 def _dots() -> skia.Image:
     """A halftone screen's tile: one dot, for a shape's fill to show through."""
     size, r = 12, 2.6
     yy, xx = np.mgrid[0:size, 0:size] + 0.5
     d = np.hypot(xx - size / 2, yy - size / 2)
-    alpha = np.clip(r + 0.5 - d, 0, 1)
-    rgba = np.zeros((size, size, 4), dtype=np.uint8)
-    rgba[..., 3] = (alpha * 255).astype(np.uint8)
-    rgba[..., :3] = rgba[..., 3:4]
-    return skia.Image.fromarray(rgba, colorType=skia.kRGBA_8888_ColorType)
+    return _mask(np.clip(r + 0.5 - d, 0, 1))
 
 
 @functools.cache
-def _halftone(color: tuple[int, int, int]) -> skia.Shader:
-    screen = _dots().makeShader(skia.TileMode.kRepeat, skia.TileMode.kRepeat)
-    return skia.Shaders.Blend(
-        skia.BlendMode.kDstIn, skia.Shaders.Color(skia.ColorSetRGB(*color)), screen
-    )
+def _halftone(color: th.RGB) -> skia.Shader:
+    return _screened(color, _dots())
 
 
 @functools.cache
-def _slate(base: tuple[int, int, int]) -> skia.Image:
+def _slate(base: th.RGB) -> skia.Image:
     """A used slate: faint clouds of old chalk wiped across it."""
     surface = skia.Surface(W, H)
     c = surface.getCanvas()
@@ -208,22 +252,16 @@ def _slate(base: tuple[int, int, int]) -> skia.Image:
     return surface.makeImageSnapshot()
 
 
+# ── a piece ──────────────────────────────────────────────────────────────────
+
+
 def _faded(p: skia.Paint, alpha: float) -> skia.Paint:
     if alpha < 1.0:
         p.setAlphaf(alpha)
     return p
 
 
-def _poly(points: list[tuple[float, float]]) -> skia.Path:
-    path = skia.Path()
-    if points:
-        path.moveTo(*points[0])
-        for pt in points[1:]:
-            path.lineTo(*pt)
-    return path
-
-
-def draw_piece(c: skia.Canvas, p: Piece, f: float) -> tuple[float, float] | None:
+def draw_piece(c: skia.Canvas, p: Piece, f: float) -> g.Point | None:
     """Draw `p`, the share `f` of it done, and return where the pen is."""
     if f <= 0:
         return None
@@ -239,17 +277,15 @@ def draw_piece(c: skia.Canvas, p: Piece, f: float) -> tuple[float, float] | None
         # what is printed in that ink already, in the blue.
         ghost = look.ghost if p.color != look.ink["red"] else look.ink["blue"]
         c.save()
-        c.translate(2.4, 1.8)
-        _draw_ink(c, Piece(p.element, p.kind, ghost, points=p.points, text=p.text, at=p.at,
-                           box=p.box, width=p.width), f, 0.32)  # fmt: skip
+        c.translate(*GHOST_OFFSET)
+        _draw_ink(c, dataclasses.replace(p, color=ghost), f, GHOST_ALPHA)
         c.restore()
     return _draw_ink(c, p, f, 1.0)
 
 
 def _card(c: skia.Canvas, p: Piece, f: float) -> None:
     """A card of paper under words on a picture, laid down with its shadow."""
-    x0, y0, x1, y1 = p.box
-    rect = skia.RRect.MakeRectXY(skia.Rect.MakeLTRB(x0, y0, x1, y1), 14, 14)
+    rect = skia.RRect.MakeRectXY(skia.Rect.MakeLTRB(*p.box), 14, 14)
     blur = skia.MaskFilter.MakeBlur(skia.kNormal_BlurStyle, 10)
     shadow = skia.Paint(AntiAlias=True, MaskFilter=blur)
     shadow.setColor(skia.Color4f(0, 0, 0, 0.22 * f).toColor())
@@ -257,7 +293,7 @@ def _card(c: skia.Canvas, p: Piece, f: float) -> None:
     c.translate(0, 4)
     c.drawRRect(rect, shadow)
     c.restore()
-    paint = skia.Paint(AntiAlias=True, Color=skia.ColorSetRGB(*p.color))
+    paint = _solid(p.color)
     paint.setAlphaf(0.92 * f)
     c.drawRRect(rect, paint)
 
@@ -294,118 +330,108 @@ def _fill(c: skia.Canvas, p: Piece, f: float) -> None:
         c.translate(5 + 6 * (1 - ease), 7 + 8 * (1 - ease))
         c.drawPath(p.shape, shadow)
         c.restore()
-    paint = skia.Paint(AntiAlias=True, Color=skia.ColorSetRGB(*p.color))
+    paint = _solid(p.color)
     paint.setAlphaf(min(1.0, 0.25 + ease))
     c.drawPath(p.shape, paint)
     c.restore()
 
 
-def _draw_ink(c: skia.Canvas, p: Piece, f: float, alpha: float) -> tuple[float, float] | None:
+def _draw_ink(c: skia.Canvas, p: Piece, f: float, alpha: float) -> g.Point | None:
     """A line, a label or a highlight, the share `f` of it done."""
-    look = th.current()
-    if p.kind == "line" and look.shadow:
-        # Strips of paper: each line lifted off the card by its shadow.
-        n = len(p.points)
-        k = max(2, min(n, math.ceil(n * f)))
-        blur = skia.MaskFilter.MakeBlur(skia.kNormal_BlurStyle, 3)
-        shade = _paint((0x2E, 0x22, 0x14), "line", p.width)
-        shade.setMaskFilter(blur)
-        shade.setAlphaf(0.25)
-        c.save()
-        c.translate(2.5, 3.5)
-        c.drawPath(_poly(p.points[:k]), shade)
-        c.restore()
     if p.kind == "line":
-        n = len(p.points)
-        k = max(2, min(n, math.ceil(n * f)))
-        path = _poly(p.points[:k])
-        if th.current().pen == "chalk":
-            # Chalk's dusty edge: a wider, fainter pass under the line.
-            dust = _paint(p.color, "line", p.width + 3.5)
-            dust.setAlphaf(0.22)
-            c.drawPath(path, dust)
-        c.drawPath(path, _faded(_paint(p.color, "line", p.width), alpha))
-        return p.points[k - 1] if f < 1 else None
+        return _draw_line(c, p, f, alpha)
     if p.kind == "text" and p.text is not None:
-        x, y = p.at
-        if f >= 1:
-            # Finished: drawn whole. Letters reach past their advance width,
-            # and a clip at the width cut each label's last one.
-            c.save()
-            c.translate(x, y)
-            c.drawPath(p.text.path, _faded(_paint(p.color, "text"), alpha))
-            c.restore()
-            return None
-        right = max(p.text.path.getBounds().right(), p.text.width)
-        edge = x + right * f
-        c.save()
-        c.clipRect(
-            skia.Rect.MakeLTRB(x - 12, y - p.text.ascent * 1.8, edge, y + p.text.descent * 2.5)
-        )
-        c.translate(x, y)
-        c.drawPath(p.text.path, _faded(_paint(p.color, "text"), alpha))
-        c.restore()
-        return (edge, y - p.text.ascent * 0.3)
-    x0, y0, x1, y1 = p.box
+        return _draw_text(c, p, p.text, f, alpha)
     paint = _paint(p.color, "wash")
     paint.setAlphaf(min(f, 1.0) * th.current().highlight_alpha)
-    c.drawRoundRect(skia.Rect.MakeLTRB(x0, y0, x1, y1), 18, 18, paint)
+    c.drawRoundRect(skia.Rect.MakeLTRB(*p.box), 18, 18, paint)
     return None
 
 
-def _marker(c: skia.Canvas, at: tuple[float, float], t: float) -> None:
-    """A marker pen whose tip is on the stroke being drawn, with a little
+def _draw_line(c: skia.Canvas, p: Piece, f: float, alpha: float) -> g.Point | None:
+    """A line drawn up to the share `f` of its points; the pen is at the last
+    one until it is done."""
+    look = th.current()
+    n = len(p.points)
+    k = max(2, min(n, math.ceil(n * f)))
+    path = g.path_of(p.points[:k])
+    if look.shadow:
+        # Strips of paper: each line lifted off the card by its shadow.
+        shade = _paint((0x2E, 0x22, 0x14), "line", p.width)
+        shade.setMaskFilter(skia.MaskFilter.MakeBlur(skia.kNormal_BlurStyle, 3))
+        shade.setAlphaf(0.25)
+        c.save()
+        c.translate(2.5, 3.5)
+        c.drawPath(path, shade)
+        c.restore()
+    if look.pen == "chalk":
+        # Chalk's dusty edge: a wider, fainter pass under the line.
+        dust = _paint(p.color, "line", p.width + 3.5)
+        dust.setAlphaf(0.22)
+        c.drawPath(path, dust)
+    c.drawPath(path, _faded(_paint(p.color, "line", p.width), alpha))
+    return p.points[k - 1] if f < 1 else None
+
+
+def _draw_text(c: skia.Canvas, p: Piece, t: g.Text, f: float, alpha: float) -> g.Point | None:
+    """A label written left to right up to the share `f` of its width; the
+    pen is at the edge of what is written until it is done."""
+    x, y = p.at
+    edge: float | None = None
+    c.save()
+    if f < 1:
+        # Revealed through a clip. A finished label is drawn whole: letters
+        # reach past their advance width, and a clip at the width would cut
+        # each label's last one.
+        edge = x + max(t.path.getBounds().right(), t.width) * f
+        top, bottom = y - t.ascent * CLIP_ASCENT, y + t.descent * CLIP_DESCENT
+        c.clipRect(skia.Rect.MakeLTRB(x - CLIP_LEFT, top, edge, bottom))
+    c.translate(x, y)
+    c.drawPath(t.path, _faded(_paint(p.color, "text"), alpha))
+    c.restore()
+    return None if edge is None else (edge, y - t.ascent * TIP_HEIGHT)
+
+
+# ── the pen ──────────────────────────────────────────────────────────────────
+
+
+def _point(length: float, half: float) -> skia.Path:
+    """A pen's point: a triangle from its tip at the origin, `length` long
+    and `2 * half` wide at its base."""
+    return g.path_of([(0, 0), (length, -half), (length, half)], closed=True)
+
+
+def _marker(c: skia.Canvas, at: g.Point, t: float) -> None:
+    """The theme's pen, its tip on the stroke being drawn, with a little
     hand tremor."""
-    if th.current().pen in ("print", "craft"):
+    look = th.current()
+    if look.pen in ("print", "craft"):
         # Nothing holds a pen: a print appears, cut paper is laid down.
         return
+    point, collar, body = look.tip
     x, y = at
     c.save()
     c.translate(x, y + math.sin(t / 37) * 1.5)
     c.rotate(-35)
     shadow = skia.Paint(AntiAlias=True, Color=skia.Color4f(0, 0, 0, 0.18).toColor())
     c.drawRoundRect(skia.Rect.MakeXYWH(12, -4, 128, 30), 9, 9, shadow)
-    tip = skia.Path()
-    tip.moveTo(0, 0)
-    tip.lineTo(12, -9)
-    tip.lineTo(12, 9)
-    tip.close()
-    look = th.current()
-    point, collar, body = look.tip
     if look.pen == "chalk":
         # A stick of chalk, its end worn round.
-        stick = skia.Paint(AntiAlias=True, Color=skia.ColorSetRGB(*body))
-        c.drawRoundRect(skia.Rect.MakeXYWH(-2, -11, 96, 22), 10, 10, stick)
-        c.restore()
-        return
-    if look.pen in ("ballpoint", "technical"):
+        c.drawRoundRect(skia.Rect.MakeXYWH(-2, -11, 96, 22), 10, 10, _solid(body))
+    elif look.pen in ("ballpoint", "technical"):
         # A slim pen: a fine point, a metal collar, a long body.
-        tip = skia.Path()
-        tip.moveTo(0, 0)
-        tip.lineTo(16, -5)
-        tip.lineTo(16, 5)
-        tip.close()
-        c.drawPath(tip, skia.Paint(AntiAlias=True, Color=skia.ColorSetRGB(*point)))
-        c.drawRoundRect(skia.Rect.MakeXYWH(16, -7, 18, 14), 3, 3,
-                        skia.Paint(AntiAlias=True, Color=skia.ColorSetRGB(*collar)))  # fmt: skip
-        c.drawRoundRect(skia.Rect.MakeXYWH(34, -9, 120, 18), 9, 9,
-                        skia.Paint(AntiAlias=True, Color=skia.ColorSetRGB(*body)))  # fmt: skip
-        c.restore()
-        return
-    c.drawPath(tip, skia.Paint(AntiAlias=True, Color=skia.ColorSetRGB(*point)))
-    c.drawRoundRect(
-        skia.Rect.MakeXYWH(12, -12, 22, 24),
-        3,
-        3,
-        skia.Paint(AntiAlias=True, Color=skia.ColorSetRGB(*collar)),
-    )
-    c.drawRoundRect(
-        skia.Rect.MakeXYWH(34, -15, 100, 30),
-        8,
-        8,
-        skia.Paint(AntiAlias=True, Color=skia.ColorSetRGB(*body)),
-    )
+        c.drawPath(_point(16, 5), _solid(point))
+        c.drawRoundRect(skia.Rect.MakeXYWH(16, -7, 18, 14), 3, 3, _solid(collar))
+        c.drawRoundRect(skia.Rect.MakeXYWH(34, -9, 120, 18), 9, 9, _solid(body))
+    else:
+        # A marker: a broad point, a collar, a thick body.
+        c.drawPath(_point(12, 9), _solid(point))
+        c.drawRoundRect(skia.Rect.MakeXYWH(12, -12, 22, 24), 3, 3, _solid(collar))
+        c.drawRoundRect(skia.Rect.MakeXYWH(34, -15, 100, 30), 8, 8, _solid(body))
     c.restore()
+
+
+# ── frames ───────────────────────────────────────────────────────────────────
 
 
 def _wipe(c: skia.Canvas, share: float) -> None:
@@ -428,16 +454,41 @@ def _blank(theme_id: str) -> skia.Image:
     return surface.makeImageSnapshot()
 
 
-def _still_frames(seg: Segment) -> Iterator[tuple[bytes, bool]]:
+def _raster() -> skia.Surface:
+    """A surface at the video's size, its pixels in the order the encoder
+    reads them."""
+    info = skia.ImageInfo.Make(W, H, skia.kRGBA_8888_ColorType, skia.kPremul_AlphaType)
+    return skia.Surface.MakeRaster(info)
+
+
+def _frame_ms(seg: Segment, i: int) -> float:
+    """When the segment's `i`th frame is shown, ms from the video's start."""
+    return (seg.first_frame + i) * 1000 / FPS
+
+
+def _wiping(seg: Segment, t: float) -> bool:
+    return seg.wipe and t > seg.end_ms - WIPE_MS
+
+
+def _wipe_out(c: skia.Canvas, seg: Segment, t: float) -> None:
+    """The scene's end wiped away, as far as `t` is into the wipe."""
+    _wipe(c, (t - (seg.end_ms - WIPE_MS)) / WIPE_MS)
+
+
+def _done(p: Piece, t: float) -> float:
+    """The share of `p` drawn by `t`."""
+    return (t - p.start_ms) / max(p.end_ms - p.start_ms, 1.0)
+
+
+def _still_frames(seg: Segment) -> Frames:
     """A fixed slide: the same frame throughout, fading to the board at the
     end when the segment wipes."""
-    info = skia.ImageInfo.Make(W, H, skia.kRGBA_8888_ColorType, skia.kPremul_AlphaType)
-    frame = skia.Surface.MakeRaster(info)
+    frame = _raster()
     img = skia.Image.open(seg.still)
     last: bytes | None = None
     for i in range(seg.frames):
-        t = (seg.first_frame + i) * 1000 / FPS
-        wiping = seg.wipe and t > seg.end_ms - WIPE_MS
+        t = _frame_ms(seg, i)
+        wiping = _wiping(seg, t)
         if last is not None and not wiping:
             yield last, False
             continue
@@ -446,19 +497,13 @@ def _still_frames(seg: Segment) -> Iterator[tuple[bytes, bool]]:
             paper(c)
             c.drawImageRect(img, skia.Rect.MakeWH(W, H))
             if wiping:
-                _wipe(c, (t - (seg.end_ms - WIPE_MS)) / WIPE_MS)
+                _wipe_out(c, seg, t)
         pixels: bytes = frame.makeImageSnapshot().tobytes()
         last = pixels
         yield pixels, True
 
 
-# How much an illustrated scene's picture is pushed in over the scene, and
-# how long it fades in from the paper.
-PUSH_IN = 0.06
-FADE_IN_MS = 400
-
-
-def _illustrated_frames(seg: Segment) -> Iterator[tuple[bytes, bool]]:
+def _illustrated_frames(seg: Segment) -> Frames:
     """An illustrated scene: its picture, pushed in slowly toward a point of
     its own, with the scene's words laid on cards as they are said. Every
     frame differs (the picture moves), so none is held."""
@@ -470,13 +515,12 @@ def _illustrated_frames(seg: Segment) -> Iterator[tuple[bytes, bool]]:
     pieces = sorted(drawing.pieces, key=lambda p: p.start_ms)
     img = skia.Image.open(seg.picture)
     rnd = np.random.default_rng(seg.first_frame)
-    fx, fy = float(rnd.uniform(0.3, 0.7)) * W, float(rnd.uniform(0.25, 0.6)) * H
-    info = skia.ImageInfo.Make(W, H, skia.kRGBA_8888_ColorType, skia.kPremul_AlphaType)
-    frame = skia.Surface.MakeRaster(info)
+    fx, fy = float(rnd.uniform(*FOCUS_X)) * W, float(rnd.uniform(*FOCUS_Y)) * H
+    frame = _raster()
     span = max(seg.end_ms - seg.start_ms, 1.0)
     sampling = skia.SamplingOptions(skia.FilterMode.kLinear)
     for i in range(seg.frames):
-        t = (seg.first_frame + i) * 1000 / FPS
+        t = _frame_ms(seg, i)
         c = frame.getCanvas()
         with th.using(look):
             paper(c)
@@ -490,15 +534,34 @@ def _illustrated_frames(seg: Segment) -> Iterator[tuple[bytes, bool]]:
             for p in pieces:
                 if p.start_ms >= t:
                     break
-                draw_piece(c, p, (t - p.start_ms) / max(p.end_ms - p.start_ms, 1.0))
+                draw_piece(c, p, _done(p, t))
             if t - seg.start_ms < FADE_IN_MS:
                 _wipe(c, 1 - (t - seg.start_ms) / FADE_IN_MS)
-            if seg.wipe and t > seg.end_ms - WIPE_MS:
-                _wipe(c, (t - (seg.end_ms - WIPE_MS)) / WIPE_MS)
+            if _wiping(seg, t):
+                _wipe_out(c, seg, t)
         yield frame.makeImageSnapshot().tobytes(), True
 
 
-def frames(seg: Segment) -> Iterator[tuple[bytes, bool]]:
+def _drawing_frame(
+    frame: skia.Surface, board: skia.Image, pending: list[Piece], seg: Segment, t: float
+) -> bytes:
+    """The finished board, what is being drawn on it at `t`, and the pen at
+    its tip, or the wipe at the scene's end."""
+    c = frame.getCanvas()
+    c.drawImage(board, 0, 0)
+    tip: g.Point | None = None
+    for p in pending:
+        if p.start_ms >= t:
+            break
+        tip = draw_piece(c, p, _done(p, t)) or tip
+    if _wiping(seg, t):
+        _wipe_out(c, seg, t)
+    elif tip is not None:
+        _marker(c, tip, t)
+    return frame.makeImageSnapshot().tobytes()
+
+
+def frames(seg: Segment) -> Frames:
     """The segment's frames as raw RGBA, each with whether it differs from
     the one before. A board holding still repeats the same bytes, without
     being drawn again. Drawn in the segment's theme; the theme is set only
@@ -515,16 +578,15 @@ def frames(seg: Segment) -> Iterator[tuple[bytes, bool]]:
         Scene.model_validate(seg.scene), when_of(seg), seg.start_ms, seg.end_ms, look
     )
     pieces = sorted(drawing.pieces, key=lambda p: p.start_ms)
-    info = skia.ImageInfo.Make(W, H, skia.kRGBA_8888_ColorType, skia.kPremul_AlphaType)
-    board = skia.Surface.MakeRaster(info)
+    board = _raster()
     with th.using(look):
         paper(board.getCanvas())
     board_img = board.makeImageSnapshot()
-    frame = skia.Surface.MakeRaster(info)
+    frame = _raster()
     done = 0
     last: bytes | None = None
     for i in range(seg.frames):
-        t = (seg.first_frame + i) * 1000 / FPS
+        t = _frame_ms(seg, i)
         with th.using(look):
             # Everything finished by now goes onto the board, once.
             committed = False
@@ -535,30 +597,14 @@ def frames(seg: Segment) -> Iterator[tuple[bytes, bool]]:
             if committed:
                 board_img = board.makeImageSnapshot()
             active = done < len(pieces) and pieces[done].start_ms < t
-            wiping = seg.wipe and t > seg.end_ms - WIPE_MS
-            if last is not None and not (committed or active or wiping):
-                pixels = None
-            else:
-                c = frame.getCanvas()
-                c.drawImage(board_img, 0, 0)
-                tip = None
-                for p in pieces[done:]:
-                    if p.start_ms >= t:
-                        break
-                    span = max(p.end_ms - p.start_ms, 1.0)
-                    tip = draw_piece(c, p, (t - p.start_ms) / span) or tip
-                if wiping:
-                    _wipe(c, (t - (seg.end_ms - WIPE_MS)) / WIPE_MS)
-                elif tip is not None:
-                    _marker(c, tip, t)
-                pixels = frame.makeImageSnapshot().tobytes()
-        if pixels is None:
-            assert last is not None
-            yield last, False
-            continue
-        last = pixels
-        yield pixels, True
+            changed = last is None or committed or active or _wiping(seg, t)
+            if changed:
+                last = _drawing_frame(frame, board_img, pieces[done:], seg, t)
+        assert last is not None
+        yield last, changed
 
+
+# ── encoding ─────────────────────────────────────────────────────────────────
 
 # A board still for at least this many frames is encoded from one frame,
 # converted once and repeated by the encoder, rather than piped frame by
@@ -568,6 +614,8 @@ def frames(seg: Segment) -> Iterator[tuple[bytes, bool]]:
 HOLD_FRAMES = 15
 
 ENCODER = ["-c:v", "libx264", "-preset", "veryfast", "-tune", "animation", "-crf", "20"]
+# How much of ffmpeg's complaint a failure keeps, in characters.
+ERROR_TAIL = 600
 
 
 def _encoder(seg: Segment, out: str, hold: int = 0) -> subprocess.Popen[bytes]:
@@ -585,12 +633,13 @@ def _encoder(seg: Segment, out: str, hold: int = 0) -> subprocess.Popen[bytes]:
 
 
 def _finish(proc: subprocess.Popen[bytes]) -> None:
+    """Close the encoder's input and wait for it; raise if it failed."""
     assert proc.stdin is not None
     proc.stdin.close()
     err = proc.stderr.read() if proc.stderr else b""
     if proc.wait() != 0:
         raise RuntimeError(
-            f"ffmpeg exited {proc.returncode}: {err.decode(errors='replace')[-600:]}"
+            f"ffmpeg exited {proc.returncode}: {err.decode(errors='replace')[-ERROR_TAIL:]}"
         )
 
 
@@ -599,7 +648,7 @@ def render_segment(seg: Segment) -> list[str]:
     them: a run of drawing is piped frame by frame; a board still for
     `HOLD_FRAMES` or more is a file of its own made from one frame. Runs in
     a worker process."""
-    stem = seg.out[: -len(".mp4")] if seg.out.endswith(".mp4") else seg.out
+    stem = seg.out.removesuffix(".mp4")
     files: list[str] = []
     live: subprocess.Popen[bytes] | None = None
     held: bytes | None = None
@@ -634,7 +683,6 @@ def render_segment(seg: Segment) -> list[str]:
             write(held, count)
         held, count = None, 0
 
-    procs: list[subprocess.Popen[bytes]] = []
     try:
         for f, changed in frames(seg):
             if changed:
@@ -646,14 +694,13 @@ def render_segment(seg: Segment) -> list[str]:
                 count += 1
         flush_hold()
         if live is not None:
-            procs.append(live)
             _finish(live)
             live = None
     except BaseException:
-        for p in [*procs, *([live] if live is not None else [])]:
-            p.kill()
+        if live is not None:
+            live.kill()
             with contextlib.suppress(Exception):
-                p.wait()
+                live.wait()
         raise
     with open(f"{stem}.parts.json", "w", encoding="utf-8") as fh:
         json.dump(files, fh)

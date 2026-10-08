@@ -13,9 +13,17 @@ import skia
 from httpx import AsyncClient
 
 from opennotebook.api import video as video_api
-from opennotebook.build.whiteboard import check, draw, frame
+from opennotebook.build.whiteboard import check, draw, frame, illustrate
 from opennotebook.build.whiteboard import theme as th
-from tests.builds.test_whiteboard import (  # pyright: ignore[reportPrivateUsage]
+from opennotebook.build.whiteboard.compile import (
+    CARD_BAND,
+    H,
+    W,
+    compile_illustrated,
+    compile_scene,
+)
+from opennotebook.build.whiteboard.scene import TONES, PlannedScene
+from tests.builds.test_whiteboard import (
     _scene,  # pyright: ignore[reportPrivateUsage]
     _segment,  # pyright: ignore[reportPrivateUsage]
     _when,  # pyright: ignore[reportPrivateUsage]
@@ -35,7 +43,7 @@ def _pixels(png: bytes) -> np.ndarray:
 
 
 def _frame_png(rgba: bytes) -> bytes:
-    arr = np.frombuffer(rgba, dtype=np.uint8).reshape(1080, 1920, 4)
+    arr = np.frombuffer(rgba, dtype=np.uint8).reshape(H, W, 4)
     data = skia.Image.fromarray(arr, colorType=skia.kRGBA_8888_ColorType).encodeToData()
     assert data is not None
     return bytes(data)
@@ -76,7 +84,7 @@ def test_the_whiteboard_looks_as_it_did_before_themes(tmp_path: Path) -> None:
 def test_every_theme_is_complete_and_the_api_names_them_all() -> None:
     assert th.DEFAULT == "whiteboard" and next(iter(th.THEMES)) == th.DEFAULT
     for t in th.THEMES.values():
-        assert set(t.ink) == set(th.TONES), t.id
+        assert set(t.ink) == set(TONES), t.id
         assert (Path(frame.ASSETS) / t.font).exists(), t.id
     assert set(typing.get_args(video_api.ThemeId)) == set(th.THEMES)
 
@@ -174,7 +182,7 @@ def test_each_theme_starts_on_its_paper_and_draws_the_same_every_time(
     b = [f for f, _ in draw.frames(seg)]
     assert a == b, "a render is deterministic"
     with th.using(theme_id):
-        surface = skia.Surface(1920, 1080)
+        surface = skia.Surface(W, H)
         draw.paper(surface.getCanvas())
         blank = surface.makeImageSnapshot().tobytes()
     assert a[0] == blank, "the first frame is the empty paper"
@@ -212,8 +220,6 @@ def test_a_label_reads_on_its_cut_paper(theme_id: str) -> None:
 
 
 def test_a_filled_theme_fills_its_shapes_and_cut_paper_has_no_outline() -> None:
-    from opennotebook.build.whiteboard.compile import compile_scene
-
     def kinds(theme_id: str, element: str) -> list[str]:
         d = compile_scene(_scene(), _when, 0, 6000, theme_id)
         return [p.kind for p in d.pieces if p.element == element]
@@ -229,9 +235,6 @@ def test_a_filled_theme_fills_its_shapes_and_cut_paper_has_no_outline() -> None:
 
 
 def test_a_picture_is_asked_for_by_its_brief_never_its_words() -> None:
-    from opennotebook.build.whiteboard import illustrate
-    from opennotebook.build.whiteboard.scene import PlannedScene
-
     ps = PlannedScene(lines=["l0"], title="The kernel", brief="A kernel between programs and a CPU",
                       concepts=["kernel", "CPU"])  # fmt: skip
     ask = illustrate.prompt(th.THEMES["watercolor"], ps)
@@ -247,8 +250,6 @@ def test_a_picture_is_asked_for_by_its_brief_never_its_words() -> None:
 
 
 def test_an_illustrated_scene_sets_its_words_on_cards_at_its_foot() -> None:
-    from opennotebook.build.whiteboard.compile import CARD_BAND, compile_illustrated
-
     with th.using("watercolor"):
         d = compile_illustrated(_scene(), _when, 0, 6000)
     cards = [p for p in d.pieces if p.kind == "card" and p.element != "title"]

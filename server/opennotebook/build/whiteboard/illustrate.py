@@ -25,6 +25,7 @@ import skia
 
 from opennotebook.ai import client
 from opennotebook.ai.errors import AiError
+from opennotebook.build.whiteboard.compile import H, W
 from opennotebook.build.whiteboard.scene import PlannedScene
 from opennotebook.build.whiteboard.theme import Theme
 
@@ -33,7 +34,14 @@ log = logging.getLogger(__name__)
 ASPECT = "16:9"
 # A custom style, in the person's own words, at most this long.
 CUSTOM_CHARS = 200
+# A picture is asked for this many times before the scene is drawn instead.
 ATTEMPTS = 2
+# An image smaller than this on either side is not a picture, px.
+MIN_SIDE = 64
+# The checker's answer is a short JSON object; its reason is kept to this
+# many characters.
+CHECK_TOKENS = 300
+WHY_CHARS = 200
 
 RULES = """Paint one picture for a scene of an educational explainer video.
 Style: {style}
@@ -73,18 +81,18 @@ def prompt(theme: Theme, ps: PlannedScene, custom: str = "") -> str:
 
 
 def _fit(data: bytes) -> bytes | None:
-    """The picture as a PNG at 1920×1080, cropped to fill; None for one that
-    is not a picture."""
+    """The picture as a PNG at the video's size, cropped to fill; None for
+    one that is not a picture."""
     img = skia.Image.MakeFromEncoded(skia.Data.MakeWithCopy(data))
-    if img is None or img.width() < 64 or img.height() < 64:
+    if img is None or img.width() < MIN_SIDE or img.height() < MIN_SIDE:
         return None
     w, h = img.width(), img.height()
-    scale = max(1920 / w, 1080 / h)
-    sw, sh = 1920 / scale, 1080 / scale
+    scale = max(W / w, H / h)
+    sw, sh = W / scale, H / scale
     src = skia.Rect.MakeXYWH((w - sw) / 2, (h - sh) / 2, sw, sh)
-    surface = skia.Surface(1920, 1080)
+    surface = skia.Surface(W, H)
     surface.getCanvas().drawImageRect(
-        img, src, skia.Rect.MakeWH(1920, 1080), skia.SamplingOptions(skia.FilterMode.kLinear)
+        img, src, skia.Rect.MakeWH(W, H), skia.SamplingOptions(skia.FilterMode.kLinear)
     )
     out = surface.makeImageSnapshot().encodeToData()
     return bytes(out) if out is not None else None
@@ -101,7 +109,7 @@ async def _check(model: str, png: bytes, ps: PlannedScene) -> list[str]:
     ]
     try:
         done = await client.ai().complete(
-            model, [{"role": "user", "content": content}], max_tokens=300
+            model, [{"role": "user", "content": content}], max_tokens=CHECK_TOKENS
         )
         start = done.text.find("{")
         v = json.loads(done.text[start:]) if start >= 0 else {}
@@ -112,7 +120,7 @@ async def _check(model: str, png: bytes, ps: PlannedScene) -> list[str]:
     if v.get("lettering") is True:
         faults.append("the picture has lettering in it; it must have none at all")
     if v.get("contradicts") is True:
-        faults.append(f"the picture misleads about the scene: {str(v.get('why', ''))[:200]}")
+        faults.append(f"the picture misleads about the scene: {str(v.get('why', ''))[:WHY_CHARS]}")
     return faults
 
 
@@ -120,7 +128,8 @@ async def picture(
     model: str, check_model: str, theme: Theme, ps: PlannedScene, custom: str = ""
 ) -> Picture:
     """The scene's picture, checked; or none, with why."""
-    ask = prompt(theme, ps, custom)
+    base = prompt(theme, ps, custom)
+    ask = base
     faults: list[str] = []
     for attempt in range(1, ATTEMPTS + 1):
         try:
@@ -138,8 +147,6 @@ async def picture(
         if not faults:
             return Picture(png, attempt, [])
         log.info("the picture for %r needs another try: %s", ps.title, "; ".join(faults))
-        ask = (
-            f"{prompt(theme, ps, custom)}\n\nThe last picture had these faults; avoid them:\n- "
-            + ("\n- ".join(faults))
-        )
+        avoid = "\n- ".join(faults)
+        ask = f"{base}\n\nThe last picture had these faults; avoid them:\n- {avoid}"
     return Picture(None, ATTEMPTS, faults)

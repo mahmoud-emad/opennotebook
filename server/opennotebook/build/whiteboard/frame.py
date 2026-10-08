@@ -22,18 +22,18 @@ import html
 from functools import cache
 from pathlib import Path
 
+import skia
+
 from opennotebook.build.whiteboard import theme as th
-from opennotebook.build.whiteboard.compile import compile_scene
-from opennotebook.build.whiteboard.scene import COLS, Beat, Element, Scene
+from opennotebook.build.whiteboard.compile import H, W, compile_scene
+from opennotebook.build.whiteboard.draw import draw_piece, paper
+from opennotebook.build.whiteboard.scene import COLS, ROWS, Beat, Element, Scene
 
 ASSETS = Path(__file__).parent / "assets"
-OPENING = "Introduction"
 CLOSING = "Recap"
 THANKS = "Thanks for watching"
 # The most chapters the opening lists: more is a list nobody reads.
 MOST = 10
-
-W, H = 1920, 1080
 
 
 @cache
@@ -43,6 +43,7 @@ def _hand(name: str) -> str:
 
 
 def _clock(ms: int) -> str:
+    """`ms` as minutes and seconds, "1:05"."""
     s = max(ms, 0) // 1000
     return f"{s // 60}:{s % 60:02d}"
 
@@ -120,27 +121,26 @@ def _el(**v: object) -> Element:
 def board(heading: str, items: list[str], ticked: bool) -> Scene:
     """A slide as a finished board: its heading in the title band, its items
     one per row, centred, numbered or ticked."""
-    items = items[:6]
-    first = (6 - len(items)) // 2
+    items = items[:ROWS]
+    first = (ROWS - len(items)) // 2
     beat = Beat(line="", word=0)
     elements: list[Element] = []
     for k, item in enumerate(items):
         label = item if ticked else f"{k + 1} · {item}"
         at = f"{COLS[0]}{first + k + 1}"
         kind = "box" if ticked else "label"
-        elements.append(_el(id=f"t{k}", kind=kind, label=label, at=at, span=[6, 1], beat=beat))
+        span = [len(COLS), 1]
+        elements.append(_el(id=f"t{k}", kind=kind, label=label, at=at, span=span, beat=beat))
     if not elements:
-        elements.append(_el(id="t0", kind="label", label=heading, at="A3", span=[6, 2], beat=beat))
+        # Nothing to list: the heading alone, across the middle rows.
+        span = [len(COLS), 2]
+        elements.append(_el(id="t0", kind="label", label=heading, at="A3", span=span, beat=beat))
     return Scene(title=heading, layout="stack", elements=elements)
 
 
 def board_png(sc: Scene, theme: th.Theme | str | None = None) -> bytes:
     """A scene as a finished board, a PNG at the video's size, in the theme
     given (or the one in use)."""
-    import skia
-
-    from opennotebook.build.whiteboard.draw import draw_piece, paper
-
     with th.using(theme if theme is not None else th.current()):
         d = compile_scene(sc, lambda _b: 0.0, 0.0, 1000.0)
         surface = skia.Surface(W, H)
