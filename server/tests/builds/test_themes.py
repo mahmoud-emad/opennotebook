@@ -3,6 +3,7 @@ one place, the whiteboard's unchanged by them, and a theme carried from the
 request to the last frame."""
 
 import dataclasses
+import hashlib
 import os
 import typing
 from pathlib import Path
@@ -173,18 +174,26 @@ def test_every_ink_reads_on_its_paper_and_its_highlight(theme_id: str) -> None:
             assert min(_contrast(ink, t.paper), _contrast(ink, lit)) >= NEW_THEMES, (theme_id, tone)
 
 
+def _digest(frame: bytes) -> str:
+    return hashlib.blake2b(frame, digest_size=16).hexdigest()
+
+
 @pytest.mark.parametrize("theme_id", list(th.THEMES))
 def test_each_theme_starts_on_its_paper_and_draws_the_same_every_time(
     tmp_path: Path, theme_id: str
 ) -> None:
     seg = dataclasses.replace(_segment(tmp_path, frames=30), theme=theme_id)
-    a = [f for f, _ in draw.frames(seg)]
-    b = [f for f, _ in draw.frames(seg)]
+    # Compared by digest: a failing comparison of raw 8 MB frames makes
+    # pytest's diff of them run for minutes.
+    a = [_digest(f) for f, _ in draw.frames(seg)]
+    b = [_digest(f) for f, _ in draw.frames(seg)]
     assert a == b, "a render is deterministic"
     with th.using(theme_id):
-        surface = skia.Surface(W, H)
+        # RGBA, as the frames are: a surface's native order is BGRA on Linux.
+        info = skia.ImageInfo.Make(W, H, skia.kRGBA_8888_ColorType, skia.kPremul_AlphaType)
+        surface = skia.Surface.MakeRaster(info)
         draw.paper(surface.getCanvas())
-        blank = surface.makeImageSnapshot().tobytes()
+        blank = _digest(surface.makeImageSnapshot().tobytes())
     assert a[0] == blank, "the first frame is the empty paper"
     assert len(set(a)) > 5, "the board changes as it is drawn"
 

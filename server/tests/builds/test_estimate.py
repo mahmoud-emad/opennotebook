@@ -286,5 +286,6 @@ def test_a_drawn_theme_adds_nothing_and_an_illustrated_one_adds_a_cost_a_scene()
 
 
 def test_a_video_over_the_limit_says_to_shorten_it_or_use_slides() -> None:
-    assert e.Render("whiteboard").fix == "a shorter length or the Slides style"
+    # Only the deck is held to the limit: a shorter one is the way under it.
+    assert e.Render("whiteboard").fix == e.Render("slides").fix == e.SHORTER
     assert e.Render("slides").fix == "a shorter length"

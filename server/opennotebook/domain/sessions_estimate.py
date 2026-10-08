@@ -646,9 +646,6 @@ SCENES_PER_PART = (1.3, 1.8, 2.2)
 # illustrated one adds a picture a scene; reasoned, not measured.
 SCENE_USD_BY_FAMILY = {"drawn": 0.0, "illustrated": 0.04}
 
-# What to change to bring a whiteboard video under the limit.
-SHORTER_OR_SLIDES = "a shorter length or the Slides style"
-
 
 @dataclass(frozen=True)
 class Render:
@@ -661,8 +658,9 @@ class Render:
 
     @property
     def fix(self) -> str:
-        """What to change to come under the spending limit."""
-        return SHORTER_OR_SLIDES if self.style == "whiteboard" else SHORTER
+        """What to change to come under the spending limit: only the deck is
+        held to it, so a shorter one, whatever the style."""
+        return SHORTER
 
 
 def _scaled(per: tuple[float, float, float], n: float) -> tuple[float, float, float]:
@@ -877,8 +875,8 @@ async def refuse_over_limit(
     video: Render | None = None,
 ) -> str | None:
     """Why a build whose HIGH estimate is over the person's spending limit is
-    refused, or None. A video overview's is checked with its render, so it
-    is refused before its deck is built, not after.
+    refused, or None. A video overview is held to it by its deck alone
+    (`Live.limited_usd`): its render is not stopped by the limit.
 
     The high end, not the typical one: the limit is a promise about the most
     a build costs, and a build that usually fits but sometimes does not would
@@ -892,5 +890,5 @@ async def refuse_over_limit(
     except NoPrices:
         return None
     if live.over_limit:
-        return over_limit_message(live.estimate.total[2], live.limit_usd, live.fix)
+        return over_limit_message(live.limited_usd, live.limit_usd, live.fix)
     return None
