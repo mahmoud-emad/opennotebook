@@ -1,5 +1,3 @@
-<img src="web/public/favicon.svg" alt="OpenNotebook logo" width="72" />
-
 # OpenNotebook
 
 [![CI](https://github.com/mahmoud-emad/opennotebook/actions/workflows/ci.yml/badge.svg)](https://github.com/mahmoud-emad/opennotebook/actions/workflows/ci.yml)
