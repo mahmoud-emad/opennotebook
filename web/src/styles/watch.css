@@ -122,6 +122,9 @@ body.watch-open { overflow:hidden; }
 .watch-page .w-follow { position:absolute; left:50%; bottom:12px; transform:translateX(-50%);
   display:inline-flex; align-items:center; gap:6px; padding:6px 14px; border-radius:var(--bs-border-radius-pill);
   background:var(--accent); color:var(--st-on-primary); border:0; box-shadow:var(--bs-box-shadow); font-size:13px; }
+/* Pressed, it keeps its centring: the app scales a pressed button by a
+   transform, which would otherwise drop the one that centres it. */
+.watch-page .w-follow:active:not(:disabled) { transform:translateX(-50%) scale(.98); }
 
 /* ── the tutor ───────────────────────────────────────────────────────────── */
 .watch-page .w-explain { flex:1; min-height:0; display:flex; flex-direction:column; }
