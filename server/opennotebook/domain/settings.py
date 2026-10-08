@@ -722,8 +722,25 @@ def need(key: str) -> Def:
 MAX_TEXT_BYTES = 400
 MAX_MODEL_BYTES = 200
 _WHOLE_NUMBER = re.compile(r"[+-]?[0-9]+")
-# `vendor/name`, with the `:free`-style suffixes some endpoints use.
-_MODEL_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._:+-]*")
+# What a model id's two halves, `vendor/name`, are made of: the name also
+# takes the `:free`-style suffixes some endpoints use.
+_ALNUM = frozenset("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789")
+_VENDOR_CHARS = _ALNUM | frozenset("._-")
+_NAME_CHARS = _VENDOR_CHARS | frozenset(":+")
+
+
+def _is_model_id(s: str) -> bool:
+    """Whether `s` has a model id's shape: `vendor/name`, each half starting
+    with a letter or digit."""
+    vendor, slash, name = s.partition("/")
+    return (
+        bool(slash)
+        and len(s.encode()) <= MAX_MODEL_BYTES
+        and vendor[:1] in _ALNUM
+        and name[:1] in _ALNUM
+        and set(vendor) <= _VENDOR_CHARS
+        and set(name) <= _NAME_CHARS
+    )
 
 
 def validate(d: Def, value: str) -> str | None:
@@ -768,7 +785,7 @@ async def check_model(model_id: str) -> str | None:
     The id must look like `vendor/name`, and the AI endpoint's model list must
     name it. When the list cannot be read, the id is accepted on its shape, as
     the Rust studio did: an unreachable catalogue is not a reason to refuse."""
-    if len(model_id.encode()) > MAX_MODEL_BYTES or not _MODEL_ID.fullmatch(model_id):
+    if not _is_model_id(model_id):
         return (
             f"“{model_id}” is not a model id. Model ids look like {SCRIPT_MODEL_DEFAULT}; "
             "check the spelling and try again."
