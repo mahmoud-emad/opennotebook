@@ -55,7 +55,7 @@ describe("the cost of a tool", () => {
   });
 
   it("says only a video's deck is held to the limit, when the whole could go over it", () => {
-    const video = { ...e, total_low_usd: 0.34, total_high_usd: 0.98, limited_usd: 0.23 };
+    const video = { ...e, total_low_usd: 0.34, total_high_usd: 0.98 };
     render(<EstimateBanner est={video} loading={false} failed={false} />);
     expect(screen.getByRole("status").textContent).toBe(
       "Estimated $0.34 – $0.98 · the deck is within your $0.50 limit; the video itself can cost more.",

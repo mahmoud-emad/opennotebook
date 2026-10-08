@@ -24,7 +24,8 @@ export function EstimateBanner({ est, loading, failed }: { est: Estimate | null;
             {anyUnpriced(est)
               ? ", not counting a model with no price, so the real cost is unknown."
               : est.limit_usd > 0 && est.total_high_usd > est.limit_usd && !est.over_limit
-                ? // A video overview: only its deck is held to the limit for now.
+                ? // Over the limit yet allowed: a video overview, whose deck alone
+                  // is held to the limit.
                   ` · the deck is within your ${usd(est.limit_usd)} limit; the video itself can cost more.`
                 : est.limit_usd > 0
                   ? ` · within your ${usd(est.limit_usd)} limit.`

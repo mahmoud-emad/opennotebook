@@ -9,7 +9,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type * as Rest from "@/client/types.gen";
-import { apiBase, call, enc, errText, isAbort, storage } from "./api";
+import { call, enc, errText, isAbort, storage } from "./api";
 import { overviewEstimate } from "./api-studio";
 import { EstimateBanner } from "./cost";
 import { CostDialog, LimitNote, type Estimate } from "./dialogs";
@@ -19,11 +19,11 @@ import "../styles/video.css";
 
 export type VideoStyle = "whiteboard" | "slides";
 /** A whiteboard's look (the server's build/whiteboard/theme.py). */
-export type VideoTheme = Rest.ThemeOut;
-export type VideoLength = "short" | "default" | "long";
+type VideoTheme = Rest.ThemeOut;
+type VideoLength = "short" | "default" | "long";
 export type Video = Rest.VideoState;
 
-export const STYLE_LABEL: Record<VideoStyle, string> = {
+const STYLE_LABEL: Record<VideoStyle, string> = {
   whiteboard: "Whiteboard",
   slides: "Slides",
 };
@@ -45,20 +45,20 @@ const THEME_LABEL: Record<string, string> = {
   kawaii: "Kawaii",
 };
 
-export function themeLabel(id: string | null | undefined): string | null {
+function themeLabel(id: string | null | undefined): string | null {
   if (!id) return null;
   return THEME_LABEL[id] ?? id.charAt(0).toUpperCase() + id.slice(1);
 }
 
 /** What a video is called on its row: its theme's name when it has one. */
-export function videoName(v: { style: string; theme?: string | null }): string {
-  return `${themeLabel(v.theme) ?? STYLE_LABEL[v.style as VideoStyle]} video`;
+export function videoName(v: { style: VideoStyle; theme?: string | null }): string {
+  return `${themeLabel(v.theme) ?? STYLE_LABEL[v.style]} video`;
 }
 
 // The theme last chosen, per collection and overall, in this browser only.
 const THEME_KEY = "video-theme";
 
-export function lastTheme(cid?: string): string {
+function lastTheme(cid?: string): string {
   try {
     const s = storage();
     return (cid && s?.getItem(`${THEME_KEY}:${cid}`)) || s?.getItem(THEME_KEY) || "whiteboard";
@@ -78,7 +78,7 @@ function rememberTheme(theme: string, cid?: string): void {
 }
 
 /** A theme's thumbnail, rendered by server/scripts/theme_previews.py. */
-export function themeThumb(id: string): string {
+function themeThumb(id: string): string {
   return `${import.meta.env.BASE_URL}themes/${id}.jpg`;
 }
 
@@ -90,7 +90,7 @@ const LENGTH_LABEL: Record<VideoLength, string> = {
 
 // ── the server ───────────────────────────────────────────────────────────────
 
-export async function makeOverview(
+async function makeOverview(
   cid: string,
   style: VideoStyle,
   length: VideoLength,
@@ -104,29 +104,20 @@ export async function makeOverview(
 }
 
 /** The looks a whiteboard video can be made in, the default first. */
-export async function videoThemes(): Promise<VideoTheme[]> {
+async function videoThemes(): Promise<VideoTheme[]> {
   return call<VideoTheme[]>("GET", "/video/themes");
 }
 
-export async function videosOf(sid: string): Promise<Video[]> {
+async function videosOf(sid: string): Promise<Video[]> {
   return call<Video[]>("GET", `/sessions/${enc(sid)}/videos`);
 }
 
-export async function makeVideo(sid: string, style: VideoStyle, theme?: string): Promise<Video> {
+async function makeVideo(sid: string, style: VideoStyle, theme?: string): Promise<Video> {
   return call<Video>("POST", `/sessions/${enc(sid)}/video`, { style, ...(theme ? { theme } : {}) });
 }
 
-export function videoUrl(sid: string, style: VideoStyle, download = false): string {
-  const q = `style=${style}${download ? "&download=true" : ""}`;
-  return `${apiBase()}/sessions/${enc(sid)}/video?${q}`;
-}
-
-export function captionsUrl(sid: string, style: VideoStyle): string {
-  return `${apiBase()}/sessions/${enc(sid)}/video/captions?style=${style}`;
-}
-
 /** Whether a video is still on its way: asked for, or being made. */
-export const pending = (v: Video) => v.state === "waiting" || v.state === "rendering";
+const pending = (v: Video) => v.state === "waiting" || v.state === "rendering";
 
 // ── the Studio tool ──────────────────────────────────────────────────────────
 
@@ -213,7 +204,7 @@ export function VideoOptions({
   const [costOpen, setCostOpen] = useState(false);
   // The video as chosen would be refused for its cost.
   const over = !!cost.est?.over_limit;
-  const go = () => {
+  const make = () => {
     if (making || over) return;
     setMaking(true);
     setErr("");
@@ -273,7 +264,7 @@ export function VideoOptions({
       {showCost && !over && (
         <EstimateBanner est={cost.est} loading={cost.loading} failed={cost.err !== ""} />
       )}
-      {cost.est?.over_limit && <LimitNote e={cost.est} className="opt-err" />}
+      {over && cost.est && <LimitNote e={cost.est} className="opt-err" />}
       {err !== "" && (
         <div className="opt-err" role="alert">
           {err}
@@ -287,7 +278,7 @@ export function VideoOptions({
         <button className="ghost" onClick={onCancel}>
           Cancel
         </button>
-        <button className="primary" disabled={making || over} onClick={go}>
+        <button className="primary" disabled={making || over} onClick={make}>
           {making ? "Starting…" : "Make video"}
         </button>
       </div>
@@ -301,7 +292,7 @@ export function VideoOptions({
           onRetry={cost.retry}
           onBuild={() => {
             setCostOpen(false);
-            go();
+            make();
           }}
         />
       )}
@@ -323,7 +314,7 @@ export function VideoLine({ sid, ready, ro }: { sid: string; ready: boolean; ro:
   const [err, setErr] = useState("");
   const load = useCallback(() => {
     videosOf(sid)
-      .then((v) => setVideos(v))
+      .then(setVideos)
       .catch(() => setVideos((v) => v ?? []));
   }, [sid]);
   useEffect(() => {
@@ -372,7 +363,7 @@ export function VideoLine({ sid, ready, ro }: { sid: string; ready: boolean; ro:
             {v.state === "ready" && (v.claims ?? 0) > 0 && ` · ${v.supported ?? 0}/${v.claims} claims checked`}
           </span>
           {v.state === "failed" && <span className="out-d bad">{v.failure}</span>}
-          {v.playable && <WatchLink sid={sid} style={v.style as VideoStyle} />}
+          {v.playable && <WatchLink sid={sid} style={v.style} />}
           {v.state === "failed" && !ro && (
             <button className="link-btn" disabled={starting} onClick={start}>
               <Icon name="arrow-clockwise" />
