@@ -32,6 +32,7 @@ import math
 import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from typing import Literal
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -653,11 +654,10 @@ SHORTER_OR_SLIDES = "a shorter length or the Slides style"
 class Render:
     """A video overview's render, priced on top of the deck it is made from."""
 
-    # "slides" or "whiteboard".
-    style: str
+    style: Literal["slides", "whiteboard"]
     # A whiteboard's theme, as a person reads it, and its family.
     theme: str = ""
-    family: str = "drawn"
+    family: Literal["drawn", "illustrated"] = "drawn"
 
     @property
     def fix(self) -> str:
@@ -666,6 +666,7 @@ class Render:
 
 
 def _scaled(per: tuple[float, float, float], n: float) -> tuple[float, float, float]:
+    """A low / typical / high cost for one, times `n`."""
     return (per[0] * n, per[1] * n, per[2] * n)
 
 
@@ -760,9 +761,9 @@ class Live:
     def limited_usd(self) -> float:
         """The most the spending limit is held against: the whole estimate's
         high end, but for a video overview only its deck's. The limit is
-        checked on the deck's build; the render is not stopped by it yet,
-        and its high end alone ($0.67 for a short whiteboard) would refuse
-        every whiteboard video at the default $0.50 limit."""
+        checked on the deck's build and does not stop the render, whose high
+        end alone ($0.75 for a default-length whiteboard) would refuse every
+        whiteboard video at the default $0.50 limit."""
         if self.video is None:
             return self.estimate.total[2]
         render = sum(ln.cost[2] for ln in self.estimate.lines if ln.group == GROUP_VIDEO)

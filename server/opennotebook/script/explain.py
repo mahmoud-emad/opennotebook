@@ -25,10 +25,14 @@ STAGE = "explain"
 # Passages given to the model: fewer than an answer gets, as the narration
 # carries much of the context.
 PASSAGES = 6
-# The narration before the moment told as "just heard", in characters, and
-# the turns of the thread kept.
+# The narration around the moment, in characters: the end of what was just
+# heard, and the start of what comes next.
 HEARD_CHARS = 1_800
 AHEAD_CHARS = 500
+# How much of what was just heard, from its end, joins the question in
+# picking the passages, in characters.
+QUERY_HEARD_CHARS = 600
+# The thread kept: its last turns, each cut to this many characters.
 HISTORY_TURNS = 6
 HISTORY_CHARS = 1_200
 # The narration's timeline, for pointing to a moment: each line's start and
@@ -39,7 +43,7 @@ TIMELINE_WORDS = 10
 Mode = Literal["ask", "explain", "example", "why", "quiz"]
 
 # What each quick prompt asks, said as the viewer would.
-ASKS: dict[str, str] = {
+ASKS: dict[Mode, str] = {
     "explain": "Explain what was just said, more simply and in a little more depth.",
     "example": "Give me a concrete example of what was just explained.",
     "why": "Why does what was just explained matter?",
@@ -49,11 +53,15 @@ ASKS: dict[str, str] = {
     ),
 }
 
+# A moment the answer points to, `[m:ss]`.
 MOMENT = re.compile(r"\[(\d{1,3}):([0-5]\d)\]")
 
 
 @dataclass
 class Cited:
+    """A citation in the answer: its number, the source it is from (an index
+    into the docs), and the passage."""
+
     n: int
     doc: int
     excerpt: str
@@ -80,11 +88,13 @@ class Moment:
 
 
 def clock(ms: int) -> str:
+    """A time as `m:ss`, as the answer points to it."""
     s = max(ms, 0) // 1000
     return f"{s // 60}:{s % 60:02d}"
 
 
 def _items(script: dict[str, Any], key: str) -> list[dict[str, Any]]:
+    """The script's list under `key`, its objects only."""
     got = script.get(key)
     return [x for x in got if isinstance(x, dict)] if isinstance(got, list) else []  # pyright: ignore[reportUnknownVariableType]
 
@@ -99,6 +109,7 @@ def _on(items: list[dict[str, Any]], t: int) -> dict[str, Any] | None:
 
 
 def moment(script: dict[str, Any], t_ms: int) -> Moment:
+    """What is on at `t_ms`, held within the video."""
     t = max(0, min(t_ms, int(script.get("duration_ms", t_ms) or t_ms)))
     chapter = _on(_items(script, "chapters"), t) or {}
     scene = _on(_items(script, "scenes"), t) or {}
@@ -114,6 +125,20 @@ def moment(script: dict[str, Any], t_ms: int) -> Moment:
         heard=heard[-HEARD_CHARS:],
         ahead=ahead[:AHEAD_CHARS],
     )
+
+
+def timeline(script: dict[str, Any]) -> str:
+    """The narration as a timeline: each line's time and first words."""
+    lines = _items(script, "lines")
+    if not lines:
+        return ""
+    step = max(1, -(-len(lines) // TIMELINE_LINES))
+    s = "\nTimeline:\n"
+    for ln in lines[::step]:
+        words = str(ln.get("text", "")).split()
+        more = "…" if len(words) > TIMELINE_WORDS else ""
+        s += f"- [{clock(int(ln.get('start_ms', 0)))}] {' '.join(words[:TIMELINE_WORDS])}{more}\n"
+    return s
 
 
 def system_prompt(language_rule: str) -> str:
@@ -175,20 +200,6 @@ def user_prompt(
     return s + f"\nViewer: {ask}"
 
 
-def timeline(script: dict[str, Any]) -> str:
-    """The narration as a timeline: each line's time and first words."""
-    lines = _items(script, "lines")
-    if not lines:
-        return ""
-    step = max(1, -(-len(lines) // TIMELINE_LINES))
-    s = "\nTimeline:\n"
-    for ln in lines[::step]:
-        words = str(ln.get("text", "")).split()
-        more = "…" if len(words) > TIMELINE_WORDS else ""
-        s += f"- [{clock(int(ln.get('start_ms', 0)))}] {' '.join(words[:TIMELINE_WORDS])}{more}\n"
-    return s
-
-
 def moments(text: str, duration_ms: int) -> str:
     """The answer with every `[m:ss]` past the video's end removed."""
 
@@ -210,9 +221,11 @@ async def explain(
     model: str,
     language_rule: str,
 ) -> Explained:
+    """Answer `question` (or the quick prompt `mode` asks) at `t_ms` of the
+    video `script`, from the narration and the passages of `docs`."""
     m = moment(script, t_ms)
     ask = question.strip() if mode == "ask" else ASKS[mode]
-    query = " ".join([question, m.scene, *m.board, m.heard[-600:]])
+    query = " ".join([question, m.scene, *m.board, m.heard[-QUERY_HEARD_CHARS:]])
     passages = grounding.excerpts_from([d.text for d in docs], query, PASSAGES) if docs else []
     raw = await generate.send(
         model,

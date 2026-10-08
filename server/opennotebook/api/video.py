@@ -11,6 +11,10 @@ Each read route comes twice, as the media routes do: under
 `/api/sessions/{sid}` for the output's owner, and under
 `/api/shares/{share}/sessions/{sid}` for anyone signed in, only for an
 output the share includes.
+
+The routes are declared in the order the API lists them: an output's video,
+its watch page (the script and the explainer), the themes, and a video
+overview of a collection.
 """
 
 import asyncio
@@ -35,6 +39,7 @@ from opennotebook.api.deps import Db, Me
 from opennotebook.api.media import file_name_of
 from opennotebook.api.notes import Citation
 from opennotebook.build import video
+from opennotebook.build.whiteboard import theme as th
 from opennotebook.db.models import Job, Session, Source
 from opennotebook.db.session import release
 from opennotebook.domain import collections, reading, sessions, shares
@@ -47,7 +52,10 @@ from opennotebook.script.errors import ScriptError, problem
 router = APIRouter(prefix="/api", tags=["video"])
 
 Style = Literal["slides", "whiteboard"]
+# Every style, in the order the studio lists them.
+STYLES: tuple[Style, ...] = video.STYLES  # pyright: ignore[reportAssignmentType]
 StyleQuery = Annotated[Style, Query(description="The video's style")]
+Download = Annotated[bool, Query(description="Send it as a download rather than to play")]
 # A whiteboard's look (build/whiteboard/theme.py): one per theme the studio
 # has, kept in step with it by a test.
 ThemeId = Literal[
@@ -68,6 +76,7 @@ MADE_FROM_FAILED = (
 )
 LOST = "The video stopped before it was finished. Make it again to start over."
 MISSING = "This video is missing from the studio's files. Make it again."
+EMPTY_QUESTION = "The question is empty. Write a question, then ask again."
 
 MP4: dict[int | str, dict[str, Any]] = {
     200: {"content": {"video/mp4": {}}, "description": "An MP4 file"},
@@ -76,6 +85,12 @@ MP4: dict[int | str, dict[str, Any]] = {
 VTT: dict[int | str, dict[str, Any]] = {
     200: {"content": {"text/vtt": {}}, "description": "The narration as WebVTT captions"}
 }
+# A video and its captions may be kept by the viewer's browser for an hour,
+# and by no shared cache.
+CACHE = {"Cache-Control": "private, max-age=3600"}
+
+
+# ── an output's video ────────────────────────────────────────────────────────
 
 
 class VideoState(BaseModel):
@@ -139,6 +154,7 @@ class VideoState(BaseModel):
 
     @classmethod
     def of(cls, style: Style, raw: Any) -> VideoState:
+        """A style's state as the output's `video` field keeps it."""
         v: dict[str, Any] = raw if isinstance(raw, dict) else {}  # pyright: ignore[reportUnknownVariableType]
         if not v:
             return cls(style=style, state="none")
@@ -159,11 +175,17 @@ async def _owned(s: AsyncSession, owner: uuid.UUID, sid: uuid.UUID, lock: bool =
     return o
 
 
+def _kept(o: Session, style: Style) -> dict[str, Any]:
+    """A style's video as the output's `video` field keeps it; empty when
+    none was asked for."""
+    return (o.video or {}).get(style) or {}
+
+
 async def state_of(s: AsyncSession, o: Session, style: Style) -> VideoState:
     """A style's state, with a render whose job ended without writing its
     outcome (the worker was killed, the job was stopped) said as failed
     rather than left rendering forever."""
-    st = VideoState.of(style, (o.video or {}).get(style))
+    st = VideoState.of(style, _kept(o, style))
     if st.state == "waiting":
         if o.state == "failed":
             st.state, st.failure = "failed", MADE_FROM_FAILED
@@ -201,28 +223,73 @@ async def _alive(s: AsyncSession, job_id: uuid.UUID) -> tuple[bool, bool]:
     return True, job.status == "queued"
 
 
-async def _start(
-    s: AsyncSession, o: Session, style: Style, theme: str = "whiteboard"
-) -> VideoState:
+def _require_encoder() -> None:
+    """Refuse at once when ffmpeg or ffprobe is missing, rather than queue a
+    render that fails at its end, after drawing every slide."""
+    try:
+        video.tool(video.FFMPEG_KEY, "ffmpeg")
+        video.tool(video.FFPROBE_KEY, "ffprobe")
+    except video.ToolMissing as e:
+        raise Problem(503, e.sentence) from e
+
+
+async def _start(s: AsyncSession, o: Session, style: Style, theme: ThemeId) -> VideoState:
     if o.state != "ready":
         raise Problem(409, NOT_READY)
     current = await state_of(s, o, style)
     if current.state == "rendering":
         # Already on its way: the same render, not a second one.
         return current
-    try:
-        video.tool(video.FFMPEG_KEY, "ffmpeg")
-        video.tool(video.FFPROBE_KEY, "ffprobe")
-    except video.ToolMissing as e:
-        # Refused at once rather than queued: a render with no encoder
-        # fails at its end, after drawing every slide.
-        raise Problem(503, e.sentence) from e
+    _require_encoder()
     if style == "whiteboard" and not client.ai().has_key:
         # The scenes are written by a model: without a key the render would
         # fail at its first call, after waiting its turn.
         raise Problem(503, NO_KEY)
     await video.queue(s, o, style, theme)
-    return VideoState.of(style, (o.video or {})[style])
+    return VideoState.of(style, _kept(o, style))
+
+
+async def _ready(s: AsyncSession, o: Session, style: Style) -> dict[str, Any]:
+    """The video to serve: this style's, or while a new one is made or after
+    it failed, the one made before it."""
+    st = await state_of(s, o, style)
+    kept = _kept(o, style)
+    if st.state == "ready":
+        return kept
+    previous = kept.get("previous")
+    if isinstance(previous, dict):
+        return previous  # pyright: ignore[reportUnknownVariableType]
+    if st.state == "rendering":
+        raise Problem(409, RENDERING)
+    raise Problem(404, NO_VIDEO)
+
+
+def _file(rel: Any) -> str:
+    """A video's file on the files volume, from its path as kept."""
+    if not isinstance(rel, str) or not rel or not storage.exists(rel):
+        raise Problem(404, MISSING)
+    return str(storage.local_path(rel))
+
+
+async def video_response(s: AsyncSession, o: Session, style: Style, download: bool) -> Response:
+    v = await _ready(s, o, style)
+    # The title as a file name, then without what ASCII cannot say, made a
+    # file name again in case that left it empty or ragged.
+    name = file_name_of(file_name_of(o.title).encode("ascii", "ignore").decode())
+    return FileResponse(
+        _file(v.get("path")),
+        media_type="video/mp4",
+        filename=f"{name}.mp4",
+        content_disposition_type="attachment" if download else "inline",
+        headers=CACHE,
+    )
+
+
+async def captions_response(s: AsyncSession, o: Session, style: Style) -> Response:
+    v = await _ready(s, o, style)
+    return FileResponse(
+        _file(v.get("captions")), media_type="text/vtt; charset=utf-8", headers=CACHE
+    )
 
 
 @router.post("/sessions/{sid}/video", status_code=202)
@@ -238,52 +305,7 @@ async def make_video(sid: uuid.UUID, body: VideoReq, s: Db, me: Me) -> VideoStat
 async def list_videos(sid: uuid.UUID, s: Db, me: Me) -> list[VideoState]:
     """Every style's video of an output and how far it is."""
     o = await _owned(s, me.id, sid)
-    return [await state_of(s, o, st) for st in video.STYLES]  # pyright: ignore[reportArgumentType]
-
-
-async def _ready(s: AsyncSession, o: Session, style: Style) -> dict[str, Any]:
-    """The video to serve: this style's, or while a new one is made or after
-    it failed, the one made before it."""
-    st = await state_of(s, o, style)
-    raw: dict[str, Any] = (o.video or {}).get(style) or {}
-    if st.state == "ready":
-        return raw
-    previous = raw.get("previous")
-    if isinstance(previous, dict):
-        return previous  # pyright: ignore[reportUnknownVariableType]
-    if st.state == "rendering":
-        raise Problem(409, RENDERING)
-    raise Problem(404, NO_VIDEO)
-
-
-def _file(rel: Any) -> str:
-    if not isinstance(rel, str) or not rel or not storage.exists(rel):
-        raise Problem(404, MISSING)
-    return str(storage.local_path(rel))
-
-
-async def video_response(s: AsyncSession, o: Session, style: Style, download: bool) -> Response:
-    v = await _ready(s, o, style)
-    name = file_name_of(file_name_of(o.title).encode("ascii", "ignore").decode())
-    return FileResponse(
-        _file(v.get("path")),
-        media_type="video/mp4",
-        filename=f"{name}.mp4",
-        content_disposition_type="attachment" if download else "inline",
-        headers={"Cache-Control": "private, max-age=3600"},
-    )
-
-
-async def captions_response(s: AsyncSession, o: Session, style: Style) -> Response:
-    v = await _ready(s, o, style)
-    return FileResponse(
-        _file(v.get("captions")),
-        media_type="text/vtt; charset=utf-8",
-        headers={"Cache-Control": "private, max-age=3600"},
-    )
-
-
-Download = Annotated[bool, Query(description="Send it as a download rather than to play")]
+    return [await state_of(s, o, style) for style in STYLES]
 
 
 @router.get("/sessions/{sid}/video", response_class=Response, responses=MP4)
@@ -325,7 +347,7 @@ async def shared_captions(
     return await captions_response(s, o, style)
 
 
-# ── the watch page: the video's script, and its explainer ────────────────────
+# ── the watch page: the video's script ───────────────────────────────────────
 
 
 class ScriptChapter(BaseModel):
@@ -364,34 +386,38 @@ class VideoScript(BaseModel):
     theme: str | None = Field(default=None, description="A whiteboard's theme")
 
 
+# A WebVTT cue's timing line, `00:00:01.000 --> 00:00:03.500`; a comma before
+# the milliseconds is taken too, as SubRip writes it.
 CUE = re.compile(r"(\d+):(\d{2}):(\d{2})[.,](\d{3})\s+-->\s+(\d+):(\d{2}):(\d{2})[.,](\d{3})")
+# A caption is a few words; a line of the transcript is a sentence, or this
+# many words of a long one.
+LINE_WORDS = 40
 
 
 def _cue_ms(h: str, m: str, s: str, ms: str) -> int:
     return ((int(h) * 60 + int(m)) * 60 + int(s)) * 1000 + int(ms)
 
 
+def _cue_of(block: str) -> ScriptLine | None:
+    """One caption block as a line: the text under its timing line, or None
+    when it has no timing or no text."""
+    rows = block.strip().split("\n")
+    for i, row in enumerate(rows):
+        timing = CUE.search(row)
+        if timing:
+            said = " ".join(r.strip() for r in rows[i + 1 :] if r.strip())
+            if not said:
+                return None
+            g = timing.groups()
+            return ScriptLine(start_ms=_cue_ms(*g[:4]), end_ms=_cue_ms(*g[4:]), text=said)
+    return None
+
+
 def lines_of_vtt(text: str) -> list[ScriptLine]:
-    """A video's captions as its narration: what a video made before scripts
-    were kept is followed by."""
-    out: list[ScriptLine] = []
-    for block in re.split(r"\n\s*\n", text.replace("\r\n", "\n")):
-        rows = block.strip().split("\n")
-        for i, row in enumerate(rows):
-            mt = CUE.search(row)
-            if mt:
-                said = " ".join(r.strip() for r in rows[i + 1 :] if r.strip())
-                if said:
-                    g = mt.groups()
-                    start, end = _cue_ms(*g[:4]), _cue_ms(*g[4:])
-                    out.append(ScriptLine(start_ms=start, end_ms=end, text=said))
-                break
-    return _sentences(out)
-
-
-# A caption is a few words; a line of the transcript is a sentence, or this
-# many words of a long one.
-LINE_WORDS = 40
+    """A video's captions read as its narration, for a video made before its
+    script was kept."""
+    blocks = re.split(r"\n\s*\n", text.replace("\r\n", "\n"))
+    return _sentences([cue for b in blocks if (cue := _cue_of(b)) is not None])
 
 
 def _sentences(cues: list[ScriptLine]) -> list[ScriptLine]:
@@ -413,6 +439,8 @@ def _sentences(cues: list[ScriptLine]) -> list[ScriptLine]:
 
 
 async def script_of(s: AsyncSession, o: Session, style: Style) -> VideoScript:
+    """The video's script as its render kept it, or for a video made before
+    scripts were kept, its narration read from its captions."""
     v = await _ready(s, o, style)
     rel = v.get("script")
     if isinstance(rel, str) and storage.exists(rel):
@@ -441,6 +469,9 @@ async def shared_script(
     return await script_of(s, o, style)
 
 
+# ── the watch page: the explainer ────────────────────────────────────────────
+
+
 class Turn(BaseModel):
     role: Literal["user", "assistant"]
     text: str = Field(max_length=8_000)
@@ -464,9 +495,6 @@ class ExplainOut(BaseModel):
     t_ms: int = Field(description="The moment answered about")
 
 
-EMPTY_QUESTION = "The question is empty. Write a question, then ask again."
-
-
 @router.post("/sessions/{sid}/video/explain")
 async def explain_moment(sid: uuid.UUID, body: ExplainReq, s: Db, me: Me) -> ExplainOut:
     """Explain a moment of the video, or answer a question about it, from
@@ -479,6 +507,7 @@ async def explain_moment(sid: uuid.UUID, body: ExplainReq, s: Db, me: Me) -> Exp
     docs = await reading.read_docs(s, me.id, cid, None) if cid else []
     model = await config.value(s, me.id, config.SCRIPT_MODEL_KEY)
     rule = config.language_rule(await config.value(s, me.id, config.LANGUAGE_KEY))
+    # The model takes seconds: the connection goes back to the pool meanwhile.
     await release(s)
     try:
         async with ledger.spending(me.id, "explain", collection_id=cid):
@@ -488,19 +517,18 @@ async def explain_moment(sid: uuid.UUID, body: ExplainReq, s: Db, me: Me) -> Exp
             )  # fmt: skip
     except (AiError, ScriptError) as e:
         raise problem(e) from e
+    citations = [
+        Citation(
+            n=c.n,
+            name=docs[c.doc].name,
+            title=docs[c.doc].title,
+            url=docs[c.doc].url,
+            excerpt=c.excerpt,
+        )
+        for c in got.cited
+    ]
     return ExplainOut(
-        answer=got.text,
-        citations=[
-            Citation(
-                n=c.n,
-                name=docs[c.doc].name,
-                title=docs[c.doc].title,
-                url=docs[c.doc].url,
-                excerpt=c.excerpt,
-            )
-            for c in got.cited
-        ],
-        t_ms=min(body.t_ms, int(script["duration_ms"])),
+        answer=got.text, citations=citations, t_ms=min(body.t_ms, int(script["duration_ms"]))
     )
 
 
@@ -519,8 +547,6 @@ class ThemeOut(BaseModel):
 @router.get("/video/themes")
 async def video_themes(me: Me) -> list[ThemeOut]:
     """The looks a whiteboard video can be made in, the default first."""
-    from opennotebook.build.whiteboard import theme as th
-
     return [ThemeOut(id=t.id, label=t.label, family=t.family) for t in th.THEMES.values()]
 
 
@@ -529,6 +555,9 @@ async def video_themes(me: Me) -> list[ThemeOut]:
 # A video overview's length, as the deck it is narrated over: parts, each a
 # scene or two of the whiteboard.
 LENGTHS = {"short": 4, "default": 6, "long": 9}
+# The title of an overview of a collection with no title and not one
+# source: what is left when nothing better names it.
+OVERVIEW_TITLE = "Video overview"
 
 
 class OverviewReq(BaseModel):
@@ -543,23 +572,57 @@ class OverviewOut(BaseModel):
     video: VideoState
 
 
+class CollectionVideo(VideoState):
+    session_id: uuid.UUID
+
+
+def _overview_build(body: OverviewReq, title: str) -> sessions_api.BuildReq:
+    """The deck a video overview is narrated over: one narrator, its parts
+    as long as the length asked for."""
+    return sessions_api.BuildReq(
+        kind="slides", title=title, speakers=1, slide_count=LENGTHS[body.length]
+    )
+
+
+def _render(body: OverviewReq) -> est.Render:
+    """A video overview's render, as its estimate prices it: a whiteboard's
+    theme can add a cost a scene, by its family."""
+    if body.style != "whiteboard":
+        return est.Render(style=body.style)
+    t = th.theme_of(body.theme)
+    return est.Render(style=body.style, theme=t.label, family=t.family)
+
+
+async def _overview_title(s: AsyncSession, owner: uuid.UUID, cid: uuid.UUID) -> str:
+    """What a video overview is about, as its title: the collection's title,
+    else its one source's. The video's opening slide shows it, so a generic
+    name ("Video overview", or a deck's "Editorial slides") is the last
+    resort."""
+    c = await collections.owned(s, owner, cid)
+    title = " ".join((c.title or "").split())
+    if title and title != collections.UNTITLED:
+        return title
+    # Two at most: enough to tell one source from several.
+    found = (
+        await s.scalars(select(Source.title).where(Source.collection_id == cid).limit(2))
+    ).all()
+    if len(found) == 1 and found[0].strip():
+        return " ".join(found[0].split())
+    return OVERVIEW_TITLE
+
+
 @router.post("/collections/{cid}/videos", status_code=202)
 async def make_overview(cid: uuid.UUID, body: OverviewReq, s: Db, me: Me) -> OverviewOut:
     """Make a video overview of a collection's sources: one narrator's deck,
     built as any deck is (and refused as one would be), then its video once
     it is ready. Follow the build on /api/sessions/{sid}/events and the video
     on /api/sessions/{sid}/videos."""
-    try:
-        video.tool(video.FFMPEG_KEY, "ffmpeg")
-        video.tool(video.FFPROBE_KEY, "ffprobe")
-    except video.ToolMissing as e:
-        raise Problem(503, e.sentence) from e
-    # Named for what it is about: the title asked for, else the collection's,
-    # else its one source's. The video's opening slide shows it, so a generic
-    # name ("Video overview", or a deck's "Editorial slides") will not do.
-    build = _overview_build(body, body.title.strip() or await _overview_title(s, me.id, cid))
-    made = await sessions_api.build(cid, build, s, me)
+    _require_encoder()
+    title = body.title.strip() or await _overview_title(s, me.id, cid)
+    made = await sessions_api.build(cid, _overview_build(body, title), s, me)
     o = await _owned(s, me.id, made.id, lock=True)
+    # Asked for with its deck: `video.after_build` starts it once that is
+    # ready.
     asked: dict[str, Any] = {"state": video.WAITING}
     if body.style == "whiteboard":
         asked["theme"] = body.theme
@@ -577,42 +640,6 @@ async def estimate_overview(
     return await sessions_api.priced(s, me.id, cid, _overview_build(body, ""), _render(body))
 
 
-def _overview_build(body: OverviewReq, title: str) -> sessions_api.BuildReq:
-    """The deck a video overview is narrated over: one narrator, its parts
-    as long as the length asked for."""
-    return sessions_api.BuildReq(
-        kind="slides", title=title, speakers=1, slide_count=LENGTHS[body.length]
-    )
-
-
-def _render(body: OverviewReq) -> est.Render:
-    """A video overview's render, as its estimate prices it: a whiteboard's
-    theme can add a cost a scene, by its family."""
-    if body.style != "whiteboard":
-        return est.Render(style=body.style)
-    from opennotebook.build.whiteboard import theme as th
-
-    t = th.theme_of(body.theme)
-    return est.Render(style=body.style, theme=t.label, family=t.family)
-
-
-async def _overview_title(s: AsyncSession, owner: uuid.UUID, cid: uuid.UUID) -> str:
-    c = await collections.owned(s, owner, cid)
-    title = " ".join((c.title or "").split())
-    if title and title != collections.UNTITLED:
-        return title
-    found = (
-        await s.scalars(select(Source.title).where(Source.collection_id == cid).limit(2))
-    ).all()
-    if len(found) == 1 and found[0].strip():
-        return " ".join(found[0].split())
-    return "Video overview"
-
-
-class CollectionVideo(VideoState):
-    session_id: uuid.UUID
-
-
 @router.get("/collections/{cid}/videos")
 async def collection_videos(cid: uuid.UUID, s: Db, me: Me) -> list[CollectionVideo]:
     """Every video asked for of a collection's outputs, and how far each is:
@@ -624,8 +651,8 @@ async def collection_videos(cid: uuid.UUID, s: Db, me: Me) -> list[CollectionVid
     )
     out: list[CollectionVideo] = []
     for o in rows:
-        for style in video.STYLES:
+        for style in STYLES:
             if style in (o.video or {}):
-                st = await state_of(s, o, style)  # pyright: ignore[reportArgumentType]
+                st = await state_of(s, o, style)
                 out.append(CollectionVideo(**st.model_dump(), session_id=o.id))
     return out

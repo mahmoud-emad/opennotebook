@@ -158,13 +158,13 @@ def parse_response(raw: dict[str, Any]) -> Completion:
         if isinstance(c, dict)
     ]
     return Completion(
-        images=_images(msg),
         text=text,
         tool_calls=calls,
         usage=_usage(raw.get("usage")),
         finish_reason=_finish(choice.get("finish_reason")),
         model=str(raw.get("model", "")),
         raw=raw,
+        images=_images(msg),
     )
 
 
@@ -264,8 +264,10 @@ class Ai:
     ) -> Completion:
         """Send and wait for the whole answer. With `image_aspect` ("16:9"),
         ask an image model for a picture of that shape (`Completion.images`)."""
-        more: dict[str, Any] = {}
+        more: dict[str, Any] | None = None
         if image_aspect is not None:
+            # OpenRouter's image output: the picture beside the text, in the
+            # shape asked for.
             more = {"modalities": ["image", "text"], "image_config": {"aspect_ratio": image_aspect}}
         body = self._body(
             model,

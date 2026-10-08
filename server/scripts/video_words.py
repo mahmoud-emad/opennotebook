@@ -34,7 +34,10 @@ from opennotebook.db.session import sessionmaker
 from opennotebook.domain.sessions import Line
 from opennotebook.script.budget import speakable
 
+# The style whose scripts are backfilled: whiteboards only.
 STYLE = "whiteboard"
+# What a line voiced again is called, in its clip's errors and as its id.
+NAME = "backfill"
 # How far a line's new clip may differ in length from its clip in the video,
 # in ms, before its times are taken not to be the video's.
 LENGTH_SLACK_MS = 120
@@ -42,7 +45,7 @@ LENGTH_SLACK_MS = 120
 
 async def words_for(
     voice_client: speech.Speech, voice: str, line: dict[str, Any]
-) -> list[list[Any]] | None:
+) -> list[tuple[str, int, int]] | None:
     """A script line's words with their times in the video, or None when the
     voice does not come back the same."""
     text = str(line.get("text", ""))
@@ -50,17 +53,19 @@ async def words_for(
     data, cues = await voice_client.synthesize_timed(speakable(text), voice)
     if not data or not cues:
         return None
-    length = wav.duration_of(data, "backfill")
+    length = wav.duration_of(data, NAME)
     if abs(length - (end - start)) > LENGTH_SLACK_MS:
         return None
-    ln = Line("backfill", "host", 0, text)
+    ln = Line(NAME, "host", 0, text)
     ln.cues = [w.as_cue() for w in cues]
     ln.duration_ms = length
     words, _ = tl.align(ln, start)
-    return [[w.text, w.start_ms, w.end_ms] for w in words]
+    return [(w.text, w.start_ms, w.end_ms) for w in words]
 
 
 async def backfill(sid: uuid.UUID) -> str:
+    """Time the words of one output's whiteboard script, and say what was
+    done."""
     async with sessionmaker()() as s:
         o = await s.get(Session, sid)
         if o is None:
@@ -87,6 +92,7 @@ async def backfill(sid: uuid.UUID) -> str:
 
 
 async def main(args: list[str]) -> None:
+    """Backfill the outputs named, or every output with a video."""
     if args:
         sids = [uuid.UUID(a) for a in args]
     else:

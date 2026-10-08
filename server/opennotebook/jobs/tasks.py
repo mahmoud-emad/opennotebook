@@ -142,6 +142,10 @@ async def _finish(progress: Progress, error: str | None) -> None:
         await progress.finish(error)
 
 
+# Why a render that was stopped did not finish, as the output's video says.
+STOPPED = "The video was stopped before it was finished. Make it again to start over."
+
+
 class RenderSpec(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -217,6 +221,3 @@ async def render_video(**spec: object) -> None:
         await _finish(progress, str(e) if isinstance(e, BuildError) else type(e).__name__)
         return
     await _finish(progress, None)
-
-
-STOPPED = "The video was stopped before it was finished. Make it again to start over."

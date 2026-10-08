@@ -277,8 +277,8 @@ def test_a_drawn_theme_adds_nothing_and_an_illustrated_one_adds_a_cost_a_scene()
     chalk = e.with_render(deck, e.Render("whiteboard", "Chalkboard", "drawn"), 6, "m")
     assert chalk.total == plain.total
     assert not any(ln.step == "Illustrations" for ln in chalk.lines)
-    drawn = e.with_render(deck, e.Render("whiteboard", "Watercolor", "illustrated"), 6, "m")
-    pictures = step(drawn, "Illustrations")
+    painted = e.with_render(deck, e.Render("whiteboard", "Watercolor", "illustrated"), 6, "m")
+    pictures = step(painted, "Illustrations")
     assert pictures.calls.typical == math.ceil(6 * e.SCENES_PER_PART[1])
     assert pictures.cost[1] == pytest.approx(
         pictures.calls.typical * e.SCENE_USD_BY_FAMILY["illustrated"]
