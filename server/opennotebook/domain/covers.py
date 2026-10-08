@@ -278,7 +278,10 @@ async def redraw(owner: uuid.UUID, cid: uuid.UUID, *, force: bool) -> None:
         ):
             designed = await design(cid, digest, model, language)
     except (AiError, NotACover, TimeoutError) as e:
-        log.info("collection %s: cover kept: %s", cid, e)
+        # The reason can quote the model's reply: one line, so it cannot forge
+        # log entries.
+        why = str(e).replace("\r", " ").replace("\n", " ")
+        log.info("collection %s: cover kept: %s", cid, why)
         failure = e
     async with sessionmaker()() as s, s.begin():
         c = await s.scalar(

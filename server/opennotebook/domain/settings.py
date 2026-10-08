@@ -768,7 +768,7 @@ async def check_model(model_id: str) -> str | None:
     The id must look like `vendor/name`, and the AI endpoint's model list must
     name it. When the list cannot be read, the id is accepted on its shape, as
     the Rust studio did: an unreachable catalogue is not a reason to refuse."""
-    if not _MODEL_ID.fullmatch(model_id):
+    if len(model_id.encode()) > MAX_MODEL_BYTES or not _MODEL_ID.fullmatch(model_id):
         return (
             f"“{model_id}” is not a model id. Model ids look like {SCRIPT_MODEL_DEFAULT}; "
             "check the spelling and try again."
