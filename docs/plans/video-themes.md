@@ -174,27 +174,15 @@ How a scene is shown changes. What it says does not: the plan, the scene JSON, t
 | Phase | Size | Done when |
 |---|---|---|
 | 0 plumbing | about half a day | All tests pass, the whiteboard golden test is unchanged, the API takes and reports `theme` |
-| 1 three drawn themes | about a day | A real video renders in each on the lab; the contrast and golden tests pass; the four previews in `img/` are regenerated from the real renderer |
+| 1 three drawn themes | about a day | A real video renders in each; the contrast and golden tests pass; the four previews in `img/` are regenerated from the real renderer |
 | 2 Retro Print, Paper-craft | one to two days | Fills and reveals work, lint understands fills, a real video in each |
 | 3 picker | half a day | Thumbnails, the remembered choice, the subtitle, the spec amendment |
-| 4 illustrated | two to three days | A real Watercolor video on the lab, with its cost measured and no text in any picture over five videos (eyeballed and checked) |
+| 4 illustrated | two to three days | A real Watercolor video, with its cost measured and no text in any picture over five videos (eyeballed and checked) |
 
 Phases 0 to 3 ship without any new model call; phase 4 can ship later on its own.
 
-## 10. Working notes for the agent doing this
+## 10. Working on it
 
-- **The machine**: the code runs on the lab machine (`ssh remote-lab01`, repo `~/code/research/opennotebook`, branch `development`).
-  - The dev stack runs from `~/start-dev.sh`, which reads the AI key from `~/.config/opennotebook/ai.env`. Never print or copy keys.
-  - Stop the stack by PID, not with `pkill -f`: that pattern matches your own ssh command line.
-  - The web app is at `http://localhost:5173` on the lab. Reach it with `ssh -f -N -L 15173:localhost:5173 remote-lab01`.
-- **Checks**:
-  - Server, from `server/`: `uv run ruff check`, `uv run ruff format`, `uv run pyright`, and `uv run pytest -q`. Tests need `TEST_DATABASE_URL` pointing at an empty Postgres 18 with pgvector. Run one suite at a time on one database; two at once deadlock.
-  - Web, from `web/`, with `PATH=$HOME/.local/bin:$HOME/.local/node/bin:$PATH` on the lab: `pnpm exec tsc -b`, `pnpm exec eslint .`, `pnpm exec vitest run`, and `pnpm run build` (first screen under 150 KB).
-  - The client is regenerated with `DATABASE_URL=postgresql://gen@localhost/gen pnpm run api`.
-- **Rendering slides**: the browser for the slides is Playwright's Chromium. If a video's opening and closing slides come out as plain boards, the browser is missing: run `uv run playwright install chromium` in `server/`.
-- **Commits**:
-  - Author `Mahmoud-Emad <mahmmoud.hassanein@gmail.com>` (`git -c user.name=Mahmoud-Emad -c user.email=mahmmoud.hassanein@gmail.com commit`).
-  - No Co-Authored-By or Signed-off-by, and no mention of AI tools in messages.
-  - Short conventional messages, one feature per commit.
-  - The lab has no GitHub credentials: commit from a clone on the Mac and push from there, then move the lab onto the new HEAD with a git bundle and `git reset --mixed`.
-- **Coordination**: another agent may be working in the same tree. Do not overwrite files you did not change; tell it which shared files you touched (`routes.ts`, `App.tsx`, `pipeline.py`, `settings.py`, `web/openapi.json`, `web/src/client/*`).
+- **Run it**: `make dev` starts the api, the worker and the web app (see the README for the database settings). A whiteboard video needs `ffmpeg`, `libEGL` and `libGL` on the machine, and Playwright's Chromium for its opening and closing slides (`uv run playwright install chromium` in `server/`); without the browser the slides fall back to being drawn on the board.
+- **Check it**: `make check` runs what CI runs. The server tests need `TEST_DATABASE_URL` pointing at an empty Postgres 18 with pgvector; run one test session at a time against one database, as two at once deadlock. After an API change, regenerate the web client with `make api-client`.
+- **Commit it**: short conventional messages (`feat:`, `fix:`, `docs:`), one change per commit.

@@ -596,7 +596,7 @@ Both were repaired.
 - **Separate from the session.** The voice is the session's first speaker's. The files live under `video/<sid>/voice/`, and the session's own narration is untouched.
 - **Every video's audio is levelled** to −16 LUFS, the loudness of spoken video on the web.
 
-**First run on the real pipeline**, on lab01 (4 cores): "Vaccines in four slides", a session the studio built from real sources. It ran with the lab's AI key (OpenRouter), Microsoft's Edge neural voice (Ava Multilingual) with its word timings, and retrieval from the collection.
+**First run on the real pipeline**, on a 4-core test machine: "Vaccines in four slides", a session the studio built from real sources. It ran through OpenRouter, Microsoft's Edge neural voice (Ava Multilingual) with its word timings, and retrieval from the collection.
 
 | | |
 |---|---|
@@ -642,7 +642,7 @@ The line asks again every 3 s while a video is on its way.
 - One slot under a row in `outputs.tsx`, the tile in `collection/Studio.tsx`, and the regenerated client.
 - Six tests, in `video.test.tsx`.
 
-**Checked in a browser** against lab01, through an SSH tunnel:
+**Checked in a browser** against a running studio:
 - **Tile and options:** the tile and its options draw as the other tools' do.
 - **Starting one:** Make video put the new output in the list at once, preparing ("Writing the script · 2/5"), with its video waiting under it.
 - **A finished one:** the existing video's line showed "188 s · 38/38 claims checked".
@@ -667,13 +667,13 @@ The line asks again every 3 s while a video is on its way.
 **The tutor**, `POST /api/sessions/{sid}/video/explain` with `{style, t_ms, mode, question, history}`, owner only (`server/opennotebook/script/explain.py`):
 - **Told the moment:** the chapter and scene on at `t_ms`, the board's labels and claims, the last 1,800 characters heard and the next 500 not yet heard, the chapter list with times, and the last six turns, and a timeline of the narration (each line's time and first ten words, at most 60 lines) so it can point to any moment, not only a chapter.
 - **Grounded as the chat is:** six passages from the collection's sources, picked by the question together with the scene and the narration around the moment, so "what does this mean?" finds passages about *this*. `cite.renumber` removes a citation that names no passage; a moment past the video's end is removed too.
-- **On the script model** (Haiku 4.5), charged to the ledger as `explain`. Measured on lab01: 600 to 1,900 tokens in and 30 to 220 out, $0.0014 to $0.0021 a question.
+- **On the script model** (Haiku 4.5), charged to the ledger as `explain`. Measured: 600 to 1,900 tokens in and 30 to 220 out, $0.0014 to $0.0021 a question.
 
 **Routes:** a `watch` view in `web/src/ui/routes.ts` and a lazy `WatchPage` in `App.tsx`, agreed with the agent working on the app.
 
 **Tests:** three server tests (the script kept and served, the tutor's prompt and its checked answer, a video followed by its captions) and new web tests (times, moments, asking and seeking, a share's page, the route). Server 799 passed; web 201 passed; the first screen 110.2 KB of 150.
 
-**Checked in a browser** against lab01, on the vaccines video (made before scripts were kept, so served from its captions):
+**Checked in a browser**, on the vaccines video (made before scripts were kept, so served from its captions):
 - **The page:** title, length, the three tabs; no chapter strip, as the video has no chapters.
 - **Transcript:** the captions read as sentences; a click on the 0:48 line put the video and the highlight there.
 - **Explain this part** at 0:48 explained the antigen, T cell and B cell path in plain words, with one source chip, and offered Resume.
@@ -715,7 +715,7 @@ A whiteboard video can now be made in a theme, as [plans/video-themes.md](plans/
 
 **Readable:** every ink reaches 3:1 against its paper (WCAG's bar for large text; every label is 24 px or more); every theme added reaches 4:1 everywhere, on its highlighter and on Paper-craft's cut paper too. The whiteboard's amber and green on its yellow highlighter fall short and are kept, as the whiteboard is kept unchanged.
 
-**Measured on lab01**, the vaccines session: Chalkboard 3:22, $0.35, 32/32 claims; Notebook 3:21, $0.34, 39/39; Blueprint 3:23, $0.27, 40/40.
+**Measured** on the vaccines session: Chalkboard 3:22, $0.35, 32/32 claims; Notebook 3:21, $0.34, 39/39; Blueprint 3:23, $0.27, 40/40.
 
 ### 2026-10-07, illustrated themes
 

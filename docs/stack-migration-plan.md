@@ -381,7 +381,7 @@ Versions and licences were checked on 2026-10-04.
 
 ### Phase 1, 2026-10-04: contract and skeleton (done)
 
-Built on lab01 against Postgres 18.6 + pgvector 0.8.6. `make check` runs the whole gate.
+Built against Postgres 18.6 + pgvector 0.8.6. `make check` runs the whole gate.
 
 - **`server/`** (FastAPI 0.142, Python 3.14, uv):
   - **Schema.** Alembic `0001` creates every table in section 5, with `users`, `api_keys`, `usage_events` and `owner_id` throughout. `0002` adds Procrastinate's queue. Upgrade, downgrade and upgrade again leave nothing behind, and `alembic check` is clean.
@@ -397,11 +397,11 @@ Built on lab01 against Postgres 18.6 + pgvector 0.8.6. `make check` runs the who
   - **Pages.** The shell, the theme switch, the snackbar, home (with New collection on home only), and a collection page with sources.
   - **Size.** The first screen is 124 KB gzipped, against a 150 KB budget enforced by `scripts/size.mjs`. The build takes under a second.
   - **TypeScript.** Pinned to 6.0, because typescript-eslint does not support 7 yet.
-- **Not yet:** Docker Compose and Caddy (lab01 has no Docker; the dev loop is `make dev`), and CI wiring.
+- **Not yet:** Docker Compose and Caddy (the dev loop is `make dev`), and CI wiring.
 
 ### Phase 0, converter spike: markitdown is out, the port stays
 
-The converter was ported to `server/opennotebook/convert/`, with all 36 Rust tests and one more; on the lab its 52 test cases pass. The PDF path now reads PDFium's text layer (pypdfium2) instead of `pdf_oxide`. PPTX is read as raw XML with lxml, because python-pptx hides placeholder types and SmartArt text. Every error is a full sentence that says what to do.
+The converter was ported to `server/opennotebook/convert/`, with all 36 Rust tests and one more; its 52 test cases pass. The PDF path now reads PDFium's text layer (pypdfium2) instead of `pdf_oxide`. PPTX is read as raw XML with lxml, because python-pptx hides placeholder types and SmartArt text. Every error is a full sentence that says what to do.
 
 markitdown 0.1.8 was run on the same fixtures and fails the verbatim rule:
 - **Escaping:** `_` and `*` are escaped (`af\_bella`, `5 \* 3`).
