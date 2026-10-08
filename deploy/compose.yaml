@@ -36,6 +36,10 @@ x-server: &server
     OPENNOTEBOOK_TTS_BASE_URL: ${OPENNOTEBOOK_TTS_BASE_URL:-http://speech:8000/v1}
   volumes:
     - files:/data/files
+  # So a model server on this machine, such as Ollama, is reachable at
+  # http://host.docker.internal:11434/v1 on Linux too.
+  extra_hosts:
+    - "host.docker.internal:host-gateway"
 
 services:
   caddy:

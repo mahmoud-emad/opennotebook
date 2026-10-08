@@ -113,6 +113,9 @@ jobs:
     env:
       DATABASE_URL: postgresql://opennotebook:opennotebook@localhost:5432/opennotebook
       OPENNOTEBOOK_AI_BASE_URL: http://ai.invalid/v1
+      # A provider set in the environment, so the studio skips its setup
+      # tour. Nothing the suite does calls it.
+      OPENNOTEBOOK_AI_KEY: e2e-unused
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
