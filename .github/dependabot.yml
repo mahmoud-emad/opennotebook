@@ -12,6 +12,10 @@ updates:
     directory: /web
     schedule:
       interval: weekly
+    ignore:
+      # typescript-eslint does not support TypeScript 7 yet.
+      - dependency-name: typescript
+        update-types: ["version-update:semver-major"]
     groups:
       web:
         patterns: ["*"]
@@ -26,6 +30,10 @@ updates:
     directory: /deploy
     schedule:
       interval: weekly
+    ignore:
+      # Node moves with CI and the README, LTS releases only, by hand.
+      - dependency-name: node
+        update-types: ["version-update:semver-major"]
     groups:
       images:
         patterns: ["*"]
