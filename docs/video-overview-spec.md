@@ -429,7 +429,7 @@ Research the same day changed six things:
 |---|---|
 | Word timings | `speech.Speech.synthesize_timed`, through Kokoro-FastAPI's captioned route, falling back on servers without it; stored in `Line.cues`; setting `OPENNOTEBOOK_TTS_TIMESTAMPS` |
 | One timeline | `build/timeline.py`, now behind the episode download too; `api/media.py`'s copy of the join is gone |
-| Renderer | `build/video.py`: slides drawn by a browser, title cards for audio overviews and missing slides, ffmpeg as a subprocess, then a check of streams, length, chapters and black frames |
+| Renderer | `build/video.py` runs a render; `build/stills.py` draws slides and title cards (for audio overviews and missing slides) in a browser; `build/encode.py` runs ffmpeg as a subprocess, then checks streams, length, chapters and black frames |
 | Queue | `render` |
 | Routes | `api/video.py`: make, list states, play or download with ranges, WebVTT captions, share routes |
 | Storage and settings | Migration `0007` (`Session.video`); settings `OPENNOTEBOOK_FFMPEG`, `OPENNOTEBOOK_FFPROBE`, `OPENNOTEBOOK_BROWSER_CHANNEL` |
@@ -491,7 +491,7 @@ The suite runs 25 video tests, two of them real renders.
 | `draw.py` | skia frames, one child process per scene. A hold of 15 frames or more is encoded from a single frame. |
 
 **Also changed:**
-- **`video.py`:** the `whiteboard` style. Each scene is drawn as soon as it is written.
+- **`video.py`:** the `whiteboard` style, rendered by `whiteboard/render.py`. Each scene is drawn as soon as it is written.
 - **Model setting:** a `OPENNOTEBOOK_VIDEO_MODEL` setting, Sonnet 5.5 by default.
 - **Spending:** recorded in the ledger as `video`.
 

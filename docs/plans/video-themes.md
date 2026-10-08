@@ -60,7 +60,7 @@ Server:
   - `check.still(..., theme)`.
   - `frame.opening_html` / `closing_html(..., theme)` and `frame.board_png(..., theme)`.
   - `geometry.text(s, size, font=...)`, with `_font` cached per file.
-- `build/video.py`: `render(..., theme: str = "whiteboard")` passes it to `_whiteboard` and into each `Segment`, and writes `"theme"` into the video state. `jobs/tasks.py`'s `render_video` task takes `theme` and passes it on.
+- `build/video.py`: `render(..., theme: str = "whiteboard")` passes it to `whiteboard/render.py` and into each `Segment`, and writes `"theme"` into the video state. `jobs/tasks.py`'s `render_video` task takes `theme` and passes it on.
 - `api/video.py`:
   - `VideoReq` gains `theme: ThemeId = "whiteboard"`, with `ThemeId = Literal[...]` of the theme ids that exist, so the OpenAPI client lists them.
   - `OverviewReq` gains it too. A collection overview stores it with its `waiting` state, so `video.after_build` queues the render with it.
