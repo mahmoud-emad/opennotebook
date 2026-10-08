@@ -4,7 +4,7 @@
 #   docker build -f deploy/web.Dockerfile .
 
 # ── build: web/dist, the same build CI runs, size budget included ────────────
-FROM node:24.21.0-trixie-slim AS build
+FROM node:26.9.0-trixie-slim AS build
 RUN npm install --global pnpm@12.9.1
 WORKDIR /web
 COPY web/package.json web/pnpm-lock.yaml web/pnpm-workspace.yaml ./
@@ -14,6 +14,6 @@ COPY web/ ./
 RUN pnpm build
 
 # ── run: Caddy with the built app under /srv/ui ──────────────────────────────
-FROM caddy:2.11.4-alpine
+FROM caddy:2.11.6-alpine
 COPY deploy/Caddyfile /etc/caddy/Caddyfile
 COPY --from=build /web/dist /srv/ui
