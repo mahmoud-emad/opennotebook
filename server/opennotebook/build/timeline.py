@@ -77,6 +77,8 @@ class Chapter:
 
 @dataclass(frozen=True)
 class Caption:
+    """A piece of the narration on screen, and when."""
+
     start_ms: int
     end_ms: int
     text: str
@@ -84,6 +86,8 @@ class Caption:
 
 @dataclass(frozen=True)
 class Timeline:
+    """Every line and every chapter, and how long the episode is."""
+
     lines: tuple[Span, ...]
     chapters: tuple[Chapter, ...]
     total_ms: int
@@ -245,23 +249,24 @@ def timeline(parts: list[Part], exact_ms: Mapping[str, float] | None = None) -> 
         words, share = align(line, start)
         spans.append(
             Span(
-                line_id,
-                part.ordinal,
-                line.speaker_id,
-                line.text,
-                round(start),
-                round(end),
-                words,
-                share >= MEASURED_SHARE,
+                line_id=line_id,
+                part_ordinal=part.ordinal,
+                speaker_id=line.speaker_id,
+                text=line.text,
+                start_ms=round(start),
+                end_ms=round(end),
+                words=words,
+                measured=share >= MEASURED_SHARE,
             )
         )
         at = end
     total = round(at)
     # Parts in order, each holding its own lines: by position, so two parts
     # that share an ordinal still get a chapter each.
-    owner = {line.line_id: idx for idx, p in enumerate(in_order(parts)) for line in p.lines}
+    ordered = in_order(parts)
+    owner = {line.line_id: idx for idx, p in enumerate(ordered) for line in p.lines}
     chapters: list[Chapter] = []
-    for idx, part in enumerate(in_order(parts)):
+    for idx, part in enumerate(ordered):
         mine = [sp for sp in spans if owner.get(sp.line_id) == idx]
         if not mine:
             continue

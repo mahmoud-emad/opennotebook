@@ -20,8 +20,8 @@ from httpx import AsyncClient
 from sqlalchemy import text
 
 from opennotebook import storage
+from opennotebook.build import encode, narrate, stills, video, wav
 from opennotebook.build import timeline as tl
-from opennotebook.build import video
 from opennotebook.db.models import Session
 from opennotebook.db.session import engine
 from opennotebook.domain import shares
@@ -29,13 +29,20 @@ from opennotebook.domain.sessions import Line, Part
 from opennotebook.speech import words_of
 from opennotebook.speech.wav import ramp_wav
 from tests.builds.conftest import drain
-from tests.builds.fake import install
+from tests.builds.fake import install, tools_found
 from tests.model import add_note
 
 
 @pytest.fixture
 def files(tmp_path: Path) -> Path:
     return tmp_path
+
+
+@pytest.fixture
+def volume(files: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """The files volume, in the test's own directory."""
+    monkeypatch.setattr(storage, "_root", lambda: files)
+    return files
 
 
 def _can_render() -> bool:
@@ -47,8 +54,8 @@ def _can_render() -> bool:
 
         async with async_playwright() as pw:
             try:
-                b = await video._launch(pw)  # pyright: ignore[reportPrivateUsage]
-            except video.ToolMissing:
+                b = await stills.launch(pw)
+            except encode.ToolMissing:
                 return False
             await b.close()
             return True
@@ -99,12 +106,9 @@ def _parts() -> list[Part]:
 # ── the timeline ─────────────────────────────────────────────────────────────
 
 
-def test_the_timeline_is_the_episode_with_its_pauses(
-    files: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setattr(storage, "_root", lambda: files)
+def test_the_timeline_is_the_episode_with_its_pauses(volume: Path) -> None:
     parts = _parts()
-    _voiced(files, parts)
+    _voiced(volume, parts)
     t = tl.timeline(parts)
     # 2000, a 220 ms turn, 1000, a 650 ms chapter break, 1500.
     assert [(sp.start_ms, sp.end_ms) for sp in t.lines] == [
@@ -118,8 +122,6 @@ def test_the_timeline_is_the_episode_with_its_pauses(
         (0, 3220, "Intro"),
         (3220, 5370, "The kernel"),
     ]
-    from opennotebook.build import narrate, wav
-
     episode = narrate.episode(parts)
     assert abs(wav.duration_of(episode, "episode") - t.total_ms) <= 3
 
@@ -143,10 +145,7 @@ def test_estimated_words_fill_the_line_in_order() -> None:
     assert tl.estimate("— …", 0, 100) == ()
 
 
-def test_measured_cues_win_when_they_match_the_words(
-    files: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setattr(storage, "_root", lambda: files)
+def test_measured_cues_win_when_they_match_the_words(volume: Path) -> None:
     parts = _parts()
     parts[1].lines[0].cues = [
         {"word": "The", "start_ms": 10, "end_ms": 100},
@@ -155,23 +154,20 @@ def test_measured_cues_win_when_they_match_the_words(
         {"word": "memory.", "start_ms": 930, "end_ms": 1400},
     ]
     parts[0].lines[0].cues = [{"word": "Linux", "start_ms": 0, "end_ms": 300}]  # too few
-    _voiced(files, parts)
+    _voiced(volume, parts)
     t = tl.timeline(parts)
     last = t.lines[2]
     assert last.measured and [w.start_ms for w in last.words] == [3880, 3990, 4390, 4800]
     assert not t.lines[0].measured, "a partial set of cues is not trusted word by word"
 
 
-def test_captions_are_short_and_cover_every_line(
-    files: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setattr(storage, "_root", lambda: files)
+def test_captions_are_short_and_cover_every_line(volume: Path) -> None:
     parts = _parts()
     parts[0].lines[0].text = (
         "Linux began as a hobby, in 1991, when a student posted a message online about a "
         "free operating system he was writing for fun."
     )
-    _voiced(files, parts)
+    _voiced(volume, parts)
     t = tl.timeline(parts)
     caps = tl.captions(t)
     assert all(len(c.text) <= tl.CAPTION_CHARS for c in caps)
@@ -183,23 +179,16 @@ def test_captions_are_short_and_cover_every_line(
     assert tl.vtt(caps).startswith("WEBVTT\n\n00:00:00.000 --> ")
 
 
-def test_a_word_ending_a_clause_does_not_become_a_caption_of_its_own(
-    files: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setattr(storage, "_root", lambda: files)
+def test_a_word_ending_a_clause_does_not_become_a_caption_of_its_own(volume: Path) -> None:
     parts = _parts()
-    parts[0].lines[
-        0
-    ].text = "Welcome to the show. Today we talk about colours, and why they matter."
-    _voiced(files, parts)
+    first = parts[0].lines[0]
+    first.text = "Welcome to the show. Today we talk about colours, and why they matter."
+    _voiced(volume, parts)
     texts = [c.text for c in tl.captions(tl.timeline(parts)) if c.start_ms < 2000]
     assert "colours," not in texts and all(len(t.split()) > 1 for t in texts), texts
 
 
-def test_captions_never_overlap_or_run_past_the_end_and_are_escaped(
-    files: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setattr(storage, "_root", lambda: files)
+def test_captions_never_overlap_or_run_past_the_end_and_are_escaped(volume: Path) -> None:
     parts = _parts()
     # Every cue at one instant: the pieces have no time of their own.
     parts[1].lines[0].text = "a < b --> c & d"
@@ -207,7 +196,7 @@ def test_captions_never_overlap_or_run_past_the_end_and_are_escaped(
         {"word": w, "start_ms": 1500, "end_ms": 1500} for w in ["a", "b", "c", "d"]
     ]
     parts[0].lines[0].text = "x" * 100
-    _voiced(files, parts)
+    _voiced(volume, parts)
     t = tl.timeline(parts)
     caps = tl.captions(t)
     assert all(a.end_ms <= b.start_ms for a, b in itertools.pairwise(caps))
@@ -331,7 +320,7 @@ async def test_a_server_without_timings_is_asked_once_then_voiced_plainly(
 
 
 def test_chapters_and_titles_are_escaped_for_ffmpeg() -> None:
-    meta = video.ffmetadata(
+    meta = encode.ffmetadata(
         "Reefs; a = story #1", [tl.Chapter(0, "A\\B", 0, 1000), tl.Chapter(1, "", 1000, 1000)]
     )
     assert "title=Reefs\\; a \\= story \\#1" in meta
@@ -340,7 +329,7 @@ def test_chapters_and_titles_are_escaped_for_ffmpeg() -> None:
 
 
 def test_a_title_that_ends_in_a_backslash_keeps_every_chapter() -> None:
-    meta = video.ffmetadata(
+    meta = encode.ffmetadata(
         "Deck \\", [tl.Chapter(0, "Intro \\", 0, 1000), tl.Chapter(1, "Ch\r\nmore", 1000, 2000)]
     )
     assert meta.count("[CHAPTER]") == 2
@@ -349,14 +338,14 @@ def test_a_title_that_ends_in_a_backslash_keeps_every_chapter() -> None:
 
 
 def test_an_episode_with_nothing_to_caption_has_no_caption_track() -> None:
-    args = video.encode_args("ffmpeg", Path("/w"), Path("/w/o.mp4"), 1000, captions=False)
+    args = encode.encode_args("ffmpeg", Path("/w"), Path("/w/o.mp4"), 1000, captions=False)
     assert "/w/captions.srt" not in args and "mov_text" not in args and "2:s" not in args
     assert args[args.index("-map_metadata") + 1] == "2"
 
 
 def test_the_concat_list_holds_each_still_for_its_chapter() -> None:
     stills = [Path("still-000.png"), Path("still-001.png")]
-    got = video.concat_list(stills, [tl.Chapter(0, "a", 0, 3220), tl.Chapter(1, "b", 3220, 5370)])
+    got = encode.concat_list(stills, [tl.Chapter(0, "a", 0, 3220), tl.Chapter(1, "b", 3220, 5370)])
     assert got.splitlines() == [
         "ffconcat version 1.0",
         "file 'still-000.png'",
@@ -381,13 +370,13 @@ def test_a_probe_that_is_not_the_timeline_is_a_problem() -> None:
         ],
         "chapters": [{}, {}],
     }  # fmt: skip
-    assert video.problems(good, 5370, 2) == []
+    assert encode.problems(good, 5370, 2) == []
     bad = {**good, "format": {"duration": "9.0"}, "streams": [video_stream], "chapters": []}
-    assert video.problems({"format": None, "streams": None, "chapters": None}, 0, 0)
+    assert encode.problems({"format": None, "streams": None, "chapters": None}, 0, 0)
     assert "lasts 0 ms" in " ".join(
-        video.problems({**good, "format": {"duration": "inf"}}, 5370, 2)
+        encode.problems({**good, "format": {"duration": "inf"}}, 5370, 2)
     )
-    found = " ".join(video.problems(bad, 5370, 2))
+    found = " ".join(encode.problems(bad, 5370, 2))
     assert "AAC" in found and "subtitle" in found and "lasts 9000 ms" in found
     assert "0 chapters" in found
 
@@ -400,9 +389,8 @@ async def test_only_a_finished_output_gets_a_video(
 ) -> None:
     install(monkeypatch, files)
     cid = await _collection(client)
-    sid = (await client.post(f"/api/collections/{cid}/outputs", json={"kind": "slides"})).json()[
-        "id"
-    ]
+    r = await client.post(f"/api/collections/{cid}/outputs", json={"kind": "slides"})
+    sid = r.json()["id"]
     r = await client.post(f"/api/sessions/{sid}/video", json={"style": "slides"})
     assert r.status_code == 409 and "still being made" in r.json()["detail"]
     r = await client.get(f"/api/sessions/{sid}/video")
@@ -429,11 +417,7 @@ async def test_asking_twice_starts_one_render_and_a_dead_one_says_so(
     client: AsyncClient, monkeypatch: pytest.MonkeyPatch, files: Path
 ) -> None:
     install(monkeypatch, files)
-
-    def found(key: str, name: str) -> str:
-        return name
-
-    monkeypatch.setattr(video, "tool", found)
+    tools_found(monkeypatch)
     sid = await _deck(client)
     a = (await client.post(f"/api/sessions/{sid}/video", json={})).json()
     b = (await client.post(f"/api/sessions/{sid}/video", json={})).json()
@@ -451,11 +435,7 @@ async def test_the_last_video_plays_on_while_a_new_one_is_made_or_fails(
     client: AsyncClient, monkeypatch: pytest.MonkeyPatch, files: Path
 ) -> None:
     install(monkeypatch, files)
-
-    def found(key: str, name: str) -> str:
-        return name
-
-    monkeypatch.setattr(video, "tool", found)
+    tools_found(monkeypatch)
     sid = await _deck(client)
     mp4 = files / "video" / sid / "slides.mp4"
     mp4.parent.mkdir(parents=True)

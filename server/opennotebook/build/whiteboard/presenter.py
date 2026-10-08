@@ -28,17 +28,16 @@ The session's own narration, deck and audio are untouched: the video's
 voice is its own files, under `video/<sid>/voice/`.
 """
 
-import json
 import logging
 import re
 from dataclasses import dataclass, field
 
 from opennotebook import speech, storage
 from opennotebook.ai import client
-from opennotebook.ai.errors import AiError
 from opennotebook.build import wav
 from opennotebook.build.errors import EmptyAudio, FilesNotWritten, Voice
 from opennotebook.build.whiteboard import ground
+from opennotebook.build.whiteboard.reply import json_of
 from opennotebook.domain.sessions import Line, Part
 from opennotebook.script.budget import speakable
 
@@ -46,8 +45,14 @@ log = logging.getLogger(__name__)
 
 PRESENTER_MARK = "You are the teacher who will say this lesson on camera"
 
+# The chapter titles of the opening and the closing, as their slides head
+# them (`frame.py`).
+OPENING = "Introduction"
+CLOSING = "Recap"
+
 # What the opening and closing slides write, at most: an agenda item, the
-# sentence on what the video is about, and each takeaway.
+# sentence on what the video is about, each takeaway, and how many
+# takeaways.
 AGENDA_CHARS = 40
 ABOUT_CHARS = 140
 TAKEAWAY_CHARS = 90
@@ -93,10 +98,18 @@ Answer with JSON only, no prose and no code fence:
 # A part's rewrite may be this much shorter or longer than its script, in
 # words, before it is taken to have dropped or invented something.
 LENGTH_RANGE = (0.6, 1.6)
+# A paragraph, one clip, is at most this many sentences and words: one
+# breath of thought, about 15 seconds said.
+PARAGRAPH_SENTENCES = 3
 PARAGRAPH_WORDS = 45
+# The most the rewrite may be answered with: the whole narration, as JSON.
 MAX_TOKENS = 8_000
+# The rewrite is asked for once more when it has problems; then the
+# script's own words stand in.
+TRIES = 2
 
 SENTENCE = re.compile(r"(?<=[.!?])\s+")
+# A capitalised word that does not start a sentence: a name.
 NAME = re.compile(r"(?<![.!?]\s)(?<!^)\b([A-Z][a-zA-Z]+)\b")
 
 
@@ -155,11 +168,13 @@ def joined(lines: list[str]) -> str:
 
 def paragraphs(text: str) -> list[str]:
     """Running text cut into paragraphs of whole sentences, each up to
-    three sentences or `PARAGRAPH_WORDS` words."""
+    `PARAGRAPH_SENTENCES` sentences or `PARAGRAPH_WORDS` words."""
     out: list[str] = []
     cur: list[str] = []
     for s in _sentences(text):
-        if cur and (len(cur) >= 3 or _words(" ".join([*cur, s])) > PARAGRAPH_WORDS):
+        if cur and (
+            len(cur) >= PARAGRAPH_SENTENCES or _words(" ".join([*cur, s])) > PARAGRAPH_WORDS
+        ):
             out.append(" ".join(cur))
             cur = []
         cur.append(s)
@@ -192,54 +207,50 @@ def problems(
     beyond `LENGTH_RANGE`, or a number or a name the script and its sources
     do not have. The opening is measured with the first part and the closing
     with the last, as they were taken from them."""
-    found: list[str] = []
     if len(rewrite) != len(parts):
         return [f"there are {len(rewrite)} parts, not {len(parts)}"]
     original = [" ".join(ln.text for ln in p.lines) for p in parts]
     said = ground.Said.of([*original, *(p.title for p in parts), *sources])
-    lo, hi = LENGTH_RANGE
+    found: list[str] = []
     for frame, what in ((opening, "the opening"), (closing, "the closing"), (slides, "the slides")):
-        text = " ".join(frame or [])
-        new = [n for n in ground.NUMBER.findall(text) if said.unsaid(n)]
-        names = [n for n in NAME.findall(text) if said.unsaid(n)]
-        if new or names:
-            said_ = ", ".join(repr(x) for x in [*new, *names])
-            found.append(f"{what} says {said_}, which the script does not: keep only its facts")
+        found += _invented(what, " ".join(frame or []), said)
+    lo, hi = LENGTH_RANGE
     for i, (p, paras) in enumerate(zip(original, rewrite, strict=True)):
         text = " ".join(paras)
-        whole = " ".join(
-            [
-                *(opening or [] if i == 0 else []),
-                text,
-                *(closing or [] if i == len(parts) - 1 else []),
-            ]
-        )
         if not paras or not text.strip():
             found.append(f"part {i} is empty")
             continue
-        ratio = _words(whole) / max(_words(p), 1)
+        before = (opening or []) if i == 0 else []
+        after = (closing or []) if i == len(parts) - 1 else []
+        ratio = _words(" ".join([*before, text, *after])) / max(_words(p), 1)
         if not lo <= ratio <= hi:
             found.append(
                 f"part {i} is {ratio:.1f} times the script's length; keep it about the same"
             )
-        new = [n for n in ground.NUMBER.findall(text) if said.unsaid(n)]
-        names = [n for n in NAME.findall(text) if said.unsaid(n)]
-        if new or names:
-            what = ", ".join(repr(x) for x in [*new, *names])
-            found.append(f"part {i} says {what}, which the script does not: keep only its facts")
+        found += _invented(f"part {i}", text, said)
     return found
 
 
+def _invented(what: str, text: str, said: ground.Said) -> list[str]:
+    """A problem when `text` has a number or a name that was not said."""
+    new = [n for n in ground.NUMBER.findall(text) if said.unsaid(n)]
+    names = [n for n in NAME.findall(text) if said.unsaid(n)]
+    if not (new or names):
+        return []
+    listed = ", ".join(repr(x) for x in [*new, *names])
+    return [f"{what} says {listed}, which the script does not: keep only its facts"]
+
+
 def _texts(v: object) -> list[str]:
-    items: list[object] = v if isinstance(v, list) else []  # pyright: ignore[reportUnknownVariableType]
+    items: list[object] = v if isinstance(v, list) else []
     return [str(x).strip() for x in items if str(x).strip()]
 
 
 def _parse(text: str, parts: list[Part]) -> Narration:
-    start = text.find("{")
-    if start < 0:
-        raise ValueError("no JSON object in the reply")
-    v, _ = json.JSONDecoder().raw_decode(text[start:])
+    """The rewrite as a `Narration`: its texts cut into paragraphs, and what
+    the slides write held to their lengths. `ValueError`, `KeyError` or
+    `TypeError` when it is not the JSON asked for."""
+    v = json_of(text)
     got = sorted(v["parts"], key=lambda p: int(p.get("ordinal", 0)))
     agenda = [short(a) for a in _texts(v.get("agenda"))]
     if len(agenda) != len(parts):
@@ -257,13 +268,14 @@ def _parse(text: str, parts: list[Part]) -> Narration:
 
 async def rewrite(model: str, parts: list[Part], sources: list[str]) -> Narration:
     """The narration rewritten to be spoken, opened and closed as a video,
-    as paragraphs."""
+    as paragraphs; the script's own (`plain`) when the rewrite cannot be
+    used. An `AiError` is raised, not stood in for."""
     script = "\n\n".join(
         f"## Part {i}: {p.title}\n" + "\n".join(ln.text for ln in p.lines_in_order())
         for i, p in enumerate(parts)
     )
     ask = script
-    for _ in range(2):
+    for _ in range(TRIES):
         try:
             done = await client.ai().complete(
                 model,
@@ -271,8 +283,6 @@ async def rewrite(model: str, parts: list[Part], sources: list[str]) -> Narratio
                 max_tokens=MAX_TOKENS,
             )
             got = _parse(done.text, parts)
-        except AiError:
-            raise
         except (ValueError, KeyError, TypeError) as e:
             found = [f"the answer could not be read: {e}"]
         else:
@@ -284,18 +294,14 @@ async def rewrite(model: str, parts: list[Part], sources: list[str]) -> Narratio
             if not found:
                 return got
         log.info("the spoken narration needs another try: %s", "; ".join(found))
-        ask = f"{script}\n\nYour last answer had these problems; fix every one:\n- " + "\n- ".join(
-            found
-        )
+        fixes = "\n- ".join(found)
+        ask = f"{script}\n\nYour last answer had these problems; fix every one:\n- {fixes}"
     return plain(parts)
 
 
 def voice_dir(sid: object) -> str:
+    """Where the video's own voice is kept, apart from the session's audio."""
     return f"video/{sid}/voice"
-
-
-OPENING = "Introduction"
-CLOSING = "Recap"
 
 
 @dataclass

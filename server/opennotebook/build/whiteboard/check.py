@@ -14,7 +14,6 @@ does not stop the video: the scene is kept, and counted as unchecked.
 """
 
 import base64
-import json
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -27,16 +26,16 @@ from opennotebook.ai.errors import AiError
 from opennotebook.build.whiteboard import theme as th
 from opennotebook.build.whiteboard.compile import H, W, compile_scene
 from opennotebook.build.whiteboard.draw import draw_piece, paper
+from opennotebook.build.whiteboard.reply import json_of
 from opennotebook.build.whiteboard.scene import Beat, Scene
-
-# skia-python ships without complete type information.
-# pyright: reportUnknownMemberType=false, reportUnknownVariableType=false, reportUnknownArgumentType=false
 
 log = logging.getLogger(__name__)
 
 CHECK_MARK = "You check one scene of a whiteboard explainer video before it is shown."
 # The board as the checker sees it: big enough to read every label.
 SEEN = (960, 540)
+# The most a verdict may be answered with: a line per claim and a few lists.
+MAX_TOKENS = 1_500
 
 RULES = f"""{CHECK_MARK}
 You get the narration spoken over the scene, the source passages the video is made from, the
@@ -61,6 +60,8 @@ Answer with JSON only, no prose and no code fence:
 
 @dataclass
 class Verdict:
+    """The checker's judgement of a scene, and what it counted."""
+
     # What the scene claims that the sources do not say: a fault the scene
     # is never drawn with.
     problems: list[str] = field(default_factory=list[str])
@@ -106,17 +107,11 @@ def relations(sc: Scene) -> list[str]:
     return out
 
 
-def _json(text: str) -> Any:
-    start = text.find("{")
-    if start < 0:
-        raise ValueError("no JSON object in the reply")
-    value, _ = json.JSONDecoder().raw_decode(text[start:])
-    return value
-
-
 async def check(
     model: str, sc: Scene, png: bytes, narration: list[str], passages: list[str]
 ) -> Verdict:
+    """The scene judged by `model`: its claims against the narration and
+    the passages, and its finished board (`png`) as a viewer sees it."""
     claims = relations(sc)
     rows = ["Narration:", *narration, "", "Source passages:"]
     rows += [f"[{i + 1}] {p}" for i, p in enumerate(passages)] or ["(none)"]
@@ -139,18 +134,18 @@ async def check(
         },
     ]
     try:
-        done = await client.ai().complete(model, messages, max_tokens=1500)
-        v = _json(done.text)
+        done = await client.ai().complete(model, messages, max_tokens=MAX_TOKENS)
+        v = json_of(done.text)
     except (AiError, ValueError) as e:
         log.info("the scene check could not be made: %s", e)
         return Verdict(checked=False)
     if not isinstance(v, dict):
         return Verdict(checked=False)
-    return judged(v, len(claims))  # pyright: ignore[reportUnknownArgumentType]
+    return judged(v, len(claims))
 
 
 def _strs(v: Any) -> list[str]:
-    return [str(x) for x in v if str(x).strip()] if isinstance(v, list) else []  # pyright: ignore[reportUnknownVariableType]
+    return [str(x) for x in v if str(x).strip()] if isinstance(v, list) else []
 
 
 def judged(v: dict[str, Any], asked: int) -> Verdict:
@@ -160,12 +155,12 @@ def judged(v: dict[str, Any], asked: int) -> Verdict:
         if not isinstance(c, dict):
             continue
         out.claims += 1
-        if c.get("supported") is True:  # pyright: ignore[reportUnknownMemberType]
+        if c.get("supported") is True:
             out.supported += 1
         else:
-            why = str(c.get("why") or "the sources do not say it")  # pyright: ignore[reportUnknownMemberType]
+            why = str(c.get("why") or "the sources do not say it")
             out.problems.append(
-                f"the claim {str(c.get('claim', ''))!r} is not supported: {why}; "  # pyright: ignore[reportUnknownMemberType]
+                f"the claim {str(c.get('claim', ''))!r} is not supported: {why}; "
                 "change it to what the narration says, or leave it out"
             )
     # Claims it did not answer for are not counted as supported.

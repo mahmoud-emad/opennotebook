@@ -99,10 +99,10 @@ class Studio:
         self.check_down = False
         # An illustrated theme: whether the picture check finds lettering.
         self.picture_lettering = False
+        # How many times each scene was checked and written, by its first
+        # line; a test clears the tries to start a render's scenes afresh.
         self._checks: dict[str, int] = {}
-        self._scene_tries: dict[str, int] = {}
-        self.running = 0
-        self.most_at_once = 0
+        self.scene_tries: dict[str, int] = {}
 
     def kind_of(self, body: dict[str, Any]) -> str:
         msgs = body.get("messages") or []
@@ -209,10 +209,10 @@ class Studio:
                 else "no slides today"
             )
         elif kind == "video_plan":
-            ids = re.findall(r"^(\S+) \(\d+\.\d s\):", user, re.M)
-            scenes = [ids[i : i + 2] for i in range(0, len(ids), 2)]
+            line_ids = re.findall(r"^(\S+) \(\d+\.\d s\):", user, re.M)
+            scenes = [line_ids[i : i + 2] for i in range(0, len(line_ids), 2)]
             if not self.plan_ok:
-                scenes = [ids[1:]]
+                scenes = [line_ids[1:]]
             text = json.dumps(
                 {
                     "scenes": [
@@ -273,21 +273,20 @@ class Studio:
             {
                 "claims": [{"claim": c, "supported": ok, "why": "" if ok else "not said"}
                            for c in claims],
-                "recognizable": True, "missing": [], "unreadable": [],
+                "missing": [], "unreadable": [],
                 "matches_narration": True, "fixes": [] if ok else ["say only what is said"],
             }
         )  # fmt: skip
 
     def _scene(self, user: str) -> str:
         line = re.findall(r"^(\S+): \[0\]", user, re.M)[0]
-        tries = self._scene_tries[line] = self._scene_tries.get(line, 0) + 1
+        tries = self.scene_tries[line] = self.scene_tries.get(line, 0) + 1
         target = "box" if tries > self.scene_wrong else "nowhere"
         icon = (re.findall(r"^- server: (\S+?)[,\n]", user + "\n", re.M) or ["server"])[0]
         # Labels from the narration's own words, as the rules ask.
-        said = [w.strip(".,;:!?\"'") for w in re.findall(rf"^{re.escape(line)}: (.*)$", user,
-                re.M)[0].split()]  # fmt: skip
-        words = [re.sub(r"^\[\d+\]", "", w) for w in said]
-        words = [w for w in words if len(w) > 3] or ["thing", "other"]
+        numbered = re.findall(rf"^{re.escape(line)}: (.*)$", user, re.M)[0].split()
+        said = [re.sub(r"^\[\d+\]", "", w.strip(".,;:!?\"'")) for w in numbered]
+        words = [w for w in said if len(w) > 3] or ["thing", "other"]
         first, second = words[0], words[min(1, len(words) - 1)]
         return json.dumps(
             {
@@ -312,50 +311,38 @@ class Studio:
         kind = self.kind_of(body)
         self.asked.append(kind)
         self.bodies.append(body)
-        self.running += 1
-        self.most_at_once = max(self.most_at_once, self.running)
-        try:
-            if kind in self.hold:
-                await self.hold[kind].wait()
-            if kind in self.fail:
-                return httpx2.Response(self.fail[kind], json={"error": {"message": "down"}})
-            if kind == "video_picture":
-                url = "data:image/png;base64," + base64.b64encode(_picture()).decode()
-                message = {
-                    "content": "",
-                    "images": [{"type": "image_url", "image_url": {"url": url}}],
-                }
-                return httpx2.Response(
-                    200,
-                    json={
-                        "model": body.get("model", ""),
-                        "choices": [{"message": message, "finish_reason": "stop"}],
-                        "usage": {"prompt_tokens": 100, "completion_tokens": 1290, "cost": 0.04},
-                    },
-                )
-            if kind == "video_picture_check":
-                verdict = {"lettering": self.picture_lettering, "contradicts": False, "why": ""}
-                return httpx2.Response(
-                    200,
-                    json={
-                        "model": body.get("model", ""),
-                        "choices": [{"message": {"content": json.dumps(verdict)},
-                                     "finish_reason": "stop"}],
-                        "usage": {"prompt_tokens": 100, "completion_tokens": 20, "cost": 0.001},
-                    },
-                )  # fmt: skip
-            _, r = self.reply(body)
-            return httpx2.Response(
-                200,
-                json={
-                    "model": body.get("model", ""),
-                    "choices": [{"message": {"content": r["text"]}, "finish_reason": "stop"}],
-                    "usage": {"prompt_tokens": 100, "completion_tokens": 50, "cost": 0.001},
-                    **r["extra"],
-                },
-            )
-        finally:
-            self.running -= 1
+        if kind in self.hold:
+            await self.hold[kind].wait()
+        if kind in self.fail:
+            return httpx2.Response(self.fail[kind], json={"error": {"message": "down"}})
+        if kind == "video_picture":
+            url = "data:image/png;base64," + base64.b64encode(_picture()).decode()
+            message = {"content": "", "images": [{"type": "image_url", "image_url": {"url": url}}]}
+            return _answered(body, message, completion_tokens=1290, cost=0.04)
+        if kind == "video_picture_check":
+            verdict = {"lettering": self.picture_lettering, "contradicts": False, "why": ""}
+            return _answered(body, {"content": json.dumps(verdict)}, completion_tokens=20)
+        _, r = self.reply(body)
+        return _answered(body, {"content": r["text"]}, **r["extra"])
+
+
+def _answered(
+    body: dict[str, Any],
+    message: dict[str, Any],
+    completion_tokens: int = 50,
+    cost: float = 0.001,
+    **extra: Any,
+) -> httpx2.Response:
+    """A chat completion that answers `body` with `message`, and its usage."""
+    return httpx2.Response(
+        200,
+        json={
+            "model": body.get("model", ""),
+            "choices": [{"message": message, "finish_reason": "stop"}],
+            "usage": {"prompt_tokens": 100, "completion_tokens": completion_tokens, "cost": cost},
+            **extra,
+        },
+    )
 
 
 class Voice:
@@ -413,3 +400,14 @@ def install(monkeypatch: pytest.MonkeyPatch, files: Path) -> tuple[Studio, Voice
     # from not knowing.
     monkeypatch.setattr(speech, "_UNTIMED", set[str]())
     return studio, voice
+
+
+def tools_found(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Take ffmpeg and ffprobe as installed, for a render that is asked for
+    but never run."""
+    from opennotebook.build import video
+
+    def found(key: str, name: str) -> str:
+        return name
+
+    monkeypatch.setattr(video, "tool", found)

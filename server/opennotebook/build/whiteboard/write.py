@@ -3,19 +3,18 @@ narration, then each scene's description (docs/video-overview-spec.md,
 sections 4.3 and 4.4).
 
 A plan that does not cover the narration in order is replaced by one scene
-per part. A scene that does not validate, or that the lint finds fault
-with, is sent back once with exactly what is wrong; one still wrong after
-that is drawn as a plain scene from its part's own copy. A video is never
+per part. A scene that does not validate, or that the checks find fault
+with, is sent back with exactly what is wrong, up to twice, then written
+once more by a stronger model when one is set; one still wrong after that
+is drawn as a plain scene from its own grounded words. A video is never
 lost to one scene.
 """
 
 import asyncio
-import json
 import logging
 import re
 from collections.abc import Callable
-from dataclasses import dataclass, field
-from typing import Any
+from dataclasses import dataclass
 
 from pydantic import ValidationError
 
@@ -24,18 +23,20 @@ from opennotebook.ai.errors import AiError
 from opennotebook.build import timeline as tl
 from opennotebook.build.whiteboard import check, ground, icons, lint
 from opennotebook.build.whiteboard.compile import compile_scene
+from opennotebook.build.whiteboard.reply import json_of
 from opennotebook.build.whiteboard.scene import COLS, Beat, Element, Plan, PlannedScene, Scene
 from opennotebook.domain.sessions import Part
 
 log = logging.getLogger(__name__)
 
+# The most a plan or a scene may be answered with.
 MAX_TOKENS = 6_000
 # A scene's first answer and up to two repairs (spec 4.7: two rounds pay off,
 # more rarely do).
 ATTEMPTS = 3
-# Scene calls at once.
+# Scenes written at once.
 PARALLEL = 6
-# Markers the stand-in model in the tests answers by.
+# Each prompt's first sentence, which says what is asked.
 PLAN_MARK = "You plan a whiteboard explainer video."
 SCENE_MARK = "You draw one scene of a whiteboard explainer video."
 
@@ -108,7 +109,6 @@ class Built:
     plain: bool = False
     # Written again by the stronger model after the repairs failed.
     escalated: bool = False
-    problems: list[str] = field(default_factory=list[str])
     # The accuracy checks of the scene as drawn: its pieces of text and how
     # many are grounded; its claims and how many the check found supported;
     # whether the check could be made.
@@ -119,17 +119,8 @@ class Built:
     checked: bool = False
 
 
-def _json(text: str) -> Any:
-    """The first whole JSON object in a reply, fenced or not, whatever
-    follows it: a model sometimes adds a note, or a second object."""
-    start = text.find("{")
-    if start < 0:
-        raise ValueError("no JSON object in the reply")
-    value, _ = json.JSONDecoder().raw_decode(text[start:])
-    return value
-
-
 def _numbered(text: str) -> str:
+    """A line's words, each after its index: what a beat's `word` counts."""
     return " ".join(f"[{i}]{w}" for i, w in enumerate(tl.tokens_of(text)))
 
 
@@ -172,6 +163,7 @@ def _concepts_of(p: Part) -> list[str]:
 
 
 def plan_problems(plan: Plan, order: list[str]) -> list[str]:
+    """What is wrong with a plan: lines missing, repeated or out of order."""
     got = [lid for sc in plan.scenes for lid in sc.lines]
     if got != order:
         return ["the scenes do not cover every line exactly once, in order"]
@@ -190,7 +182,7 @@ async def plan(model: str, parts: list[Part], timing: tl.Timeline) -> tuple[Plan
             secs = (sp.end_ms - sp.start_ms) / 1000 if sp else 0
             rows.append(f"{ln.line_id} ({secs:.1f} s): {ln.text}")
     try:
-        got = Plan.model_validate(_json(await _complete(model, PLAN_RULES, "\n".join(rows))))
+        got = Plan.model_validate(json_of(await _complete(model, PLAN_RULES, "\n".join(rows))))
         if not plan_problems(got, order):
             return got, True
         log.info("the scene plan does not cover the narration; one scene per part instead")
@@ -270,9 +262,11 @@ def plain_scene(
         if said.unsaid(title):
             title = ""
     concepts = concepts[:4] or [ps.title or "idea"]
+    # The concepts side by side across the board's columns, centred, each
+    # from row 2 and three rows tall.
     n = len(concepts)
-    span = max(1, 6 // n)
-    first = (6 - span * n) // 2
+    span = max(1, len(COLS) // n)
+    first = (len(COLS) - span * n) // 2
     elements: list[Element] = []
     for i, c in enumerate(concepts):
         at = _word_of(c, lines) or (ids[min(i * len(ids) // n, len(ids) - 1)], 0)
@@ -351,7 +345,7 @@ async def draw_scene(
     said = ground.Said.of(narration + sources)
     cands = icons.candidates(ps.concepts or [ps.title])
     prompt = _scene_prompt(ps, parts, cands, sources)
-    messages = prompt
+    ask = prompt
     problems: list[str] = []
     writers = [model] * ATTEMPTS
     if escalate_model and escalate_model != model:
@@ -360,7 +354,7 @@ async def draw_scene(
         sc: Scene | None = None
         verdict = check.Verdict(checked=False)
         try:
-            sc = Scene.model_validate(_json(await _complete(writer, SCENE_RULES, messages)))
+            sc = Scene.model_validate(json_of(await _complete(writer, SCENE_RULES, ask)))
             problems = scene_problems(sc, lines) + ground.problems(sc, said)
             if not problems:
                 problems = lint.problems(compile_scene(sc, when, start_ms, end_ms))
@@ -389,15 +383,14 @@ async def draw_scene(
                 claims=verdict.claims, supported=verdict.supported, checked=verdict.checked,
             )  # fmt: skip
         log.info("scene %s needs another try: %s", ps.title, "; ".join(problems))
-        messages = (
+        ask = (
             f"{prompt}\n\nYour last answer had these problems; fix every one and answer "
             "with the whole scene again:\n- " + "\n- ".join(problems)
         )
     plain = plain_scene(ps, words, cands, said)
     texts, grounded = ground.counts(plain, said)
     return Built(
-        ps, plain, start_ms, end_ms, first_try=False, plain=True, problems=problems,
-        texts=texts, grounded=grounded,
+        ps, plain, start_ms, end_ms, first_try=False, plain=True, texts=texts, grounded=grounded,
     )  # fmt: skip
 
 
@@ -414,23 +407,3 @@ def windows(plan_: Plan, timing: tl.Timeline) -> list[tuple[float, float]]:
         end = spans[scenes[i + 1].lines[0]].start_ms if i + 1 < len(scenes) else timing.total_ms
         out.append((start, float(end)))
     return out
-
-
-async def draw_all(
-    model: str,
-    plan_: Plan,
-    parts: list[Part],
-    timing: tl.Timeline,
-    when: Callable[[Beat], float],
-) -> list[Built]:
-    """Every scene, `PARALLEL` at a time."""
-    gate = asyncio.Semaphore(PARALLEL)
-
-    async def one(ps: PlannedScene, w: tuple[float, float]) -> Built:
-        async with gate:
-            return await draw_scene(model, ps, parts, when, *w)
-
-    spans = windows(plan_, timing)
-    return list(
-        await asyncio.gather(*(one(ps, w) for ps, w in zip(plan_.scenes, spans, strict=True)))
-    )

@@ -27,18 +27,13 @@ FILLER = frozenset(
         "percent per cent"
     )
 )
-# Joining marks a label may use for itself: "+", "=", "→".
+# A label of joining marks alone ("+", "=", "→") says nothing to check.
 MARKS = re.compile(r"^[\s+=→←↑↓\-–—/&?!.,:;()'\"]*$")
-
-
-def _norm(w: str) -> str:
-    return w.lower()
 
 
 def _forms(w: str) -> set[str]:
     """A word and its other number, near enough: "leaves" and "leaf",
-    "boxes" and "box", "disk" and "disks"."""
-    w = w.lower()
+    "boxes" and "box", "disk" and "disks". `w` is in lower case."""
     out = {w, w + "s", w + "es"}
     if w.endswith("ies") and len(w) > 4:
         out.add(w[:-3] + "y")
@@ -79,7 +74,7 @@ class Said:
         words: set[str] = set()
         numbers: set[str] = set()
         for t in texts:
-            words.update(_norm(w) for w in WORD.findall(t))
+            words.update(w.lower() for w in WORD.findall(t))
             numbers.update(_value(n) for n in NUMBER.findall(t))
         return cls(frozenset(words), frozenset(numbers))
 
@@ -90,7 +85,7 @@ class Said:
             if _value(n) not in self.numbers:
                 out.append(n)
         for w in WORD.findall(label):
-            low = _norm(w)
+            low = w.lower()
             if low in FILLER or len(low) < 2:
                 continue
             if not (_forms(low) & self.words):
@@ -113,6 +108,8 @@ def written(sc: Scene) -> list[tuple[str, str]]:
 
 
 def problems(sc: Scene, said: Said) -> list[str]:
+    """Each piece of text the scene writes that was not said, with the
+    words to replace."""
     found: list[str] = []
     for what, text in written(sc):
         missing = said.unsaid(text)

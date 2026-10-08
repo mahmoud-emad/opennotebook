@@ -5,9 +5,14 @@ and the render through the API against a stand-in model.
 
 Renders that need ffmpeg are skipped where it is missing."""
 
+import asyncio
+import dataclasses
 import hashlib
 import itertools
+import json
 import shutil
+import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -15,13 +20,25 @@ import pytest
 from httpx import AsyncClient
 from pydantic import ValidationError
 
-from opennotebook.build import video
-from opennotebook.build.whiteboard import check, draw, geometry, ground, icons, lint, write
+from opennotebook.ai import client as ai_client
+from opennotebook.ai.client import Ai
+from opennotebook.api.video import lines_of_vtt
+from opennotebook.build.whiteboard import (
+    check,
+    draw,
+    geometry,
+    ground,
+    icons,
+    lint,
+    presenter,
+    write,
+)
 from opennotebook.build.whiteboard.compile import SAFE, SETTLE_MS, Drawing, compile_scene
 from opennotebook.build.whiteboard.scene import Beat, Element, Plan, PlannedScene, Scene
 from opennotebook.domain.sessions import Line, Part
+from opennotebook.script import explain
 from tests.builds.conftest import drain
-from tests.builds.fake import install
+from tests.builds.fake import install, tools_found
 from tests.model import add_note
 
 needs_ffmpeg = pytest.mark.skipif(
@@ -351,8 +368,7 @@ def test_a_plain_scene_writes_only_what_was_said() -> None:
 
 def test_the_checkers_answer_becomes_repairs() -> None:
     ok = check.judged(
-        {"claims": [{"claim": "a", "supported": True}], "recognizable": True,
-         "matches_narration": True},
+        {"claims": [{"claim": "a", "supported": True}], "matches_narration": True},
         1,
     )  # fmt: skip
     assert ok.problems == [] and (ok.claims, ok.supported) == (1, 1)
@@ -383,8 +399,6 @@ def test_a_scene_says_what_its_arrows_claim_and_is_seen_as_a_picture() -> None:
 
 
 def test_fragments_become_whole_sentences_and_paragraphs() -> None:
-    from opennotebook.build.whiteboard import presenter
-
     text = presenter.joined(
         ["Have you ever wondered how a tree grows so big", "without ever eating anything",
          "Plants don't eat food the way we do.", "instead, they make their own food"]
@@ -399,8 +413,6 @@ def test_fragments_become_whole_sentences_and_paragraphs() -> None:
 
 
 def test_a_rewrite_may_not_add_a_fact_drop_a_part_or_balloon() -> None:
-    from opennotebook.build.whiteboard import presenter
-
     parts = _parts()
     good = [["So, the kernel manages memory and disks. It runs every program you use."],
             ["Ubuntu is one of them."]]  # fmt: skip
@@ -415,8 +427,6 @@ def test_a_rewrite_may_not_add_a_fact_drop_a_part_or_balloon() -> None:
 
 
 def test_the_opening_closing_and_slides_say_only_what_the_script_does() -> None:
-    from opennotebook.build.whiteboard import presenter
-
     parts = _parts()
     body = [["The kernel manages memory and disks."], ["Ubuntu is one of them."]]
     ok = presenter.problems(parts, body, [], ["Here's how it works."], ["That's it."], [])
@@ -467,11 +477,6 @@ def test_a_segment_is_drawn_in_pieces_that_join_to_every_frame(tmp_path: Path, t
     """A scene that finishes drawing early holds still for the rest: the
     hold is a piece of its own, and the pieces joined have every frame. In
     chalk too, whose grain is a texture of its own."""
-    import dataclasses
-    import json
-    import subprocess
-    import sys
-
     seg = dataclasses.replace(_segment(tmp_path, frames=150), theme=theme)
     spec = tmp_path / "seg.json"
     spec.write_text(draw.to_json(seg))
@@ -516,8 +521,10 @@ async def _ready(client: AsyncClient) -> str:
     return sid
 
 
-async def _whiteboard(client: AsyncClient, sid: str) -> dict[str, Any]:
-    r = await client.post(f"/api/sessions/{sid}/video", json={"style": "whiteboard"})
+async def _whiteboard(client: AsyncClient, sid: str, theme: str | None = None) -> dict[str, Any]:
+    """Make the output's whiteboard video: its state, with its job."""
+    body = {"style": "whiteboard", **({"theme": theme} if theme else {})}
+    r = await client.post(f"/api/sessions/{sid}/video", json=body)
     assert r.status_code == 202, r.text
     await drain("render")
     job = (await client.get(f"/api/jobs/{r.json()['job_id']}")).json()
@@ -560,7 +567,7 @@ async def test_a_wrong_scene_is_repaired_once_and_one_never_right_is_drawn_plain
     st = await _whiteboard(client, sid)
     assert st["state"] == "ready" and st["first_try"] == 0 and st["plain"] == 0
     studio.scene_wrong, studio.plan_ok = 99, False
-    studio._scene_tries.clear()  # pyright: ignore[reportPrivateUsage]
+    studio.scene_tries.clear()
     st = await _whiteboard(client, sid)
     assert st["state"] == "ready", st["failure"]
     assert st["plain"] == st["scenes"] - FRAME, "every scene drawn plain, and the video still made"
@@ -571,9 +578,6 @@ async def test_a_whiteboard_needs_an_ai_key(
 ) -> None:
     install(monkeypatch, files)
     sid = await _ready(client)
-    from opennotebook.ai import client as ai_client
-    from opennotebook.ai.client import Ai
-
     monkeypatch.setattr(ai_client, "ai", lambda: Ai("http://ai.test/v1", ""))
     r = await client.post(f"/api/sessions/{sid}/video", json={"style": "whiteboard"})
     assert r.status_code == 503 and "AI key" in r.json()["detail"]
@@ -600,7 +604,7 @@ async def test_a_scene_the_check_rejects_is_repaired_and_one_never_fixed_is_esca
     assert st["first_try"] + st["repaired"] == st["scenes"] - FRAME and st["plain"] == 0
     assert st["supported"] == st["claims"]
     studio.check_fail, studio.scene_wrong = 0, 3
-    studio._scene_tries.clear()  # pyright: ignore[reportPrivateUsage]
+    studio.scene_tries.clear()
     st = await _whiteboard(client, sid)
     assert st["state"] == "ready" and st["escalated"] == st["scenes"] - FRAME and st["plain"] == 0
 
@@ -649,11 +653,7 @@ async def test_a_video_whose_output_fails_says_so(
     client: AsyncClient, monkeypatch: pytest.MonkeyPatch, files: Path
 ) -> None:
     studio, _ = install(monkeypatch, files)
-
-    def found(key: str, name: str) -> str:
-        return name
-
-    monkeypatch.setattr(video, "tool", found)
+    tools_found(monkeypatch)
     cid = (await client.post("/api/collections", json={"title": "Linux"})).json()["id"]
     await add_note(client, cid, "The kernel manages memory, disks and every program. " * 10)
     studio.fail["outline"] = 500
@@ -717,8 +717,6 @@ async def test_a_video_keeps_its_script_and_explains_a_moment_of_it(
 
 
 def test_a_video_made_before_scripts_were_kept_is_followed_by_its_captions() -> None:
-    from opennotebook.api.video import lines_of_vtt
-
     vtt = (
         "WEBVTT\n\n1\n00:00:00.000 --> 00:00:02.500\nThe kernel\nruns.\n\n"
         "00:01:02.000 --> 00:01:03.000\nIt schedules\n\n00:01:03.000 --> 00:01:04.000\nprograms.\n"
@@ -731,8 +729,6 @@ def test_a_video_made_before_scripts_were_kept_is_followed_by_its_captions() -> 
 
 
 def test_the_explainer_is_told_what_is_on_at_the_moment() -> None:
-    from opennotebook.script import explain
-
     script = {
         "title": "Plants",
         "duration_ms": 20_000,
@@ -755,9 +751,6 @@ def test_the_explainer_is_told_what_is_on_at_the_moment() -> None:
 async def test_a_video_is_made_in_the_theme_asked_for(
     client: AsyncClient, monkeypatch: pytest.MonkeyPatch, files: Path
 ) -> None:
-    import asyncio
-    import subprocess
-
     install(monkeypatch, files)
     sid = await _ready(client)
     r = await client.post(
@@ -790,17 +783,7 @@ async def test_an_illustrated_video_paints_its_scenes_and_draws_one_it_cannot(
 ) -> None:
     studio, _ = install(monkeypatch, files)
     sid = await _ready(client)
-
-    async def make() -> dict[str, Any]:
-        r = await client.post(
-            f"/api/sessions/{sid}/video", json={"style": "whiteboard", "theme": "watercolor"}
-        )
-        assert r.status_code == 202, r.text
-        await drain("render")
-        states = {v["style"]: v for v in (await client.get(f"/api/sessions/{sid}/videos")).json()}
-        return states["whiteboard"]
-
-    st = await make()
+    st = await _whiteboard(client, sid, theme="watercolor")
     assert st["state"] == "ready", st["failure"]
     assert st["theme"] == "watercolor"
     written = st["scenes"] - FRAME
@@ -816,7 +799,7 @@ async def test_an_illustrated_video_paints_its_scenes_and_draws_one_it_cannot(
     # the theme's drawn twin: the video is made all the same.
     studio.picture_lettering = True
     studio.asked.clear()
-    st = await make()
+    st = await _whiteboard(client, sid, theme="watercolor")
     assert st["state"] == "ready", st["failure"]
     assert studio.asked.count("video_picture") == 2 * written
     assert (st["illustrated"], st["fallback"]) == (0, written)
