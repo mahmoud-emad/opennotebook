@@ -1,8 +1,8 @@
-/* The watch page of a video (ui/watch.tsx): the video leads on a backdrop,
-   its chapters a strip under it, and the rail beside it is the tutor, the
-   transcript and the chapters. One viewport tall on a desktop; on a phone
-   the video comes first and the rail follows. Every rule is scoped to
-   .watch-page, and the colours are the studio's tokens. */
+/* The watch page of a video (ui/watch.tsx and ui/watch/): the video leads on
+   a backdrop with its controls under it, and the rail beside it is the
+   tutor, the transcript and the chapters. One viewport tall on a desktop; on
+   a phone the video comes first and the rail follows. Every rule is scoped
+   to .watch-page, and the colours are the studio's tokens. */
 body.watch-open { overflow:hidden; }
 .watch-page {
   --line:var(--bs-border-color-translucent); --panel:var(--bs-tertiary-bg); --raise:var(--bs-secondary-bg);
@@ -13,6 +13,7 @@ body.watch-open { overflow:hidden; }
 }
 .watch-page * { box-sizing:border-box; }
 .watch-page .grow { flex:1; }
+.watch-page button:focus-visible { outline:2px solid var(--st-focus); outline-offset:2px; }
 
 /* ── top bar ─────────────────────────────────────────────────────────────── */
 .watch-page .w-top { grid-column:1 / -1; display:flex; align-items:center; gap:12px; padding:8px 16px;
@@ -28,13 +29,37 @@ body.watch-open { overflow:hidden; }
 .watch-page .w-left { display:flex; flex-direction:column; gap:12px; min-width:0; min-height:0;
   padding:16px 18px 14px; background:var(--st-backdrop); margin:0; max-width:none; width:auto; }
 .watch-page .w-stage { flex:1; min-height:0; display:flex; align-items:center; justify-content:center; }
-.watch-page .w-video { max-width:100%; max-height:100%; width:100%; aspect-ratio:16 / 9; background:#000;
-  border-radius:var(--bs-border-radius-lg); box-shadow:var(--bs-box-shadow-lg); }
 .watch-page .w-err { color:var(--bs-danger-text-emphasis); font-size:13px; }
 
-/* The controls under the video, as the slides' player has them (player.css,
-   "controls"): the chapters as one track cut into segments, sized by their
-   length, filling as they play; then the buttons and the clock. */
+/* The frame around the video: what goes full screen, with the captions. */
+.watch-page .w-frame { position:relative; width:100%; max-height:100%; aspect-ratio:16 / 9;
+  border-radius:var(--bs-border-radius-lg); overflow:hidden; box-shadow:var(--bs-box-shadow-lg); background:#000; }
+.watch-page .w-frame:fullscreen { border-radius:0; }
+.watch-page .w-video { position:absolute; inset:0; width:100%; height:100%; background:#000; cursor:pointer; }
+
+/* Before it starts: one big play button over the video, as a poster has. */
+.watch-page .w-start-layer { position:absolute; inset:0; display:grid; place-items:center; z-index:3;
+  pointer-events:none; }
+.watch-page .w-start { pointer-events:auto; width:76px; height:76px;
+  display:grid; place-items:center; padding:0 0 0 4px; border:0; border-radius:50%; background:var(--accent);
+  color:var(--st-on-primary, #fff); font-size:34px; box-shadow:0 8px 28px rgba(0,0,0,.35); }
+.watch-page .w-start:hover { filter:brightness(1.08); }
+
+/* Captions over the video, as the slides' player draws them (player.css,
+   "#cap"): a phrase at a time, the words said so far bright, the word being
+   said marked, the rest dim. */
+.watch-page .w-cap { position:absolute; left:50%; bottom:18px; transform:translateX(-50%);
+  max-width:min(78%, 900px); padding:7px 14px; border-radius:var(--bs-border-radius);
+  background:rgba(0,0,0,.78); color:rgba(255,255,255,.62); font-size:clamp(13px,1.35vw,18px);
+  line-height:1.45; text-align:center; font-family:var(--bs-font-sans-serif); pointer-events:none; z-index:2; }
+.watch-page .w-cap span { padding:0 2px; margin:0 1px; border-radius:3px; transition:color .1s, background .1s; }
+.watch-page .w-cap .past { color:#fff; }
+.watch-page .w-cap .now { color:#111827; background:#facc15; }
+
+/* ── the controls ────────────────────────────────────────────────────────────
+   As the slides' player has them (player.css, "controls"): the chapters as
+   one track cut into segments, sized by their length, filling as they play;
+   then the buttons and the clock. */
 .watch-page .w-controls { display:flex; flex-direction:column; gap:6px; }
 .watch-page .w-track { display:flex; gap:3px; height:18px; align-items:center; }
 .watch-page .w-seg { position:relative; flex:1 1 0; min-width:6px; height:5px; padding:0; margin:0; border:0;
@@ -67,34 +92,7 @@ body.watch-open { overflow:hidden; }
   border:1px solid var(--bs-border-color); background:var(--raise); color:var(--bs-body-color);
   font-size:13px; font-weight:650; font-variant-numeric:tabular-nums; }
 
-/* The frame around the video: what goes full screen, with the captions. */
-.watch-page .w-frame { position:relative; width:100%; max-height:100%; aspect-ratio:16 / 9;
-  border-radius:var(--bs-border-radius-lg); overflow:hidden; box-shadow:var(--bs-box-shadow-lg); background:#000; }
-.watch-page .w-frame .w-video { position:absolute; inset:0; width:100%; height:100%; border-radius:0; box-shadow:none;
-  cursor:pointer; }
-.watch-page .w-frame:fullscreen { border-radius:0; }
-
-/* Before it starts: one big play button over the video, as a poster has. */
-.watch-page .w-start-layer { position:absolute; inset:0; display:grid; place-items:center; z-index:3;
-  pointer-events:none; }
-.watch-page .w-start { pointer-events:auto; width:76px; height:76px;
-  display:grid; place-items:center; padding:0 0 0 4px; border:0; border-radius:50%; background:var(--accent);
-  color:var(--st-on-primary, #fff); font-size:34px; z-index:3; box-shadow:0 8px 28px rgba(0,0,0,.35); }
-.watch-page .w-start:hover { filter:brightness(1.08); }
-
-/* Captions over the video, as the slides' player draws them (player.css,
-   "#cap"): a phrase at a time, the words said so far bright, the word being
-   said marked, the rest dim. */
-.watch-page .w-cap { position:absolute; left:50%; bottom:18px; transform:translateX(-50%);
-  max-width:min(78%, 900px); padding:7px 14px; border-radius:var(--bs-border-radius);
-  background:rgba(0,0,0,.78); color:rgba(255,255,255,.62); font-size:clamp(13px,1.35vw,18px);
-  line-height:1.45; text-align:center; font-family:var(--bs-font-sans-serif); pointer-events:none; z-index:2; }
-.watch-page .w-cap span { padding:0 2px; margin:0 1px; border-radius:3px; transition:color .1s, background .1s; }
-.watch-page .w-cap .past { color:#fff; }
-.watch-page .w-cap .now { color:#111827; background:#facc15; }
-@media (prefers-reduced-motion: reduce) { .watch-page .w-cap span { transition:none; } }
-
-/* ── the rail ────────────────────────────────────────────────────────────── */
+/* ── the rail: its tabs, the transcript and the chapters ─────────────────── */
 .watch-page .w-rail { display:flex; flex-direction:column; min-height:0; background:var(--panel);
   border-left:1px solid var(--line); }
 .watch-page .w-tabs { display:flex; gap:2px; padding:8px 10px 0; border-bottom:1px solid var(--line); }
@@ -130,7 +128,7 @@ body.watch-open { overflow:hidden; }
 .watch-page .w-explain { flex:1; min-height:0; display:flex; flex-direction:column; }
 .watch-page .w-log { flex:1; min-height:0; overflow-y:auto; padding:14px 12px; display:flex; flex-direction:column; gap:10px; }
 .watch-page .w-hello { margin:auto 8px; text-align:center; color:var(--dim); font-size:14px; }
-.watch-page .w-hello .ic, .watch-page .w-hello svg { font-size:22px; color:var(--accent); }
+.watch-page .w-hello .ic { font-size:22px; color:var(--accent); }
 .watch-page .w-msg { padding:9px 12px; border-radius:var(--bs-border-radius-lg); font-size:14px; line-height:1.55;
   overflow-wrap:anywhere; }
 .watch-page .w-msg.you { align-self:flex-end; max-width:88%; background:var(--bs-primary-bg-subtle);
@@ -172,18 +170,16 @@ body.watch-open { overflow:hidden; }
 .watch-page .w-composer textarea:focus { outline:2px solid var(--st-focus); outline-offset:0; }
 .watch-page .w-send { display:grid; place-items:center; width:40px; height:40px; padding:0; border:0;
   border-radius:var(--bs-border-radius-lg); background:var(--accent); color:var(--st-on-primary); }
-.watch-page button:focus-visible { outline:2px solid var(--st-focus); outline-offset:2px; }
 
 @media (prefers-reduced-motion: reduce) {
+  .watch-page .w-cap span, .watch-page .w-seg, .watch-page .w-seg-tip { transition:none; }
   .watch-page .w-typing i { animation:none; }
-  .watch-page .w-seg, .watch-page .w-seg-tip { transition:none; }
 }
 /* A phone: the video first, the rail under it, the page scrolls. */
 @media (max-width:900px) {
   body.watch-open { overflow:auto; }
   .watch-page { grid-template-columns:minmax(0,1fr); grid-template-rows:auto auto minmax(480px,1fr); height:auto; min-height:100dvh; }
   .watch-page .w-left { padding:0 0 10px; }
-  .watch-page .w-video { border-radius:0; box-shadow:none; }
   .watch-page .w-controls { padding:0 16px; }
   .watch-page .w-chap-now { display:none; }
   .watch-page .w-rail { border-left:0; border-top:1px solid var(--line); }
