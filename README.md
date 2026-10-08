@@ -5,6 +5,9 @@
 
 OpenNotebook is an open-source study studio, in the spirit of NotebookLM, that you can run yourself.
 
+<img width="1706" height="931" alt="Screenshot 2026-10-08 at 12 19 40 PM" src="https://github.com/user-attachments/assets/35eaeaa8-2068-4aa9-991e-88c50d6ce76c" />
+
+
 Put your sources into a collection: PDFs, slides, web links, pasted notes, or a research report it writes for you. Then turn them into something you can learn from:
 
 - **Narrated slide decks.** You can stop them at any point and ask a question out loud.
