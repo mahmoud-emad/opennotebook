@@ -1,43 +1,69 @@
 # OpenNotebook
 
-A social learning studio, in the spirit of NotebookLM. Gather sources into a collection (files, links, pasted notes or a web research report) and make things from them: narrated slide decks you can interrupt with a spoken question, audio overviews, mind maps and study notes, every claim cited to its passage. Share a collection on Discover, and reuse what others shared, as a read-only copy or one you can change and share again.
+[![CI](https://github.com/mahmoud-emad/opennotebook/actions/workflows/ci.yml/badge.svg)](https://github.com/mahmoud-emad/opennotebook/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-## Stack
+OpenNotebook is an open-source study studio, in the spirit of NotebookLM, that you can run yourself.
 
-- **server/**: FastAPI on Python 3.14, Postgres 18 with pgvector, background jobs on Procrastinate. All the work happens here, model calls included.
-- **web/**: a React and TypeScript app served at `/ui/`. It is only a client of the server's REST API.
-- **deploy/**: Docker Compose with Caddy, Postgres and an optional speech server.
+Put your sources into a collection: PDFs, slides, web links, pasted notes, or a research report it writes for you. Then turn them into something you can learn from:
 
-## Run it
+- **Narrated slide decks.** You can stop them at any point and ask a question out loud.
+- **Video overviews.** Slides or a hand-drawn whiteboard, with chapters and captions that follow along word by word.
+- **Audio overviews.** One host or two, talking it through.
+- **Mind maps and study notes.**
 
-With Docker:
+Every claim links back to the passage it came from, so you can check it. When a collection is good, share it on Discover. Others can read it as it is, or copy it, make it their own, and share it again.
+
+## Try it
+
+You need Docker and a key for an OpenAI-compatible model API ([OpenRouter](https://openrouter.ai) works out of the box).
 
 ```sh
+git clone https://github.com/mahmoud-emad/opennotebook.git
+cd opennotebook
 cp deploy/.env.example deploy/.env   # set POSTGRES_PASSWORD and OPENNOTEBOOK_AI_KEY
-make up                              # then open http://localhost/ui/
+make up
 ```
 
-For development you need Python 3.14 with [uv](https://docs.astral.sh/uv/), Node 24 with pnpm, and Postgres 18 with pgvector. Put `DATABASE_URL` and `TEST_DATABASE_URL` in `~/.config/opennotebook/db.env` (the Makefile reads it), then:
+Then open <http://localhost/ui/>.
+
+`make up` builds the images on your machine. To use the published ones instead:
 
 ```sh
-make dev     # api on :8000, the job worker, and the web app on :5173/ui/
-make check   # formatting, lint, types and tests, server and web
+docker compose -f deploy/compose.yaml pull
+docker compose -f deploy/compose.yaml up -d --no-build
 ```
 
-## What it needs
+To serve it on your own domain with HTTPS, set `DOMAIN` and `PUBLIC_URL` in `deploy/.env`. Every setting is explained in [deploy/.env.example](deploy/.env.example).
 
-- **An OpenAI-compatible model endpoint.** OpenRouter by default: set `OPENNOTEBOOK_AI_KEY` (`OPENROUTER_API_KEY` works too). Any `/chat/completions` server works through `OPENNOTEBOOK_AI_BASE_URL`; the default model ids are OpenRouter's, so set the models in Settings for another endpoint.
-- **Voices:** Microsoft's neural voices by default, free through Edge's Read Aloud service with no key. For production, set `OPENNOTEBOOK_TTS_PROVIDER=azure` with an Azure Speech key; or `openai` for an OpenAI-compatible server such as [Speaches](https://speaches.ai). Spoken questions are transcribed by that server at `OPENNOTEBOOK_TTS_BASE_URL`.
+## Models and voices
 
-Every variable is listed with its default in [deploy/.env.example](deploy/.env.example). Everything a person chooses (styles, voices, language, spending limit) is in the app's Settings.
+- **Models.** Any API that speaks `/chat/completions` works. Point `OPENNOTEBOOK_AI_BASE_URL` at it. The default model names are OpenRouter's, so if you use another provider, pick your models in Settings.
+- **Voices.** By default it uses Microsoft's neural voices through Edge's free Read Aloud service, so you don't need a key. For heavier use, switch to Azure Speech (`OPENNOTEBOOK_TTS_PROVIDER=azure`), or to an OpenAI-compatible speech server such as [Speaches](https://speaches.ai) (`openai`). Spoken questions are transcribed by that same server.
 
-## Docs
+Everything else (styles, voices, language, a spending limit) can be changed in the app's Settings.
 
-- [Stack migration plan](docs/stack-migration-plan.md): the move from Rust to this stack, its decisions and progress
-- [Open questions](docs/open-questions.md): decisions not made yet and what each one blocks
-- [Design](docs/design.md): how the studio looks and why
-- Specifications: [phase 1](docs/phase1-spec.md) (narrated decks), [phase 2](docs/phase2-spec.md) (spoken questions), [mind maps](docs/mindmap-spec.md), [study notes](docs/study-notes-spec.md), [audio overviews](docs/audio-overview-spec.md), [video overviews](docs/video-overview-spec.md)
+## Working on it
 
-## Licence
+The code is split into three folders:
 
-MIT, see [LICENSE](LICENSE).
+| Folder | What's in it |
+| --- | --- |
+| `server/` | FastAPI on Python 3.14, Postgres 18 with pgvector, and background jobs on Procrastinate. All the real work happens here, including every model call. |
+| `web/` | A React and TypeScript app. It talks to the server only through its REST API. |
+| `deploy/` | Docker Compose with Caddy, Postgres, and an optional speech server. |
+
+You'll need Python 3.14 with [uv](https://docs.astral.sh/uv/), Node 24 with pnpm, and Postgres 18 with pgvector. Put `DATABASE_URL` and `TEST_DATABASE_URL` in `~/.config/opennotebook/db.env` (the Makefile reads it from there), then run:
+
+```sh
+make dev     # the api on :8000, the job worker, and the web app on :5173/ui/
+make check   # formatting, lint, types and tests, for both server and web
+```
+
+If you change the API, run `make api-client` to regenerate the web app's client.
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) before you open a pull request. The design and the reasoning behind each feature are in [docs/](docs/).
+
+## License
+
+MIT. See [LICENSE](LICENSE).

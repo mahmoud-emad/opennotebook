@@ -1,3 +1,3 @@
 # OpenNotebook server
 
-FastAPI + Postgres. See [the migration plan](../docs/stack-migration-plan.md).
+The FastAPI app, the background worker and the database migrations. See the [main README](../README.md) to run it, and [docs/](../docs/) for how it works.

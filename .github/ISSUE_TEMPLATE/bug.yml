@@ -1,0 +1,30 @@
+name: Bug report
+description: Something doesn't work the way it should.
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, and what you got instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: How can we reproduce it?
+      placeholder: |
+        1. Add a PDF to a collection
+        2. Make a narrated deck
+        3. ...
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+      placeholder: v0.1.0, or a commit hash
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Anything from the api or worker logs. Please remove keys first.
+      render: text
