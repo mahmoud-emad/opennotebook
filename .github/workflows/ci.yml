@@ -1,4 +1,4 @@
-# The checks `make check` runs, on every push and pull request: the server
+# The checks `make check` runs, on every push to main and every pull request: the server
 # (format, lint, types, tests against Postgres with pgvector) and the web app
 # (lint, tests, the build with its first-screen size budget), then the
 # end-to-end suite (web/e2e, `make e2e`) in a browser against the whole stack.
@@ -7,6 +7,7 @@ name: CI
 
 on:
   push:
+    branches: [main]
   pull_request:
 
 # A newer push to the same branch replaces a run still going.

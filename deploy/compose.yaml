@@ -6,7 +6,9 @@
 # draws it.
 #
 #   cp deploy/.env.example deploy/.env    # then fill it in
-#   make up                               # or: docker compose -f deploy/compose.yaml up -d --build
+#   make up                               # builds the images here
+#   docker compose -f deploy/compose.yaml pull && docker compose -f deploy/compose.yaml up -d --no-build
+#                                         # or runs the published ones
 #   docker compose -f deploy/compose.yaml --profile speech up -d   # with Speaches
 #
 # Every setting is in deploy/.env; .env.example says what each one does.
@@ -16,7 +18,7 @@ name: opennotebook
 # What the api, the worker and the migrate step share: the one server image,
 # the operator's settings, and where the database and the files are.
 x-server: &server
-  image: opennotebook-server:local
+  image: ghcr.io/mahmoud-emad/opennotebook-server:${OPENNOTEBOOK_VERSION:-latest}
   build:
     context: ..
     dockerfile: deploy/server.Dockerfile
@@ -37,7 +39,7 @@ x-server: &server
 
 services:
   caddy:
-    image: opennotebook-web:local
+    image: ghcr.io/mahmoud-emad/opennotebook-web:${OPENNOTEBOOK_VERSION:-latest}
     build:
       context: ..
       dockerfile: deploy/web.Dockerfile
