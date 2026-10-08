@@ -15,14 +15,11 @@ import json
 import logging
 import re
 from typing import Any
-from urllib.parse import urlsplit
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException
-
-from opennotebook.config import settings
 
 log = logging.getLogger(__name__)
 
@@ -46,16 +43,20 @@ OUT_OF_CREDIT = "The AI account is out of credit, so nothing can be read or made
 
 
 def credit_sentence() -> str:
-    """Out of credit, with where to add it: OpenRouter's page when the studio
-    calls OpenRouter, the provider's own account otherwise."""
+    """Out of credit, with where to add it: the account of the provider the
+    studio mostly calls, OpenRouter's page when it is OpenRouter."""
     try:
-        host = urlsplit(settings().ai_base_url).hostname or ""
+        from opennotebook.ai import connections
+
+        primary = next((c for c in connections.snapshot() if c.usable), None)
     except Exception:
         # Settings that cannot be read (no DATABASE_URL in a script, say)
         # must not turn one error into another.
-        host = ""
-    if host == "openrouter.ai" or host.endswith(".openrouter.ai"):
+        primary = None
+    if primary is not None and primary.kind == "openrouter":
         return f"{OUT_OF_CREDIT} Add credit at openrouter.ai/settings/credits, then try again."
+    if primary is not None:
+        return f"{OUT_OF_CREDIT} Add credit to the {primary.label} account, then try again."
     return f"{OUT_OF_CREDIT} Add credit with the AI provider the studio uses, then try again."
 
 
@@ -85,7 +86,8 @@ KNOWN: list[tuple[tuple[str, ...], str]] = [
             "missing authentication",
             "http 401",
         ),
-        "The AI provider refused the studio's API key. Check the key, then try again.",
+        "The AI provider refused the studio's API key. Check it in Settings › AI providers, "
+        "then try again.",
     ),
     (
         ("rate limited", "too many requests", "http 429"),

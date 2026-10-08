@@ -47,6 +47,8 @@ from sqlalchemy import delete, event, func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from opennotebook.ai import connections
+from opennotebook.ai.providers import Role
 from opennotebook.config import settings as config
 from opennotebook.db.models import InstanceSetting, User, UserSetting
 from opennotebook.domain.styles import STYLES
@@ -109,6 +111,22 @@ SEARCH_MODEL_DEFAULT = "perplexity/sonar"
 # alternatives do not.
 CHAT_MODEL_KEY = "OPENNOTEBOOK_CHAT_MODEL"
 AGENT_MODEL_DEFAULT = "google/gemini-2.5-flash-lite"
+
+# What each model is used for, so a connected provider can say which of its
+# models suits it (`ai/providers.py`).
+ROLE_OF: dict[str, Role] = {
+    SCRIPT_MODEL_KEY: "text",
+    SLIDE_MODEL_KEY: "strong",
+    VIDEO_MODEL_KEY: "strong",
+    VIDEO_CHECK_MODEL_KEY: "vision",
+    VIDEO_ESCALATE_MODEL_KEY: "strongest",
+    VIDEO_IMAGE_MODEL_KEY: "image",
+    MINDMAP_MODEL_KEY: "long",
+    NOTES_MODEL_KEY: "long",
+    CHAT_MODEL_KEY: "chat",
+    ANSWER_MODEL_KEY: "audio",
+    SEARCH_MODEL_KEY: "search",
+}
 
 type Pairs = tuple[tuple[str, str], ...]
 
@@ -239,6 +257,7 @@ TAB_VOICES = "Voices"
 TAB_CONVERSATION = "Live conversation"
 TAB_COSTS = "Costs & limits"
 TAB_MODELS = "Models"
+TAB_PROVIDERS = "AI providers"
 
 
 @dataclass(frozen=True)
@@ -261,6 +280,13 @@ TAB_INFO: tuple[Tab, ...] = (
     Tab("voices", TAB_VOICES),
     Tab("conversation", TAB_CONVERSATION),
     Tab("costs", TAB_COSTS),
+    # Drawn by the page itself from `/api/ai/providers`: it holds no settings.
+    Tab(
+        "providers",
+        TAB_PROVIDERS,
+        "Where the studio's models come from. Keys are tested before they are kept, and kept "
+        "encrypted on this server.",
+    ),
     Tab("models", TAB_MODELS, "Changing these affects quality and cost.", advanced=True),
 )
 TABS: tuple[str, ...] = tuple(t.label for t in TAB_INFO)
@@ -722,25 +748,6 @@ def need(key: str) -> Def:
 MAX_TEXT_BYTES = 400
 MAX_MODEL_BYTES = 200
 _WHOLE_NUMBER = re.compile(r"[+-]?[0-9]+")
-# What a model id's two halves, `vendor/name`, are made of: the name also
-# takes the `:free`-style suffixes some endpoints use.
-_ALNUM = frozenset("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789")
-_VENDOR_CHARS = _ALNUM | frozenset("._-")
-_NAME_CHARS = _VENDOR_CHARS | frozenset(":+")
-
-
-def _is_model_id(s: str) -> bool:
-    """Whether `s` has a model id's shape: `vendor/name`, each half starting
-    with a letter or digit."""
-    vendor, slash, name = s.partition("/")
-    return (
-        bool(slash)
-        and len(s.encode()) <= MAX_MODEL_BYTES
-        and vendor[:1] in _ALNUM
-        and name[:1] in _ALNUM
-        and set(vendor) <= _VENDOR_CHARS
-        and set(name) <= _NAME_CHARS
-    )
 
 
 def validate(d: Def, value: str) -> str | None:
@@ -782,21 +789,26 @@ def validate(d: Def, value: str) -> str | None:
 async def check_model(model_id: str) -> str | None:
     """Why `model_id` cannot be used, or None when it can.
 
-    The id must look like `vendor/name`, and the AI endpoint's model list must
-    name it. When the list cannot be read, the id is accepted on its shape, as
-    the Rust studio did: an unreachable catalogue is not a reason to refuse."""
-    if not _is_model_id(model_id):
-        return (
-            f"“{model_id}” is not a model id. Model ids look like {SCRIPT_MODEL_DEFAULT}; "
-            "check the spelling and try again."
-        )
-    from opennotebook.ai.client import ai
+    It names a connected provider's model: `connection:model`, or a model of
+    the primary connection. The provider's model list must name it. When the
+    list cannot be read, the id is accepted as it is, as the Rust studio did:
+    an unreachable catalogue is not a reason to refuse."""
+    from opennotebook.ai.client import router
 
-    listed = await ai().catalogue.prices()
-    if listed and model_id.split(":")[0] not in {m.split(":")[0] for m in listed}:
+    conns = await connections.every()
+    c, own = connections.split(model_id, conns)
+    if c is None:
         return (
-            f"The AI endpoint does not offer “{model_id}”. Pick a model from the list, "
-            "or check the id on the provider's site."
+            "No AI provider is connected yet, so no model can be chosen. Connect one in "
+            "Settings › AI providers first."
+        )
+    if not own.strip():
+        return f"“{model_id}” names no model. Add the model's id after the colon."
+    listed = await router().client(c).catalogue.ids()
+    if listed and own.split(":")[0] not in {m.split(":")[0] for m in listed}:
+        return (
+            f"{c.label} does not offer “{own}”. Pick a model from the list, or check the id "
+            "on the provider's site."
         )
     return None
 
@@ -810,7 +822,11 @@ async def check(d: Def, value: str) -> str | None:
         return None
     if d.kind.name == "style" and not any(s.id == v for s in STYLES):
         return f"“{v}” is not a slide style. Pick one of the styles in the list."
-    if d.kind.name == "model" and not any(o == v for o, _ in d.kind.options):
+    if d.kind.name == "model":
+        # A tested id needs no list while nothing is connected to ask; once
+        # something is, the provider it goes to must offer it.
+        if any(o == v for o, _ in d.kind.options) and not await connections.usable():
+            return None
         return await check_model(v)
     return None
 
@@ -840,7 +856,24 @@ def effective(
         return fit(key, v)
     if v := instance.get(key, "").strip():
         return fit(key, v)
-    return d.default if d else ""
+    return default_of(d) if d else ""
+
+
+def default_of(d: Def) -> str:
+    """What applies when nothing is set: for a model, what the connected
+    providers suggest for its role, else the catalogue's default."""
+    if (role := ROLE_OF.get(d.key)) is not None:
+        return connections.default_for(role) or d.default
+    return d.default
+
+
+async def learn_models() -> None:
+    """Read which models the connected providers offer, so a role's default
+    is one they have. Kept for minutes by each provider's catalogue."""
+    from opennotebook.ai.client import router
+
+    if await connections.usable():
+        connections.remember_offered(await router().catalogue.offered())
 
 
 # How long a process keeps the stored settings it read, and for how many
@@ -889,6 +922,11 @@ async def _instance_rows(s: AsyncSession) -> dict[str, str]:
     return rows
 
 
+async def instance_rows(s: AsyncSession) -> dict[str, str]:
+    """The instance's stored settings, as a mapping of the caller's own."""
+    return dict(await _instance_rows(s))
+
+
 async def rows(s: AsyncSession, owner: uuid.UUID) -> tuple[dict[str, str], dict[str, str]]:
     """A person's stored settings and the instance's, as mappings of their
     own the caller may change: kept for `CACHE_SECONDS`, else read."""
@@ -898,6 +936,7 @@ async def rows(s: AsyncSession, owner: uuid.UUID) -> tuple[dict[str, str], dict[
 async def values(s: AsyncSession, owner: uuid.UUID) -> dict[str, str]:
     """Every catalogued setting's value in force for a person, read in one go,
     for a build that needs several."""
+    await learn_models()
     user, instance = await rows(s, owner)
     return {d.key: effective(d.key, user, instance) for d in CATALOGUE}
 
@@ -907,6 +946,8 @@ async def value(s: AsyncSession, owner: uuid.UUID, key: str) -> str:
     if v := from_env(key):
         return fit(key, v)
     d = find(key)
+    if key in ROLE_OF:
+        await learn_models()
     user = await _user_rows(s, owner) if d is None or d.scope == "user" else {}
     return effective(key, user, await _instance_rows(s), {})
 
@@ -968,15 +1009,23 @@ def current(d: Def, user: Mapping[str, str], instance: Mapping[str, str]) -> Cur
     env = offered(d.key, from_env(d.key))
     shared = offered(d.key, instance.get(d.key, "").strip())
     if d.scope == "instance":
-        return Current(d, env or shared, d.default)
+        return Current(d, env or shared, default_of(d))
     own = offered(d.key, user.get(d.key, "").strip())
-    return Current(d, env or own, shared or d.default)
+    return Current(d, env or own, shared or default_of(d))
 
 
 async def describe(s: AsyncSession, owner: uuid.UUID) -> list[Current]:
     """Every catalogued setting as it stands for a person."""
+    await learn_models()
     user, instance = await rows(s, owner)
     return [current(d, user, instance) for d in CATALOGUE]
+
+
+def is_operator(who: User) -> bool:
+    """Whether `who` runs the studio and so may change it for everyone: the
+    local owner, in `local` mode. There are no admin roles yet."""
+    cfg = config()
+    return cfg.auth == "local" and who.email.lower() == cfg.local_owner_email.lower()
 
 
 def may_change(d: Def, who: User) -> str | None:
@@ -986,10 +1035,7 @@ def may_change(d: Def, who: User) -> str | None:
     everyone: for now only the local owner may, in `local` mode, the studio
     run by one person. There are no admin roles yet, so in `keys` mode nobody
     can change one through the API."""
-    if d.scope == "user":
-        return None
-    cfg = config()
-    if cfg.auth == "local" and who.email.lower() == cfg.local_owner_email.lower():
+    if d.scope == "user" or is_operator(who):
         return None
     return (
         f"{d.label} is set for everyone by whoever runs this studio, so it cannot be "

@@ -532,8 +532,7 @@ async def test_a_build_with_no_ai_key_is_refused_at_once(
     r = await client.post(f"/api/collections/{cid}/outputs", json={"kind": "slides"})
     assert r.status_code == 503
     assert r.json()["detail"] == (
-        "The studio has no AI key yet. Add OPENNOTEBOOK_AI_KEY to the server's environment, "
-        "then try again."
+        "No AI provider is connected yet. Connect one in Settings › AI providers, then try again."
     )
     assert await _rows("SELECT id FROM sessions") == []
 

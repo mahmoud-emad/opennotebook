@@ -27,10 +27,10 @@ from typing import Any, Literal
 import httpx2
 import openai
 
-from opennotebook.ai import ledger
+from opennotebook.ai import connections, ledger
 from opennotebook.ai.errors import AiError, Kind
-from opennotebook.ai.prices import Catalogue
-from opennotebook.config import settings
+from opennotebook.ai.prices import Catalogue, Price
+from opennotebook.ai.providers import BY_KIND, Preset
 
 Finish = Literal["stop", "length", "tool_calls", "content_filter"] | str
 
@@ -168,6 +168,21 @@ def parse_response(raw: dict[str, Any]) -> Completion:
     )
 
 
+def unfenced(text: str) -> str:
+    """The JSON in a reply that was asked for JSON in words: the first whole
+    JSON value in it, without the code fence or the sentence a model may put
+    around it. The reply as it is when it holds none."""
+    decoder = json.JSONDecoder()
+    for i, ch in enumerate(text):
+        if ch in "{[":
+            try:
+                _, end = decoder.raw_decode(text, i)
+            except ValueError:
+                continue
+            return text[i:end]
+    return text.strip()
+
+
 class Ai:
     def __init__(
         self,
@@ -178,9 +193,13 @@ class Ai:
         retries: int = 2,
         timeout: float = 300.0,
         backoff: float = 0.75,
+        preset: Preset | None = None,
     ) -> None:
         self.base_url = base_url
         self.has_key = bool(api_key)
+        # What the provider accepts. Without one, OpenRouter's, as before
+        # providers were told apart.
+        self.preset = preset or BY_KIND["openrouter"]
         # Retries are ours, not the SDK's: out of credit must not be repeated,
         # however it is dressed up.
         self._client = openai.AsyncOpenAI(
@@ -193,7 +212,11 @@ class Ai:
         self._retries = retries
         self._timeout = timeout
         self._backoff = backoff
-        self.catalogue = Catalogue(base_url, api_key, http)
+        self.catalogue = Catalogue(base_url, api_key, http, kind=self.preset.kind)
+
+    async def ready(self) -> bool:
+        """Whether calls can go out at all."""
+        return self.has_key or not self.preset.needs_key
 
     def _body(
         self,
@@ -210,15 +233,27 @@ class Ai:
             raise AiError(Kind.INVALID, "no model named")
         body: dict[str, Any] = {"model": model, "messages": messages}
         if max_tokens is not None:
-            body["max_tokens"] = max_tokens
-        if temperature is not None:
+            body[self.preset.max_tokens_field] = max_tokens
+        fixed = self.preset.fixed_temperature
+        if temperature is not None and not (fixed and model.startswith(fixed)):
             body["temperature"] = temperature
-        if json_schema is not None:
+        if json_schema is not None and self.preset.json_schema:
             name, schema = json_schema
             body["response_format"] = {
                 "type": "json_schema",
                 "json_schema": {"name": name, "strict": True, "schema": schema},
             }
+        elif json_schema is not None:
+            # A provider that ignores or refuses strict schemas is asked in
+            # words; `complete` takes the JSON out of whatever it wraps it in.
+            body["messages"] = [
+                *messages,
+                {
+                    "role": "system",
+                    "content": "Reply with one JSON value and nothing else: no prose, no code "
+                    "fence. It must match this JSON Schema:\n" + json.dumps(json_schema[1]),
+                },
+            ]
         if tools:
             body["tools"] = tools
             if tool_choice is not None:
@@ -231,9 +266,11 @@ class Ai:
         """One request through the SDK, with the retries a busy or unreachable
         provider is worth. Returns the raw HTTP response. `more` goes in the
         body as it is, for what the SDK has no parameter for."""
-        # OpenRouter: report cost in `usage.cost`. Ignored elsewhere.
-        extra: dict[str, Any] = {"usage": {"include": True}, **(more or {})}
-        if stream:
+        extra: dict[str, Any] = dict(more or {})
+        if self.preset.usage_cost:
+            # OpenRouter: report cost in `usage.cost`.
+            extra["usage"] = {"include": True}
+        if stream and self.preset.stream_usage:
             extra["stream_options"] = {"include_usage": True}
         attempt = 0
         while True:
@@ -265,6 +302,12 @@ class Ai:
         """Send and wait for the whole answer. With `image_aspect` ("16:9"),
         ask an image model for a picture of that shape (`Completion.images`)."""
         more: dict[str, Any] | None = None
+        if image_aspect is not None and not self.preset.images:
+            raise AiError(
+                Kind.UNSUPPORTED,
+                f"{self.preset.label} cannot paint pictures. Choose an image model from a provider "
+                "that can, such as OpenRouter, in Settings › Models.",
+            )
         if image_aspect is not None:
             # OpenRouter's image output: the picture beside the text, in the
             # shape asked for.
@@ -289,6 +332,8 @@ class Ai:
             raise AiError(Kind.UNAVAILABLE, f"no answer within {self._timeout:.0f}s") from e
         done = parse_response(raw if isinstance(raw, dict) else {})
         await self._charge(model, done.usage)
+        if json_schema is not None and not self.preset.json_schema:
+            done.text = unfenced(done.text)
         return done
 
     async def stream(
@@ -432,8 +477,118 @@ class Ai:
         )
 
 
+# ── many providers ────────────────────────────────────────────────────────────
+
+
+class Router:
+    """Every connected provider behind the one client the studio calls.
+
+    It has `Ai`'s surface: a model reference says which connection answers
+    (`connections.split`), and that connection's own `Ai`, kept while its
+    address and key stay the same, makes the call with the model's own id."""
+
+    def __init__(self) -> None:
+        self._clients: dict[str, tuple[tuple[str, str, str], Ai]] = {}
+        self.catalogue = RouterCatalogue(self)
+
+    def client(self, c: connections.Connection) -> Ai:
+        """The client for one connection."""
+        ident = (c.kind, c.base_url, c.key)
+        kept = self._clients.get(c.id)
+        if kept is not None and kept[0] == ident:
+            return kept[1]
+        made = Ai(c.base_url, c.key, preset=c.preset)
+        self._clients[c.id] = (ident, made)
+        if kept is not None:
+            # Its address or key changed: the old client's connections close
+            # once nothing is using them.
+            asyncio.get_running_loop().create_task(kept[1].aclose())
+        return made
+
+    @property
+    def has_key(self) -> bool:
+        """Whether a provider is connected, as last read. `ready` reads again."""
+        return any(c.usable for c in connections.snapshot())
+
+    async def ready(self) -> bool:
+        return bool(await connections.usable())
+
+    async def route(self, model: str) -> tuple[Ai, str]:
+        """The client that answers `model`, and the model's own id there."""
+        conns = await connections.every()
+        c, own = connections.split(model, conns)
+        if c is None:
+            raise AiError(
+                Kind.UNCONFIGURED,
+                "No AI provider is connected yet. Connect one in Settings › AI providers, then "
+                "try again.",
+            )
+        if not c.usable:
+            raise AiError(
+                Kind.UNCONFIGURED,
+                f"{c.label} has no key, so “{own}” cannot be used. Add its key in Settings › "
+                "AI providers, then try again.",
+            )
+        return self.client(c), own
+
+    async def complete(self, model: str, messages: list[dict[str, Any]], **kw: Any) -> Completion:
+        client, own = await self.route(model)
+        return await client.complete(own, messages, **kw)
+
+    async def stream(
+        self, model: str, messages: list[dict[str, Any]], **kw: Any
+    ) -> AsyncIterator[TextDelta | Done]:
+        client, own = await self.route(model)
+        async for ev in client.stream(own, messages, **kw):
+            yield ev
+
+    async def embed(self, model: str, texts: list[str]) -> list[list[float]]:
+        client, own = await self.route(model)
+        return await client.embed(own, texts)
+
+    async def aclose(self) -> None:
+        for _, c in self._clients.values():
+            await c.aclose()
+        self._clients.clear()
+
+
+class RouterCatalogue:
+    """Every connection's price list as one, by the references the settings
+    use: bare on the primary connection, `id:model` on the others."""
+
+    def __init__(self, router: Router) -> None:
+        self._router = router
+
+    async def prices(self) -> dict[str, Price]:
+        conns = await connections.usable()
+        lists = await asyncio.gather(*(self._router.client(c).catalogue.prices() for c in conns))
+        out: dict[str, Price] = {}
+        for c, listed in zip(conns, lists, strict=True):
+            for m, p in listed.items():
+                out.setdefault(connections.ref(c, m, conns), p)
+        return out
+
+    async def price(self, model: str) -> Price | None:
+        try:
+            client, own = await self._router.route(model)
+        except AiError:
+            return None
+        return await client.catalogue.price(own)
+
+    async def offered(self) -> dict[str, set[str]]:
+        """Each usable connection's model ids, where its list could be read."""
+        conns = await connections.usable()
+        lists = await asyncio.gather(*(self._router.client(c).catalogue.ids() for c in conns))
+        return {c.id: ids for c, ids in zip(conns, lists, strict=True) if ids}
+
+
 @lru_cache
-def ai() -> Ai:
-    """The studio's client, configured from the environment."""
-    c = settings()
-    return Ai(c.ai_base_url, c.ai_key.get_secret_value())
+def router() -> Router:
+    """The one router, for what must reach the real providers even where a
+    test stands a fake in for `ai`."""
+    return Router()
+
+
+def ai() -> Router:
+    """The studio's client: every connected provider, by model reference."""
+    return router()

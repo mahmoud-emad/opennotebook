@@ -471,7 +471,7 @@ async def test_with_no_ai_key_the_agent_says_how_to_add_one(
     cid = await _collection(client)
     evs = await _say(client, cid, "hello")
     assert kinds(evs) == ["reply", "state"]
-    assert "OPENNOTEBOOK_AI_KEY" in evs[0]["text"]
+    assert "Settings › AI providers" in evs[0]["text"]
 
 
 async def test_nobody_else_can_chat_in_a_collection(

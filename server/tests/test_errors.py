@@ -22,15 +22,15 @@ def test_out_of_credit_is_said_in_words_with_what_to_do() -> None:
 def test_out_of_credit_names_openrouter_only_when_it_is_the_provider(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from opennotebook.config import settings
+    from opennotebook.ai import connections
 
+    monkeypatch.setenv("OPENNOTEBOOK_AI_KEY", "k")
     monkeypatch.setenv("OPENNOTEBOOK_AI_BASE_URL", "https://openrouter.ai/api/v1")
-    settings.cache_clear()
-    try:
-        assert "openrouter.ai/settings/credits" in readable("insufficient_quota")
-    finally:
-        monkeypatch.undo()
-        settings.cache_clear()
+    connections.forget()
+    assert "openrouter.ai/settings/credits" in readable("insufficient_quota")
+    monkeypatch.setenv("OPENNOTEBOOK_AI_BASE_URL", "https://api.openai.com/v1")
+    connections.forget()
+    assert "Add credit to the OpenAI account" in readable("insufficient_quota")
 
 
 @pytest.mark.parametrize(

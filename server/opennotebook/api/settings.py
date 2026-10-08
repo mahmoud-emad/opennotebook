@@ -1,11 +1,15 @@
 """The studio's settings, and the slide styles."""
 
+import dataclasses
 import uuid
 
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
+from opennotebook.ai import connections
 from opennotebook.ai.client import ai
+from opennotebook.ai.client import router as ai_router
+from opennotebook.ai.connections import Connection
 from opennotebook.ai.prices import Price, hint
 from opennotebook.api.deps import Db, Me
 from opennotebook.db.session import release
@@ -13,7 +17,7 @@ from opennotebook.domain import collections, settings, styles
 from opennotebook.domain import sessions as sess
 from opennotebook.domain import sessions_estimate as est
 from opennotebook.domain import sources as sources_domain
-from opennotebook.domain.settings import TAB_INFO, Current
+from opennotebook.domain.settings import TAB_INFO, Current, Pairs
 from opennotebook.domain.styles import STYLES, SlideStyle
 
 router = APIRouter(prefix="/api", tags=["settings"])
@@ -50,9 +54,13 @@ class Setting(BaseModel):
     scope: str = Field(description="instance: set for everyone; user: each person's own")
 
     @classmethod
-    def of(cls, c: Current, prices: dict[str, Price] | None = None) -> Setting:
+    def of(
+        cls, c: Current, prices: dict[str, Price] | None = None, models: Pairs | None = None
+    ) -> Setting:
         d = c.d
         kind = d.kind
+        if models is not None and kind.name == "model":
+            kind = dataclasses.replace(kind, options=models)
         options: list[SettingOption] = []
         lo: int | None = None
         hi: int | None = None
@@ -92,6 +100,28 @@ class Setting(BaseModel):
         )
 
 
+def model_choices(d: settings.Def, conns: list[Connection], offered: dict[str, set[str]]) -> Pairs:
+    """The models a model setting offers: each connected provider's
+    suggestions for its role that the provider still has, and on OpenRouter
+    the tested ones too. With nothing connected, the tested ones."""
+    role = settings.ROLE_OF.get(d.key)
+    usable = [c for c in conns if c.usable]
+    if role is None or not usable:
+        return d.kind.options
+    out: dict[str, str] = {}
+    many = len(usable) > 1
+    for c in usable:
+        listed = offered.get(c.id)
+        tested = d.kind.options if c.kind == "openrouter" else ()
+        names = dict(tested)
+        for m in [*c.preset.suggest.get(role, ()), *(v for v, _ in tested)]:
+            if listed and m not in listed:
+                continue
+            label = names.get(m) or est.model_name(m)
+            out.setdefault(connections.ref(c, m, conns), f"{label} · {c.label}" if many else label)
+    return tuple(out.items())
+
+
 def _hint(prices: dict[str, Price] | None, model: str) -> str:
     p = (prices or {}).get(model)
     return hint(p) if p else ""
@@ -126,11 +156,13 @@ async def get_settings(s: Db, me: Me) -> SettingsOut:
     # The price list can take seconds to read; no transaction waits for it.
     await release(s)
     prices = await ai().catalogue.prices()
+    conns = await connections.every()
+    offered = await ai_router().catalogue.offered() if any(c.usable for c in conns) else {}
     return SettingsOut(
         tabs=[
             SettingTab(id=t.id, label=t.label, note=t.note, advanced=t.advanced) for t in TAB_INFO
         ],
-        settings=[Setting.of(c, prices) for c in described],
+        settings=[Setting.of(c, prices, model_choices(c.d, conns, offered)) for c in described],
     )
 
 
@@ -142,7 +174,10 @@ async def set_setting(key: str, body: SetValue, s: Db, me: Me) -> Setting:
     saved = await settings.save(s, me, key, body.value)
     # Saved before the price list is read, which can take seconds.
     await release(s)
-    return Setting.of(saved, await ai().catalogue.prices())
+    conns = await connections.every()
+    offered = await ai_router().catalogue.offered() if any(c.usable for c in conns) else {}
+    choices = model_choices(saved.d, conns, offered)
+    return Setting.of(saved, await ai().catalogue.prices(), choices)
 
 
 # ── what the Create panel offers ─────────────────────────────────────────────

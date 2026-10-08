@@ -130,8 +130,8 @@ LABELS = {
 }
 
 NO_KEY = (
-    "The studio has no AI key yet, so I cannot answer. Add OPENNOTEBOOK_AI_KEY to the "
-    "server's environment; links you paste here are still read into the sources."
+    "No AI provider is connected yet, so I cannot answer. Connect one in Settings › AI "
+    "providers; links you paste here are still read into the sources."
 )
 OUT_OF_CREDIT = (
     "The AI account behind the studio is out of credit, so I cannot search or write right "
@@ -850,7 +850,7 @@ async def _run(t: Turn, history: Sequence[tuple[str, str]]) -> AsyncIterator[Eve
 
     # ── the agent ───────────────────────────────────────────────────────────
     ai = client.ai()
-    if not ai.has_key:
+    if not await ai.ready():
         yield reply(NO_KEY)
         await _settle(t, read_this_turn)
         yield await state(t)

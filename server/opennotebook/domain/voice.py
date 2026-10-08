@@ -109,10 +109,7 @@ VOICING_PARALLEL = 4
 VOICE_SAMPLES = 4
 
 NO_AUDIO = "No audio was recorded. Check that the microphone is allowed, then ask again."
-NO_KEY = (
-    "The studio has no AI key yet. Add OPENNOTEBOOK_AI_KEY to the server's environment, "
-    "then try again."
-)
+NO_KEY = "No AI provider is connected yet. Connect one in Settings › AI providers, then try again."
 TOO_LONG = "That question was too long to send. Ask it in under a minute, then try again."
 # A question longer than this is refused before anything reads it: a minute
 # at 48 kHz is under 6 MB.

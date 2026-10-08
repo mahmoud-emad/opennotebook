@@ -84,12 +84,14 @@ async def test_an_instance_change_is_seen_at_once(client: AsyncClient, kept: Non
     me = await _me(client)
     async with sessionmaker()() as s:
         before = await st.value(s, me, st.CHAT_MODEL_KEY)
-    assert before != "acme/model-1"
+    assert before != "anthropic/claude-haiku-4.5"
     # The models are set for everyone, here by the studio's local owner.
-    r = await client.patch(f"/api/settings/{st.CHAT_MODEL_KEY}", json={"value": "acme/model-1"})
+    r = await client.patch(
+        f"/api/settings/{st.CHAT_MODEL_KEY}", json={"value": "anthropic/claude-haiku-4.5"}
+    )
     assert r.status_code == 200, r.text
     async with sessionmaker()() as s:
-        assert await st.value(s, me, st.CHAT_MODEL_KEY) == "acme/model-1"
+        assert await st.value(s, me, st.CHAT_MODEL_KEY) == "anthropic/claude-haiku-4.5"
 
 
 # ── the price list ────────────────────────────────────────────────────────────

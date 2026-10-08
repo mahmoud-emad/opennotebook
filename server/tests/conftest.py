@@ -13,8 +13,26 @@ if not os.environ.get("TEST_DATABASE_URL"):
     pytest.exit("Set TEST_DATABASE_URL to an empty Postgres database (make check does).", 2)
 os.environ["DATABASE_URL"] = os.environ["TEST_DATABASE_URL"]
 os.environ["OPENNOTEBOOK_AUTH"] = "local"
-# No test reaches a real AI endpoint; one that tries fails at once.
+# No test reaches a real AI endpoint; one that tries fails at once. No
+# provider is connected from the environment of whoever runs them, either:
+# a test that wants one sets it.
 os.environ["OPENNOTEBOOK_AI_BASE_URL"] = "http://ai.invalid/v1"
+os.environ.pop("OPENNOTEBOOK_AI_API_KEY", None)
+os.environ.pop("OPENNOTEBOOK_AI_KEY", None)
+os.environ.pop("OPENNOTEBOOK_AI_PRIMARY", None)
+os.environ.pop("OPENROUTER_API_KEY", None)
+os.environ.pop("OPENAI_API_KEY", None)
+os.environ.pop("ANTHROPIC_API_KEY", None)
+os.environ.pop("GEMINI_API_KEY", None)
+os.environ.pop("GOOGLE_API_KEY", None)
+os.environ.pop("MISTRAL_API_KEY", None)
+os.environ.pop("GROQ_API_KEY", None)
+os.environ.pop("DEEPSEEK_API_KEY", None)
+os.environ.pop("TOGETHER_API_KEY", None)
+os.environ.pop("XAI_API_KEY", None)
+os.environ.pop("OLLAMA_API_KEY", None)
+os.environ.pop("OLLAMA_BASE_URL", None)
+os.environ["OPENNOTEBOOK_SECRET_KEY"] = "tests"
 # Lines are read aloud by the OpenAI-compatible client, which the tests fake;
 # the Microsoft voices' own tests choose them where they need them.
 os.environ["OPENNOTEBOOK_TTS_PROVIDER"] = "openai"
@@ -99,6 +117,19 @@ def settings_read_fresh(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     st.forget()
     yield
     st.forget()
+
+
+@pytest.fixture(autouse=True)
+def connections_read_fresh() -> Iterator[None]:
+    """Every test starts from the connections its environment and tables
+    hold, with no model lists remembered from another."""
+    from opennotebook.ai import connections
+
+    connections.forget()
+    connections.remember_offered({})
+    yield
+    connections.forget()
+    connections.remember_offered({})
 
 
 @pytest.fixture(autouse=True)

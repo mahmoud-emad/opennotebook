@@ -90,11 +90,14 @@ def test_the_tabs_are_in_the_plans_order_and_each_has_its_info() -> None:
         "Voices",
         "Live conversation",
         "Costs & limits",
+        "AI providers",
         "Models",
     )
     assert tuple(t.label for t in st.TAB_INFO) == st.TABS
     for t in st.TABS:
-        assert any(d.tab == t for d in st.CATALOGUE), f"{t} is empty"
+        # AI providers is drawn from its own route, not from settings.
+        if t != st.TAB_PROVIDERS:
+            assert any(d.tab == t for d in st.CATALOGUE), f"{t} is empty"
 
 
 def test_the_new_settings_exist_with_their_defaults() -> None:
@@ -196,12 +199,35 @@ async def test_a_tested_model_and_bad_values_are_judged_without_the_catalogue() 
     d = st.need(st.SLIDE_MODEL_KEY)
     assert await st.check(d, "anthropic/claude-sonnet-5.5") is None
     assert await st.check(d, "has spaces in it") is not None
-    # The seam: until the AI client lands, an untested id need only look
-    # like vendor/name.
-    assert await st.check(d, "vendor/new-model:free") is None
-    assert await st.check(d, "no-slash") is not None
+    # Nothing connected: an untested id has no provider to be checked with.
+    why = await st.check(d, "vendor/new-model:free")
+    assert why is not None and why.startswith("No AI provider is connected yet")
     assert await st.check(st.need(st.STYLE_KEY), "no-such-style") is not None
     assert await st.check(st.need(st.STYLE_KEY), "clay") is None
+
+
+async def test_a_model_must_be_one_its_provider_offers(monkeypatch: pytest.MonkeyPatch) -> None:
+    from opennotebook.ai import connections
+    from opennotebook.ai.prices import Catalogue
+
+    async def listed(_: Catalogue) -> set[str]:
+        return {"vendor/new-model", "gpt-5.4"}
+
+    monkeypatch.setattr(Catalogue, "ids", listed)
+    monkeypatch.setenv("OPENROUTER_API_KEY", "k")
+    monkeypatch.setenv("OPENAI_API_KEY", "k")
+    connections.forget()
+    d = st.need(st.SLIDE_MODEL_KEY)
+    # `:free`-style suffixes are the same model.
+    assert await st.check(d, "vendor/new-model:free") is None
+    assert await st.check(d, "openai:gpt-5.4") is None
+    why = await st.check(d, "vendor/gone")
+    assert why == (
+        "OpenRouter does not offer “vendor/gone”. Pick a model from the list, or check the id "
+        "on the provider's site."
+    )
+    why = await st.check(d, "openai:")
+    assert why is not None and why.startswith("OpenRouter does not offer “openai:”")
 
 
 def test_a_model_setting_is_text_with_its_tested_options() -> None:

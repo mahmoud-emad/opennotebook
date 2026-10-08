@@ -51,11 +51,11 @@ async def close_clients() -> None:
     database: the AI client's, the shared speech clients' and the pool. The
     worker closes these when it stops; the api, after its own work."""
     from opennotebook import speech
-    from opennotebook.ai.client import ai
+    from opennotebook.ai.client import router
     from opennotebook.db.session import engine
 
-    if ai.cache_info().currsize:
-        await ai().aclose()
+    if router.cache_info().currsize:
+        await router().aclose()
     await speech.close_shared()
     if engine.cache_info().currsize:
         await engine().dispose()

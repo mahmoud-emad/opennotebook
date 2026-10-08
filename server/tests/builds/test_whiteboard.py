@@ -580,7 +580,7 @@ async def test_a_whiteboard_needs_an_ai_key(
     sid = await _ready(client)
     monkeypatch.setattr(ai_client, "ai", lambda: Ai("http://ai.test/v1", ""))
     r = await client.post(f"/api/sessions/{sid}/video", json={"style": "whiteboard"})
-    assert r.status_code == 503 and "AI key" in r.json()["detail"]
+    assert r.status_code == 503 and "No AI provider is connected" in r.json()["detail"]
 
 
 def test_lint_reads_the_drawing_it_is_given() -> None:

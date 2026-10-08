@@ -67,8 +67,8 @@ NOT_READY = "This output is still being made. Make its video once it is ready."
 NO_VIDEO = "This output has no video in that style yet. Make one first."
 RENDERING = "The video is still being made. Wait for it to finish, then try again."
 NO_KEY = (
-    "The studio has no AI key, and a whiteboard video's scenes are written by a model. Add "
-    "OPENNOTEBOOK_AI_KEY to the server's environment, then try again."
+    "No AI provider is connected, and a whiteboard video's scenes are written by a model. "
+    "Connect one in Settings › AI providers, then try again."
 )
 MADE_FROM_FAILED = (
     "The output this video was to be made from could not be made, so neither could the video. "
@@ -241,7 +241,7 @@ async def _start(s: AsyncSession, o: Session, style: Style, theme: ThemeId) -> V
         # Already on its way: the same render, not a second one.
         return current
     _require_encoder()
-    if style == "whiteboard" and not client.ai().has_key:
+    if style == "whiteboard" and not await client.ai().ready():
         # The scenes are written by a model: without a key the render would
         # fail at its first call, after waiting its turn.
         raise Problem(503, NO_KEY)

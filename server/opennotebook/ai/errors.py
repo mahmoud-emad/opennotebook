@@ -21,6 +21,10 @@ class Kind(StrEnum):
     UNAVAILABLE = "unavailable"
     DECODE = "decode"
     INVALID = "invalid"
+    # No provider can make the call: none is connected, or the one named
+    # cannot do this kind of work. The detail is the sentence itself.
+    UNCONFIGURED = "unconfigured"
+    UNSUPPORTED = "unsupported"
 
 
 # The words each kind is said with. `errors.readable` recognises them and
@@ -33,12 +37,14 @@ _SAID = {
     Kind.UNAVAILABLE: "the AI provider is unavailable",
     Kind.DECODE: "the AI provider's answer could not be read",
     Kind.INVALID: "the request was refused",
+    Kind.UNCONFIGURED: "",
+    Kind.UNSUPPORTED: "",
 }
 
 
 class AiError(Exception):
     def __init__(self, kind: Kind, detail: str) -> None:
-        super().__init__(f"{_SAID[kind]}: {detail}")
+        super().__init__(f"{_SAID[kind]}: {detail}" if _SAID[kind] else detail)
         self.kind = kind
         self.detail = detail
 
@@ -60,6 +66,10 @@ class AiError(Exception):
         # Not over 401 (a bad key) or 429: a per-minute rate limit is often
         # worded "quota exceeded" and clears by itself.
         if status not in (401, 429) and (_looks_like_credit(body) or _looks_like_credit(detail)):
+            return cls(Kind.QUOTA, detail)
+        if status == 429 and _exhausted(body):
+            # OpenAI and Gemini say an empty account with a 429, in words no
+            # per-minute limit uses.
             return cls(Kind.QUOTA, detail)
         if status == 402:
             return cls(Kind.QUOTA, detail)
@@ -131,5 +141,18 @@ def _looks_like_credit(detail: str) -> bool:
             "out of credit",
             "credit balance",
             "quota",
+        )
+    )
+
+
+def _exhausted(body: str) -> bool:
+    b = body.lower()
+    return any(
+        k in b
+        for k in (
+            "insufficient_quota",
+            "credit_balance_exhausted",
+            "credits are depleted",
+            "check your plan and billing",
         )
     )

@@ -56,8 +56,28 @@ def parse_models(body: Any) -> dict[str, Price]:
     return out
 
 
+def model_ids(body: Any) -> set[str]:
+    """Every model id a `/models` body names, priced or not. Gemini's are
+    `models/gemini-…`, which its chat calls name without the prefix."""
+    data = body.get("data") if isinstance(body, dict) else None
+    items: list[Any] = data if isinstance(data, list) else []
+    return {
+        str(m["id"]).removeprefix("models/") for m in items if isinstance(m, dict) and m.get("id")
+    }
+
+
+def auth_headers(kind: str, key: str) -> dict[str, str]:
+    """How a provider's own endpoints take the key. Anthropic's model list is
+    its native API, which wants its own headers."""
+    if not key:
+        return {}
+    if kind == "anthropic":
+        return {"x-api-key": key, "anthropic-version": "2023-06-01"}
+    return {"Authorization": f"Bearer {key}"}
+
+
 class Catalogue:
-    """The price list, read from the endpoint and kept.
+    """The model list and its prices, read from the endpoint and kept.
 
     A list older than `TTL_SECONDS` is still answered with at once, while a
     fresh one is read in the background (stale while it revalidates). Only
@@ -66,11 +86,20 @@ class Catalogue:
     that fails is not tried again for `RETRY_SECONDS`, so an endpoint that is
     down costs one slow call a minute, not one per estimate."""
 
-    def __init__(self, base_url: str, api_key: str, http: httpx2.AsyncClient | None = None) -> None:
+    def __init__(
+        self,
+        base_url: str,
+        api_key: str,
+        http: httpx2.AsyncClient | None = None,
+        *,
+        kind: str = "openrouter",
+    ) -> None:
         self._url = base_url.rstrip("/") + "/models"
         self._key = api_key
+        self._kind = kind
         self._http = http
         self._prices: dict[str, Price] = {}
+        self._ids: set[str] = set()
         self._read_at = 0.0
         self._failed_at: float | None = None
         self._reading: asyncio.Task[None] | None = None
@@ -78,17 +107,26 @@ class Catalogue:
     async def prices(self) -> dict[str, Price]:
         """The current prices; the last list read when the endpoint fails,
         and none while it has never answered."""
+        await self._current()
+        return self._prices
+
+    async def ids(self) -> set[str]:
+        """Every model the endpoint offers; empty while it has never
+        answered."""
+        await self._current()
+        return self._ids
+
+    async def _current(self) -> None:
         now = time.monotonic()
-        if self._prices and now - self._read_at < TTL_SECONDS:
-            return self._prices
+        if self._ids and now - self._read_at < TTL_SECONDS:
+            return
         if self._failed_at is not None and now - self._failed_at < RETRY_SECONDS:
-            return self._prices
+            return
         reading = self._read()
-        if not self._prices:
+        if not self._ids:
             # Nothing to answer with yet: this one read is waited for, by
             # every caller that asks meanwhile.
             await asyncio.shield(reading)
-        return self._prices
 
     def _read(self) -> asyncio.Task[None]:
         """The read in flight, started when there is none."""
@@ -98,7 +136,8 @@ class Catalogue:
         return self._reading
 
     async def _fetch(self) -> None:
-        headers = {"Authorization": f"Bearer {self._key}"} if self._key else {}
+        headers = auth_headers(self._kind, self._key)
+        ids: set[str] = set()
         try:
             http = self._http or httpx2.AsyncClient(timeout=20)
             try:
@@ -107,15 +146,17 @@ class Catalogue:
                 if self._http is None:
                     await http.aclose()
             r.raise_for_status()
-            fresh = parse_models(r.json())
+            body = r.json()
+            fresh, ids = parse_models(body), model_ids(body)
         except httpx2.HTTPError, ValueError:
             fresh = {}
         except Exception:
             # A read in the background has nobody to raise to.
             log.exception("the price list could not be read")
             fresh = {}
-        if fresh:
-            self._prices, self._read_at, self._failed_at = fresh, time.monotonic(), None
+        if ids:
+            self._prices, self._ids = fresh, ids
+            self._read_at, self._failed_at = time.monotonic(), None
         else:
             self._failed_at = time.monotonic()
 

@@ -473,10 +473,7 @@ async def _one(s: AsyncSession, owner: uuid.UUID, sid: uuid.UUID) -> Session:
 # ── building ─────────────────────────────────────────────────────────────────
 
 NO_SOURCES = "Add a source first: a link, a note, or a topic to research."
-NO_KEY = (
-    "The studio has no AI key yet. Add OPENNOTEBOOK_AI_KEY to the server's environment, "
-    "then try again."
-)
+NO_KEY = "No AI provider is connected yet. Connect one in Settings › AI providers, then try again."
 
 
 async def _planned(
@@ -525,7 +522,7 @@ async def start(
     is refused. A video overview's deck is checked against the limit with
     the video's render (`video`)."""
     await collections.editable(s, owner, cid)
-    if not client.ai().has_key:
+    if not await client.ai().ready():
         # Refused at once rather than queued: a build with no key fails at
         # its first call, minutes later, after waiting its turn.
         raise Problem(503, NO_KEY)
@@ -903,7 +900,7 @@ async def voice_ask(
         return _sse(_once(voice.failed(e.sentence)))
     if a.is_silent:
         return _sse(_once(voice.silent(a)))
-    if not client.ai().has_key:
+    if not await client.ai().ready():
         return _sse(_once(voice.failed(voice.NO_KEY)))
     at = voice.At(slide=slide, line=line, offset_ms=offset_ms)
     return _sse(voice.turn(voice.prepare(o, values, at, bytes(wav), a.speech_ms)))

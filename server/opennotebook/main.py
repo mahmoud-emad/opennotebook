@@ -17,6 +17,7 @@ from opennotebook.api import (
     media,
     mindmaps,
     notes,
+    providers,
     rpc,
     sessions,
     settings,
@@ -60,6 +61,7 @@ def create_app() -> FastAPI:
     )
     for module in (
         account,
+        providers,
         collections,
         sources,
         ask,

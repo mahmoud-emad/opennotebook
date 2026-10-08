@@ -37,7 +37,7 @@ from typing import Literal
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from opennotebook.ai import client
+from opennotebook.ai import client, connections
 from opennotebook.ai.prices import Price
 from opennotebook.db.models import Source
 from opennotebook.domain import settings as st
@@ -209,8 +209,9 @@ def count_short(n: int) -> str:
 
 def model_name(model: str) -> str:
     """A model id as a person reads it: `anthropic/claude-haiku-4.5` is
-    "Claude Haiku 4.5"."""
-    name = model.rsplit("/", 1)[-1]
+    "Claude Haiku 4.5", and so is `openrouter:anthropic/claude-haiku-4.5`."""
+    _, own = connections.split(model, connections.snapshot())
+    name = own.rsplit("/", 1)[-1]
     return " ".join(w[0].upper() + w[1:] if w[:1].isalpha() else w for w in name.split("-"))
 
 

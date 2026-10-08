@@ -180,6 +180,24 @@ class UserSetting(Base):
     updated_at: Mapped[datetime] = _now()
 
 
+class AiProvider(Base):
+    """An AI provider account connected from the web app (`ai/connections.py`).
+    Ones set in the environment are never stored here. The key is encrypted
+    (`ai/secrets.py`); `last_check` is what testing it last said."""
+
+    __tablename__ = "ai_providers"
+
+    # A slug: the preset's kind, or `custom`, `custom-2`, … for other servers.
+    id: Mapped[str] = mapped_column(Text, primary_key=True)
+    kind: Mapped[str] = mapped_column(Text)
+    label: Mapped[str] = _str()
+    base_url: Mapped[str] = mapped_column(Text)
+    key_encrypted: Mapped[str] = _str()
+    last_check: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = _now()
+    updated_at: Mapped[datetime] = _now()
+
+
 # ── Collections and what they hold ────────────────────────────────────────────
 
 
