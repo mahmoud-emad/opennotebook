@@ -48,8 +48,13 @@ jobs:
           version: "0.12.23"
           enable-cache: true
           cache-dependency-glob: server/uv.lock
+      # Videos, as the server image has them (deploy/server.Dockerfile):
+      # ffmpeg encodes them, skia loads libEGL and libGL to draw a
+      # whiteboard, and a browser draws a deck's slides.
+      - name: System packages
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg libegl1 libgl1
       - name: Install
-        run: uv sync --frozen
+        run: uv sync --frozen && uv run playwright install --with-deps chromium
       - name: Format
         run: uv run ruff format --check .
       - name: Lint
