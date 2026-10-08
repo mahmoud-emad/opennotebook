@@ -14,6 +14,6 @@ COPY web/ ./
 RUN pnpm build
 
 # ── run: Caddy with the built app under /srv/ui ──────────────────────────────
-FROM caddy:2.11.4-alpine
+FROM caddy:2.11.6-alpine
 COPY deploy/Caddyfile /etc/caddy/Caddyfile
 COPY --from=build /web/dist /srv/ui
