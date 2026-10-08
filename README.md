@@ -18,16 +18,16 @@ Every claim links back to the passage it came from, so you can check it. When a 
 
 ## Try it
 
-You need Docker and a key for an OpenAI-compatible model API ([OpenRouter](https://openrouter.ai) works out of the box).
+You need Docker and an AI provider: [OpenRouter](https://openrouter.ai), OpenAI, Anthropic, Google Gemini, Mistral, Groq, DeepSeek, Together, xAI, a local [Ollama](https://ollama.com), or any OpenAI-compatible server.
 
 ```sh
 git clone https://github.com/mahmoud-emad/opennotebook.git
 cd opennotebook
-cp deploy/.env.example deploy/.env   # set POSTGRES_PASSWORD and OPENNOTEBOOK_AI_KEY
+cp deploy/.env.example deploy/.env   # set POSTGRES_PASSWORD
 make up
 ```
 
-Then open <http://localhost/ui/>.
+Then open <http://localhost/ui/>. On first run, a short setup tour asks for a provider and its key. It tests the key, checks that the account has credit, and suggests a model for each kind of work. To skip the tour, put the key in `deploy/.env` instead (`OPENROUTER_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, …).
 
 `make up` builds the images on your machine. To use the published ones instead:
 
@@ -40,7 +40,7 @@ To serve it on your own domain with HTTPS, set `DOMAIN` and `PUBLIC_URL` in `dep
 
 ## Models and voices
 
-- **Models.** Any API that speaks `/chat/completions` works. Point `OPENNOTEBOOK_AI_BASE_URL` at it. The default model names are OpenRouter's, so if you use another provider, pick your models in Settings.
+- **Models.** Connect one or more providers, in the setup tour, in Settings › AI providers, or with environment variables. Each kind of work uses a model your providers offer, and you can change it in Settings › Models. OpenRouter covers every feature with one key. Direct providers cover most of them; the tour shows which features have no model yet.
 - **Voices.** By default it uses Microsoft's neural voices through Edge's free Read Aloud service, so you don't need a key. For heavier use, switch to Azure Speech (`OPENNOTEBOOK_TTS_PROVIDER=azure`), or to an OpenAI-compatible speech server such as [Speaches](https://speaches.ai) (`openai`). Spoken questions are transcribed by that same server.
 
 Everything else (styles, voices, language, a spending limit) can be changed in the app's Settings.
