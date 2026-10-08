@@ -315,9 +315,14 @@ export function WatchPage({ sid, style, share }: { sid: string; style: VideoStyl
           />
           {captions && script && <Captions lines={script.lines} videoRef={videoRef} />}
           {!playing && t === 0 && (
-            <button className="w-start" aria-label="Play" title="Play (K)" onClick={togglePlay}>
-              <Icon name="play-fill" />
-            </button>
+            // Centred by its layer, not by a transform of its own: the
+            // app's buttons move a little when pressed, and one positioned
+            // by a transform jumped out from under the pointer.
+            <div className="w-start-layer">
+              <button className="w-start" aria-label="Play" title="Play (K)" onClick={togglePlay}>
+                <Icon name="play-fill" />
+              </button>
+            </div>
           )}
           </div>
         </div>

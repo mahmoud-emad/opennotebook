@@ -75,7 +75,9 @@ body.watch-open { overflow:hidden; }
 .watch-page .w-frame:fullscreen { border-radius:0; }
 
 /* Before it starts: one big play button over the video, as a poster has. */
-.watch-page .w-start { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); width:76px; height:76px;
+.watch-page .w-start-layer { position:absolute; inset:0; display:grid; place-items:center; z-index:3;
+  pointer-events:none; }
+.watch-page .w-start { pointer-events:auto; width:76px; height:76px;
   display:grid; place-items:center; padding:0 0 0 4px; border:0; border-radius:50%; background:var(--accent);
   color:var(--st-on-primary, #fff); font-size:34px; z-index:3; box-shadow:0 8px 28px rgba(0,0,0,.35); }
 .watch-page .w-start:hover { filter:brightness(1.08); }
