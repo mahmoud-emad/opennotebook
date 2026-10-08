@@ -224,6 +224,305 @@
         }
       }
     },
+    "/api/setup": {
+      "get": {
+        "tags": [
+          "setup"
+        ],
+        "summary": "Get Setup",
+        "description": "Whether the studio can be used yet, and whether this person can set\nit up. The web app shows the setup tour until it is ready.",
+        "operationId": "get_setup",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SetupOut"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/ai/providers": {
+      "get": {
+        "tags": [
+          "setup"
+        ],
+        "summary": "List Providers",
+        "description": "The providers the studio can connect to, the ones it is connected to,\nand the model each kind of work uses.",
+        "operationId": "list_providers",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProvidersOut"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "setup"
+        ],
+        "summary": "Add Provider",
+        "description": "Test a provider's key and, when it works, connect it. A key that does\nnot work is refused with the reason.",
+        "operationId": "add_provider",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProviderIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/ai/providers/check": {
+      "post": {
+        "tags": [
+          "setup"
+        ],
+        "summary": "Check Provider Key",
+        "description": "Test a provider's key without keeping it: does the provider answer,\naccept the key, and have credit.",
+        "operationId": "check_provider_key",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProviderIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/ai/providers/{cid}": {
+      "put": {
+        "tags": [
+          "setup"
+        ],
+        "summary": "Replace Provider",
+        "description": "Change a connected provider's key, address or name. The key is tested\nfirst; an empty key keeps the one it has.",
+        "operationId": "replace_provider",
+        "parameters": [
+          {
+            "name": "cid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Cid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProviderIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "setup"
+        ],
+        "summary": "Remove Provider",
+        "description": "Disconnect a provider connected in the web app; its key is deleted.",
+        "operationId": "remove_provider",
+        "parameters": [
+          {
+            "name": "cid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Cid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/ai/providers/{cid}/check": {
+      "post": {
+        "tags": [
+          "setup"
+        ],
+        "summary": "Recheck Provider",
+        "description": "Test a connected provider again, as it is now.",
+        "operationId": "recheck_provider",
+        "parameters": [
+          {
+            "name": "cid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Cid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/ai/providers/{cid}/models": {
+      "get": {
+        "tags": [
+          "setup"
+        ],
+        "summary": "Provider Models",
+        "description": "The models a connected provider offers, by the ids the settings take\n(`provider:model`, bare on the primary provider).",
+        "operationId": "provider_models",
+        "parameters": [
+          {
+            "name": "cid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Cid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelsOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/collections": {
       "get": {
         "tags": [
@@ -4802,6 +5101,55 @@
         ],
         "title": "Check"
       },
+      "CheckOut": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "bad_key",
+              "no_credit",
+              "unreachable",
+              "not_compatible",
+              "no_models"
+            ],
+            "title": "Status"
+          },
+          "ok": {
+            "type": "boolean",
+            "title": "Ok"
+          },
+          "sentence": {
+            "type": "string",
+            "title": "Sentence",
+            "description": "What the test found, as the page says it"
+          },
+          "balance": {
+            "type": "string",
+            "title": "Balance",
+            "description": "What is left to spend, in words; empty when not reported"
+          },
+          "models": {
+            "type": "integer",
+            "title": "Models",
+            "description": "How many models the provider offers"
+          },
+          "checked_at": {
+            "type": "string",
+            "title": "Checked At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "ok",
+          "sentence",
+          "balance",
+          "models",
+          "checked_at"
+        ],
+        "title": "CheckOut"
+      },
       "Citation": {
         "properties": {
           "n": {
@@ -6149,6 +6497,22 @@
         ],
         "title": "MindNode"
       },
+      "ModelsOut": {
+        "properties": {
+          "models": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Models"
+          }
+        },
+        "type": "object",
+        "required": [
+          "models"
+        ],
+        "title": "ModelsOut"
+      },
       "NewKey": {
         "properties": {
           "name": {
@@ -6582,6 +6946,187 @@
         "type": "object",
         "title": "Playhead"
       },
+      "PresetOut": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "blurb": {
+            "type": "string",
+            "title": "Blurb"
+          },
+          "base_url": {
+            "type": "string",
+            "title": "Base Url",
+            "description": "Its usual address; empty for a custom server"
+          },
+          "needs_key": {
+            "type": "boolean",
+            "title": "Needs Key"
+          },
+          "key_page": {
+            "type": "string",
+            "title": "Key Page",
+            "description": "Where to make a key, without the scheme"
+          },
+          "key_env": {
+            "type": "string",
+            "title": "Key Env",
+            "description": "The environment variable that sets its key instead"
+          },
+          "roles": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Roles",
+            "description": "The roles it suggests a model for"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "label",
+          "blurb",
+          "base_url",
+          "needs_key",
+          "key_page",
+          "key_env",
+          "roles"
+        ],
+        "title": "PresetOut"
+      },
+      "ProviderIn": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "maxLength": 40,
+            "title": "Kind"
+          },
+          "base_url": {
+            "type": "string",
+            "maxLength": 500,
+            "title": "Base Url",
+            "default": ""
+          },
+          "key": {
+            "type": "string",
+            "maxLength": 500,
+            "title": "Key",
+            "default": ""
+          },
+          "label": {
+            "type": "string",
+            "maxLength": 80,
+            "title": "Label",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind"
+        ],
+        "title": "ProviderIn"
+      },
+      "ProviderOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "base_url": {
+            "type": "string",
+            "title": "Base Url"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "env",
+              "app"
+            ],
+            "title": "Source",
+            "description": "env: set in the server's environment, changed only there"
+          },
+          "key_hint": {
+            "type": "string",
+            "title": "Key Hint",
+            "description": "The key's last characters, to tell keys apart"
+          },
+          "primary": {
+            "type": "boolean",
+            "title": "Primary",
+            "description": "Models named without a provider are this one's"
+          },
+          "check": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CheckOut"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What testing it last said; none for env ones"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "label",
+          "base_url",
+          "source",
+          "key_hint",
+          "primary",
+          "check"
+        ],
+        "title": "ProviderOut"
+      },
+      "ProvidersOut": {
+        "properties": {
+          "presets": {
+            "items": {
+              "$ref": "#/components/schemas/PresetOut"
+            },
+            "type": "array",
+            "title": "Presets"
+          },
+          "providers": {
+            "items": {
+              "$ref": "#/components/schemas/ProviderOut"
+            },
+            "type": "array",
+            "title": "Providers"
+          },
+          "roles": {
+            "items": {
+              "$ref": "#/components/schemas/RoleOut"
+            },
+            "type": "array",
+            "title": "Roles"
+          }
+        },
+        "type": "object",
+        "required": [
+          "presets",
+          "providers",
+          "roles"
+        ],
+        "title": "ProvidersOut"
+      },
       "Readiness": {
         "properties": {
           "ready": {
@@ -6659,6 +7204,50 @@
           "title"
         ],
         "title": "Retitle"
+      },
+      "RoleOut": {
+        "properties": {
+          "role": {
+            "type": "string",
+            "title": "Role"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "keys": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Keys",
+            "description": "The model settings this role fills"
+          },
+          "model": {
+            "type": "string",
+            "title": "Model",
+            "description": "The model in force; empty when no provider can do it"
+          },
+          "model_name": {
+            "type": "string",
+            "title": "Model Name"
+          },
+          "chosen": {
+            "type": "boolean",
+            "title": "Chosen",
+            "description": "Set by someone, rather than suggested"
+          }
+        },
+        "type": "object",
+        "required": [
+          "role",
+          "label",
+          "keys",
+          "model",
+          "model_name",
+          "chosen"
+        ],
+        "title": "RoleOut"
       },
       "RunCommand": {
         "properties": {
@@ -7666,6 +8255,40 @@
           "settings"
         ],
         "title": "SettingsOut"
+      },
+      "SetupOut": {
+        "properties": {
+          "ready": {
+            "type": "boolean",
+            "title": "Ready",
+            "description": "A provider is connected, so the studio can be used"
+          },
+          "can_setup": {
+            "type": "boolean",
+            "title": "Can Setup",
+            "description": "This person may connect providers"
+          },
+          "providers": {
+            "items": {
+              "$ref": "#/components/schemas/ProviderOut"
+            },
+            "type": "array",
+            "title": "Providers"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "description": "What the page says when it is not ready"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ready",
+          "can_setup",
+          "providers",
+          "message"
+        ],
+        "title": "SetupOut"
       },
       "ShareCard": {
         "properties": {

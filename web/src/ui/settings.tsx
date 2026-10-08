@@ -148,6 +148,9 @@ export function useSettings() {
  * collections are named and drawn. */
 export const GENERAL = "general";
 
+/** The tab where AI providers are connected; the page draws it itself. */
+export const PROVIDERS = "providers";
+
 /** The old Appearance tab's id; a link to it opens General, where the theme is. */
 export const APPEARANCE = "appearance";
 
@@ -159,6 +162,7 @@ export const TAB_LABELS: [string, string][] = [
   ["voices", "Voices"],
   ["conversation", "Live conversation"],
   ["costs", "Costs & limits"],
+  [PROVIDERS, "AI providers"],
   ["models", "Models"],
 ];
 
@@ -173,6 +177,7 @@ export function tabGlyph(id: string): string {
       language: "translate",
       conversation: "chat-dots",
       costs: "coin",
+      [PROVIDERS]: "link-45deg",
       models: "cpu",
     }[id] ?? "gear"
   );

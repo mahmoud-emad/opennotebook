@@ -10,6 +10,7 @@ import { Icon } from "./Icon";
 import {
   APPEARANCE,
   GENERAL,
+  PROVIDERS,
   SETTINGS,
   TAB_LABELS,
   THEME,
@@ -24,6 +25,7 @@ import {
   themeLabel,
   type ThemePref,
 } from "./settings";
+import { ProvidersPanel } from "./providers";
 import { focusId } from "./shell";
 import { useStore } from "./store";
 import { assetUrl, styleList, type StyleChoice } from "./api-studio";
@@ -227,7 +229,9 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
               </div>
             </div>
           )}
-          {!loaded && d.items.length === 0 ? (
+          {current === PROVIDERS ? (
+            <ProvidersPanel />
+          ) : !loaded && d.items.length === 0 ? (
             <div className="set-note">
               <span className="mini-spin" /> Loading settings…
             </div>
@@ -259,10 +263,12 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
               );
             })
           )}
-          <p className="set-foot">
-            Saved as soon as you change it, for the next thing you make or open.
-            {current === GENERAL && " The theme is kept in this browser."}
-          </p>
+          {current !== PROVIDERS && (
+            <p className="set-foot">
+              Saved as soon as you change it, for the next thing you make or open.
+              {current === GENERAL && " The theme is kept in this browser."}
+            </p>
+          )}
         </section>
       </div>
     </>

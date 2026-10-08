@@ -2,7 +2,7 @@
 
 import { type Client, type ClientMeta, formDataBodySerializer, type Options as Options2, type RequestResult, type ServerSentEventsResult, type TDataShape } from './client';
 import { client } from './client.gen';
-import type { AddFilesData, AddFilesErrors, AddFilesResponses, AddSourcesData, AddSourcesErrors, AddSourcesResponses, AskSourcesData, AskSourcesErrors, AskSourcesResponses, BuildData, BuildErrors, BuildResponses, ClearChatData, ClearChatErrors, ClearChatResponses, CollectionEventsData, CollectionEventsErrors, CollectionEventsResponses, CollectionVideosData, CollectionVideosErrors, CollectionVideosResponses, CreateCollectionData, CreateCollectionErrors, CreateCollectionResponses, DeepResearchData, DeepResearchErrors, DeepResearchResponses, DeleteCollectionData, DeleteCollectionErrors, DeleteCollectionResponses, DeleteMindmapData, DeleteMindmapErrors, DeleteMindmapResponses, DeleteNotesData, DeleteNotesErrors, DeleteNotesResponses, DeleteSessionData, DeleteSessionErrors, DeleteSessionResponses, DeleteShareData, DeleteShareErrors, DeleteShareResponses, EpisodeData, EpisodeErrors, EpisodeResponses, EstimateData, EstimateErrors, EstimateMindmapData, EstimateMindmapErrors, EstimateMindmapResponses, EstimateNotesData, EstimateNotesErrors, EstimateNotesResponses, EstimateOverviewData, EstimateOverviewErrors, EstimateOverviewResponses, EstimateResponses, ExplainMomentData, ExplainMomentErrors, ExplainMomentResponses, GetCaptionsData, GetCaptionsErrors, GetCaptionsResponses, GetCollectionData, GetCollectionErrors, GetCollectionResponses, GetCollectionShareData, GetCollectionShareErrors, GetCollectionShareResponses, GetJobData, GetJobErrors, GetJobResponses, GetMindmapData, GetMindmapErrors, GetMindmapResponses, GetNotesData, GetNotesErrors, GetNotesResponses, GetPlaybackData, GetPlaybackErrors, GetPlaybackResponses, GetScriptData, GetScriptErrors, GetScriptResponses, GetSessionData, GetSessionErrors, GetSessionResponses, GetSettingsData, GetSettingsResponses, GetShareData, GetShareErrors, GetShareResponses, GetStudioOptionsData, GetStudioOptionsErrors, GetStudioOptionsResponses, GetVideoData, GetVideoErrors, GetVideoResponses, HealthData, HealthResponses, LineAudioData, LineAudioErrors, LineAudioResponses, ListCollectionsData, ListCollectionsErrors, ListCollectionsResponses, ListCommandsData, ListCommandsResponses, ListKeysData, ListKeysErrors, ListKeysResponses, ListMindmapsData, ListMindmapsErrors, ListMindmapsResponses, ListNotesData, ListNotesErrors, ListNotesResponses, ListSessionsData, ListSessionsErrors, ListSessionsResponses, ListSharedItemsData, ListSharedItemsErrors, ListSharedItemsResponses, ListSharesData, ListSharesErrors, ListSharesResponses, ListSourcesData, ListSourcesErrors, ListSourcesResponses, ListStylesData, ListStylesResponses, ListVideosData, ListVideosErrors, ListVideosResponses, MakeKeyData, MakeKeyErrors, MakeKeyResponses, MakeMindmapData, MakeMindmapErrors, MakeMindmapResponses, MakeNotesData, MakeNotesErrors, MakeNotesResponses, MakeOverviewData, MakeOverviewErrors, MakeOverviewResponses, MakeVideoData, MakeVideoErrors, MakeVideoResponses, MeData, MeResponses, ReadChatData, ReadChatErrors, ReadChatResponses, ReadCoverData, ReadCoverErrors, ReadCoverResponses, ReadShareCoverData, ReadShareCoverErrors, ReadShareCoverResponses, ReadSharedMindmapData, ReadSharedMindmapErrors, ReadSharedMindmapResponses, ReadSharedNotesData, ReadSharedNotesErrors, ReadSharedNotesResponses, ReadSharedSessionData, ReadSharedSessionErrors, ReadSharedSessionResponses, ReadSharedSourceData, ReadSharedSourceErrors, ReadSharedSourceResponses, ReadSourceData, ReadSourceErrors, ReadSourceResponses, ReadyData, ReadyErrors, ReadyResponses, RefreshCoverData, RefreshCoverErrors, RefreshCoverResponses, RemoveSourceData, RemoveSourceErrors, RemoveSourceResponses, RetitleMindmapData, RetitleMindmapErrors, RetitleMindmapResponses, RetitleNotesData, RetitleNotesErrors, RetitleNotesResponses, RetrySessionData, RetrySessionErrors, RetrySessionResponses, ReuseShareData, ReuseShareErrors, ReuseShareResponses, RevokeKeyData, RevokeKeyErrors, RevokeKeyResponses, RunCommandData, RunCommandErrors, RunCommandResponses, SayData, SayErrors, SayResponses, SessionEventsData, SessionEventsErrors, SessionEventsResponses, SetPlaybackData, SetPlaybackErrors, SetPlaybackResponses, SetSettingData, SetSettingErrors, SetSettingResponses, ShareCollectionData, ShareCollectionErrors, ShareCollectionResponses, SharedCaptionsData, SharedCaptionsErrors, SharedCaptionsResponses, SharedEpisodeData, SharedEpisodeErrors, SharedEpisodeResponses, SharedLineAudioData, SharedLineAudioErrors, SharedLineAudioResponses, SharedScriptData, SharedScriptErrors, SharedScriptResponses, SharedSlideData, SharedSlideErrors, SharedSlideResponses, SharedVideoData, SharedVideoErrors, SharedVideoResponses, SlideData, SlideErrors, SlideResponses, UpdateCollectionData, UpdateCollectionErrors, UpdateCollectionResponses, UpdateSessionData, UpdateSessionErrors, UpdateSessionResponses, UpdateShareData, UpdateShareErrors, UpdateShareResponses, VideoThemesData, VideoThemesResponses, VoiceAskData, VoiceAskErrors, VoiceAskResponses, WebSearchData, WebSearchErrors, WebSearchResponses } from './types.gen';
+import type { AddFilesData, AddFilesErrors, AddFilesResponses, AddProviderData, AddProviderErrors, AddProviderResponses, AddSourcesData, AddSourcesErrors, AddSourcesResponses, AskSourcesData, AskSourcesErrors, AskSourcesResponses, BuildData, BuildErrors, BuildResponses, CheckProviderKeyData, CheckProviderKeyErrors, CheckProviderKeyResponses, ClearChatData, ClearChatErrors, ClearChatResponses, CollectionEventsData, CollectionEventsErrors, CollectionEventsResponses, CollectionVideosData, CollectionVideosErrors, CollectionVideosResponses, CreateCollectionData, CreateCollectionErrors, CreateCollectionResponses, DeepResearchData, DeepResearchErrors, DeepResearchResponses, DeleteCollectionData, DeleteCollectionErrors, DeleteCollectionResponses, DeleteMindmapData, DeleteMindmapErrors, DeleteMindmapResponses, DeleteNotesData, DeleteNotesErrors, DeleteNotesResponses, DeleteSessionData, DeleteSessionErrors, DeleteSessionResponses, DeleteShareData, DeleteShareErrors, DeleteShareResponses, EpisodeData, EpisodeErrors, EpisodeResponses, EstimateData, EstimateErrors, EstimateMindmapData, EstimateMindmapErrors, EstimateMindmapResponses, EstimateNotesData, EstimateNotesErrors, EstimateNotesResponses, EstimateOverviewData, EstimateOverviewErrors, EstimateOverviewResponses, EstimateResponses, ExplainMomentData, ExplainMomentErrors, ExplainMomentResponses, GetCaptionsData, GetCaptionsErrors, GetCaptionsResponses, GetCollectionData, GetCollectionErrors, GetCollectionResponses, GetCollectionShareData, GetCollectionShareErrors, GetCollectionShareResponses, GetJobData, GetJobErrors, GetJobResponses, GetMindmapData, GetMindmapErrors, GetMindmapResponses, GetNotesData, GetNotesErrors, GetNotesResponses, GetPlaybackData, GetPlaybackErrors, GetPlaybackResponses, GetScriptData, GetScriptErrors, GetScriptResponses, GetSessionData, GetSessionErrors, GetSessionResponses, GetSettingsData, GetSettingsResponses, GetSetupData, GetSetupResponses, GetShareData, GetShareErrors, GetShareResponses, GetStudioOptionsData, GetStudioOptionsErrors, GetStudioOptionsResponses, GetVideoData, GetVideoErrors, GetVideoResponses, HealthData, HealthResponses, LineAudioData, LineAudioErrors, LineAudioResponses, ListCollectionsData, ListCollectionsErrors, ListCollectionsResponses, ListCommandsData, ListCommandsResponses, ListKeysData, ListKeysErrors, ListKeysResponses, ListMindmapsData, ListMindmapsErrors, ListMindmapsResponses, ListNotesData, ListNotesErrors, ListNotesResponses, ListProvidersData, ListProvidersResponses, ListSessionsData, ListSessionsErrors, ListSessionsResponses, ListSharedItemsData, ListSharedItemsErrors, ListSharedItemsResponses, ListSharesData, ListSharesErrors, ListSharesResponses, ListSourcesData, ListSourcesErrors, ListSourcesResponses, ListStylesData, ListStylesResponses, ListVideosData, ListVideosErrors, ListVideosResponses, MakeKeyData, MakeKeyErrors, MakeKeyResponses, MakeMindmapData, MakeMindmapErrors, MakeMindmapResponses, MakeNotesData, MakeNotesErrors, MakeNotesResponses, MakeOverviewData, MakeOverviewErrors, MakeOverviewResponses, MakeVideoData, MakeVideoErrors, MakeVideoResponses, MeData, MeResponses, ProviderModelsData, ProviderModelsErrors, ProviderModelsResponses, ReadChatData, ReadChatErrors, ReadChatResponses, ReadCoverData, ReadCoverErrors, ReadCoverResponses, ReadShareCoverData, ReadShareCoverErrors, ReadShareCoverResponses, ReadSharedMindmapData, ReadSharedMindmapErrors, ReadSharedMindmapResponses, ReadSharedNotesData, ReadSharedNotesErrors, ReadSharedNotesResponses, ReadSharedSessionData, ReadSharedSessionErrors, ReadSharedSessionResponses, ReadSharedSourceData, ReadSharedSourceErrors, ReadSharedSourceResponses, ReadSourceData, ReadSourceErrors, ReadSourceResponses, ReadyData, ReadyErrors, ReadyResponses, RecheckProviderData, RecheckProviderErrors, RecheckProviderResponses, RefreshCoverData, RefreshCoverErrors, RefreshCoverResponses, RemoveProviderData, RemoveProviderErrors, RemoveProviderResponses, RemoveSourceData, RemoveSourceErrors, RemoveSourceResponses, ReplaceProviderData, ReplaceProviderErrors, ReplaceProviderResponses, RetitleMindmapData, RetitleMindmapErrors, RetitleMindmapResponses, RetitleNotesData, RetitleNotesErrors, RetitleNotesResponses, RetrySessionData, RetrySessionErrors, RetrySessionResponses, ReuseShareData, ReuseShareErrors, ReuseShareResponses, RevokeKeyData, RevokeKeyErrors, RevokeKeyResponses, RunCommandData, RunCommandErrors, RunCommandResponses, SayData, SayErrors, SayResponses, SessionEventsData, SessionEventsErrors, SessionEventsResponses, SetPlaybackData, SetPlaybackErrors, SetPlaybackResponses, SetSettingData, SetSettingErrors, SetSettingResponses, ShareCollectionData, ShareCollectionErrors, ShareCollectionResponses, SharedCaptionsData, SharedCaptionsErrors, SharedCaptionsResponses, SharedEpisodeData, SharedEpisodeErrors, SharedEpisodeResponses, SharedLineAudioData, SharedLineAudioErrors, SharedLineAudioResponses, SharedScriptData, SharedScriptErrors, SharedScriptResponses, SharedSlideData, SharedSlideErrors, SharedSlideResponses, SharedVideoData, SharedVideoErrors, SharedVideoResponses, SlideData, SlideErrors, SlideResponses, UpdateCollectionData, UpdateCollectionErrors, UpdateCollectionResponses, UpdateSessionData, UpdateSessionErrors, UpdateSessionResponses, UpdateShareData, UpdateShareErrors, UpdateShareResponses, VideoThemesData, VideoThemesResponses, VoiceAskData, VoiceAskErrors, VoiceAskResponses, WebSearchData, WebSearchErrors, WebSearchResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -68,6 +68,89 @@ export const makeKey = <ThrowOnError extends boolean = false>(options: Options<M
  * Revoke a key. Anything using it stops working at once.
  */
 export const revokeKey = <ThrowOnError extends boolean = false>(options: Options<RevokeKeyData, ThrowOnError>): RequestResult<RevokeKeyResponses, RevokeKeyErrors, ThrowOnError> => (options.client ?? client).delete<RevokeKeyResponses, RevokeKeyErrors, ThrowOnError>({ url: '/api/keys/{kid}', ...options });
+
+/**
+ * Get Setup
+ *
+ * Whether the studio can be used yet, and whether this person can set
+ * it up. The web app shows the setup tour until it is ready.
+ */
+export const getSetup = <ThrowOnError extends boolean = false>(options?: Options<GetSetupData, ThrowOnError>): RequestResult<GetSetupResponses, unknown, ThrowOnError> => (options?.client ?? client).get<GetSetupResponses, unknown, ThrowOnError>({ url: '/api/setup', ...options });
+
+/**
+ * List Providers
+ *
+ * The providers the studio can connect to, the ones it is connected to,
+ * and the model each kind of work uses.
+ */
+export const listProviders = <ThrowOnError extends boolean = false>(options?: Options<ListProvidersData, ThrowOnError>): RequestResult<ListProvidersResponses, unknown, ThrowOnError> => (options?.client ?? client).get<ListProvidersResponses, unknown, ThrowOnError>({ url: '/api/ai/providers', ...options });
+
+/**
+ * Add Provider
+ *
+ * Test a provider's key and, when it works, connect it. A key that does
+ * not work is refused with the reason.
+ */
+export const addProvider = <ThrowOnError extends boolean = false>(options: Options<AddProviderData, ThrowOnError>): RequestResult<AddProviderResponses, AddProviderErrors, ThrowOnError> => (options.client ?? client).post<AddProviderResponses, AddProviderErrors, ThrowOnError>({
+    url: '/api/ai/providers',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Check Provider Key
+ *
+ * Test a provider's key without keeping it: does the provider answer,
+ * accept the key, and have credit.
+ */
+export const checkProviderKey = <ThrowOnError extends boolean = false>(options: Options<CheckProviderKeyData, ThrowOnError>): RequestResult<CheckProviderKeyResponses, CheckProviderKeyErrors, ThrowOnError> => (options.client ?? client).post<CheckProviderKeyResponses, CheckProviderKeyErrors, ThrowOnError>({
+    url: '/api/ai/providers/check',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Remove Provider
+ *
+ * Disconnect a provider connected in the web app; its key is deleted.
+ */
+export const removeProvider = <ThrowOnError extends boolean = false>(options: Options<RemoveProviderData, ThrowOnError>): RequestResult<RemoveProviderResponses, RemoveProviderErrors, ThrowOnError> => (options.client ?? client).delete<RemoveProviderResponses, RemoveProviderErrors, ThrowOnError>({ url: '/api/ai/providers/{cid}', ...options });
+
+/**
+ * Replace Provider
+ *
+ * Change a connected provider's key, address or name. The key is tested
+ * first; an empty key keeps the one it has.
+ */
+export const replaceProvider = <ThrowOnError extends boolean = false>(options: Options<ReplaceProviderData, ThrowOnError>): RequestResult<ReplaceProviderResponses, ReplaceProviderErrors, ThrowOnError> => (options.client ?? client).put<ReplaceProviderResponses, ReplaceProviderErrors, ThrowOnError>({
+    url: '/api/ai/providers/{cid}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Recheck Provider
+ *
+ * Test a connected provider again, as it is now.
+ */
+export const recheckProvider = <ThrowOnError extends boolean = false>(options: Options<RecheckProviderData, ThrowOnError>): RequestResult<RecheckProviderResponses, RecheckProviderErrors, ThrowOnError> => (options.client ?? client).post<RecheckProviderResponses, RecheckProviderErrors, ThrowOnError>({ url: '/api/ai/providers/{cid}/check', ...options });
+
+/**
+ * Provider Models
+ *
+ * The models a connected provider offers, by the ids the settings take
+ * (`provider:model`, bare on the primary provider).
+ */
+export const providerModels = <ThrowOnError extends boolean = false>(options: Options<ProviderModelsData, ThrowOnError>): RequestResult<ProviderModelsResponses, ProviderModelsErrors, ThrowOnError> => (options.client ?? client).get<ProviderModelsResponses, ProviderModelsErrors, ThrowOnError>({ url: '/api/ai/providers/{cid}/models', ...options });
 
 /**
  * List Collections

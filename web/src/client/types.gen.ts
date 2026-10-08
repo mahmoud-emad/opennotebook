@@ -174,6 +174,42 @@ export type Check = {
 };
 
 /**
+ * CheckOut
+ */
+export type CheckOut = {
+    /**
+     * Status
+     */
+    status: 'ok' | 'bad_key' | 'no_credit' | 'unreachable' | 'not_compatible' | 'no_models';
+    /**
+     * Ok
+     */
+    ok: boolean;
+    /**
+     * Sentence
+     *
+     * What the test found, as the page says it
+     */
+    sentence: string;
+    /**
+     * Balance
+     *
+     * What is left to spend, in words; empty when not reported
+     */
+    balance: string;
+    /**
+     * Models
+     *
+     * How many models the provider offers
+     */
+    models: number;
+    /**
+     * Checked At
+     */
+    checked_at: string;
+};
+
+/**
  * Citation
  */
 export type Citation = {
@@ -1130,6 +1166,16 @@ export type MindNode = {
 };
 
 /**
+ * ModelsOut
+ */
+export type ModelsOut = {
+    /**
+     * Models
+     */
+    models: Array<string>;
+};
+
+/**
  * NewKey
  */
 export type NewKey = {
@@ -1421,6 +1467,136 @@ export type Playhead = {
 };
 
 /**
+ * PresetOut
+ */
+export type PresetOut = {
+    /**
+     * Kind
+     */
+    kind: string;
+    /**
+     * Label
+     */
+    label: string;
+    /**
+     * Blurb
+     */
+    blurb: string;
+    /**
+     * Base Url
+     *
+     * Its usual address; empty for a custom server
+     */
+    base_url: string;
+    /**
+     * Needs Key
+     */
+    needs_key: boolean;
+    /**
+     * Key Page
+     *
+     * Where to make a key, without the scheme
+     */
+    key_page: string;
+    /**
+     * Key Env
+     *
+     * The environment variable that sets its key instead
+     */
+    key_env: string;
+    /**
+     * Roles
+     *
+     * The roles it suggests a model for
+     */
+    roles: Array<string>;
+};
+
+/**
+ * ProviderIn
+ */
+export type ProviderIn = {
+    /**
+     * Kind
+     */
+    kind: string;
+    /**
+     * Base Url
+     */
+    base_url?: string;
+    /**
+     * Key
+     */
+    key?: string;
+    /**
+     * Label
+     */
+    label?: string;
+};
+
+/**
+ * ProviderOut
+ */
+export type ProviderOut = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Kind
+     */
+    kind: string;
+    /**
+     * Label
+     */
+    label: string;
+    /**
+     * Base Url
+     */
+    base_url: string;
+    /**
+     * Source
+     *
+     * env: set in the server's environment, changed only there
+     */
+    source: 'env' | 'app';
+    /**
+     * Key Hint
+     *
+     * The key's last characters, to tell keys apart
+     */
+    key_hint: string;
+    /**
+     * Primary
+     *
+     * Models named without a provider are this one's
+     */
+    primary: boolean;
+    /**
+     * What testing it last said; none for env ones
+     */
+    check: CheckOut | null;
+};
+
+/**
+ * ProvidersOut
+ */
+export type ProvidersOut = {
+    /**
+     * Presets
+     */
+    presets: Array<PresetOut>;
+    /**
+     * Providers
+     */
+    providers: Array<ProviderOut>;
+    /**
+     * Roles
+     */
+    roles: Array<RoleOut>;
+};
+
+/**
  * Readiness
  */
 export type Readiness = {
@@ -1477,6 +1653,42 @@ export type Retitle = {
      * Title
      */
     title: string;
+};
+
+/**
+ * RoleOut
+ */
+export type RoleOut = {
+    /**
+     * Role
+     */
+    role: string;
+    /**
+     * Label
+     */
+    label: string;
+    /**
+     * Keys
+     *
+     * The model settings this role fills
+     */
+    keys: Array<string>;
+    /**
+     * Model
+     *
+     * The model in force; empty when no provider can do it
+     */
+    model: string;
+    /**
+     * Model Name
+     */
+    model_name: string;
+    /**
+     * Chosen
+     *
+     * Set by someone, rather than suggested
+     */
+    chosen: boolean;
 };
 
 /**
@@ -2148,6 +2360,34 @@ export type SettingsOut = {
      * Settings
      */
     settings: Array<Setting>;
+};
+
+/**
+ * SetupOut
+ */
+export type SetupOut = {
+    /**
+     * Ready
+     *
+     * A provider is connected, so the studio can be used
+     */
+    ready: boolean;
+    /**
+     * Can Setup
+     *
+     * This person may connect providers
+     */
+    can_setup: boolean;
+    /**
+     * Providers
+     */
+    providers: Array<ProviderOut>;
+    /**
+     * Message
+     *
+     * What the page says when it is not ready
+     */
+    message: string;
 };
 
 /**
@@ -3838,6 +4078,208 @@ export type RevokeKeyResponses = {
 };
 
 export type RevokeKeyResponse = RevokeKeyResponses[keyof RevokeKeyResponses];
+
+export type GetSetupData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/setup';
+};
+
+export type GetSetupResponses = {
+    /**
+     * Successful Response
+     */
+    200: SetupOut;
+};
+
+export type GetSetupResponse = GetSetupResponses[keyof GetSetupResponses];
+
+export type ListProvidersData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/ai/providers';
+};
+
+export type ListProvidersResponses = {
+    /**
+     * Successful Response
+     */
+    200: ProvidersOut;
+};
+
+export type ListProvidersResponse = ListProvidersResponses[keyof ListProvidersResponses];
+
+export type AddProviderData = {
+    body: ProviderIn;
+    path?: never;
+    query?: never;
+    url: '/api/ai/providers';
+};
+
+export type AddProviderErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type AddProviderError = AddProviderErrors[keyof AddProviderErrors];
+
+export type AddProviderResponses = {
+    /**
+     * Successful Response
+     */
+    201: ProviderOut;
+};
+
+export type AddProviderResponse = AddProviderResponses[keyof AddProviderResponses];
+
+export type CheckProviderKeyData = {
+    body: ProviderIn;
+    path?: never;
+    query?: never;
+    url: '/api/ai/providers/check';
+};
+
+export type CheckProviderKeyErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type CheckProviderKeyError = CheckProviderKeyErrors[keyof CheckProviderKeyErrors];
+
+export type CheckProviderKeyResponses = {
+    /**
+     * Successful Response
+     */
+    200: CheckOut;
+};
+
+export type CheckProviderKeyResponse = CheckProviderKeyResponses[keyof CheckProviderKeyResponses];
+
+export type RemoveProviderData = {
+    body?: never;
+    path: {
+        /**
+         * Cid
+         */
+        cid: string;
+    };
+    query?: never;
+    url: '/api/ai/providers/{cid}';
+};
+
+export type RemoveProviderErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type RemoveProviderError = RemoveProviderErrors[keyof RemoveProviderErrors];
+
+export type RemoveProviderResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+
+export type RemoveProviderResponse = RemoveProviderResponses[keyof RemoveProviderResponses];
+
+export type ReplaceProviderData = {
+    body: ProviderIn;
+    path: {
+        /**
+         * Cid
+         */
+        cid: string;
+    };
+    query?: never;
+    url: '/api/ai/providers/{cid}';
+};
+
+export type ReplaceProviderErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type ReplaceProviderError = ReplaceProviderErrors[keyof ReplaceProviderErrors];
+
+export type ReplaceProviderResponses = {
+    /**
+     * Successful Response
+     */
+    200: ProviderOut;
+};
+
+export type ReplaceProviderResponse = ReplaceProviderResponses[keyof ReplaceProviderResponses];
+
+export type RecheckProviderData = {
+    body?: never;
+    path: {
+        /**
+         * Cid
+         */
+        cid: string;
+    };
+    query?: never;
+    url: '/api/ai/providers/{cid}/check';
+};
+
+export type RecheckProviderErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type RecheckProviderError = RecheckProviderErrors[keyof RecheckProviderErrors];
+
+export type RecheckProviderResponses = {
+    /**
+     * Successful Response
+     */
+    200: CheckOut;
+};
+
+export type RecheckProviderResponse = RecheckProviderResponses[keyof RecheckProviderResponses];
+
+export type ProviderModelsData = {
+    body?: never;
+    path: {
+        /**
+         * Cid
+         */
+        cid: string;
+    };
+    query?: never;
+    url: '/api/ai/providers/{cid}/models';
+};
+
+export type ProviderModelsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type ProviderModelsError = ProviderModelsErrors[keyof ProviderModelsErrors];
+
+export type ProviderModelsResponses = {
+    /**
+     * Successful Response
+     */
+    200: ModelsOut;
+};
+
+export type ProviderModelsResponse = ProviderModelsResponses[keyof ProviderModelsResponses];
 
 export type ListCollectionsData = {
     body?: never;
