@@ -1,34 +1,28 @@
 """Drawing a cover: a validated `Cover` into one self-contained HTML page.
 
-Ported from `opennotebook_server/src/cover/render.rs`, number for number, so
-a cover draws as it did.
+A cover is a picture, not a label: the card it sits on already prints the
+collection's name, so a cover carries no words. It is the collection's one
+colour as a field of light, its motif drawn large enough to read on a 72 px
+row, and a fine grain, so the colour reads as a surface rather than a flat
+fill. The same picture serves both themes, as a book's cover does.
 
-A cover is drawn with the studio's own parts, so it reads as part of the app:
-the page and its dot grid as on the mind map's canvas, the motif in a rounded
-tile like a Create tile's glyph, the terms as chips, a small uppercase label,
-and the title in the app's sans at 600. Every colour but one is a theme token
-from `theme.css` (a copy of `web/src/styles/theme.css`), embedded in the page
-and switched by `data-bs-theme` exactly as the app switches it, so a cover
-follows the viewer's theme. The one colour of its own is the collection's
-accent, on the motif's tile and the short rule before the label.
+Two arrangements, both from the seed so two covers alike still differ:
 
-The page is a 1600x900 SVG with system fonts, no script and nothing fetched,
-so the web app can frame it in a sandboxed iframe and scale it to a card,
-about 0.16 to 0.19 of its size. Sizes, radii and hairlines are chosen for
-that scale: a radius of 56 here is the 10 of an app card. Text is laid out
-here, not by the browser: an SVG `<text>` never wraps, so every line is
-measured with a per-glyph width estimate, the size is stepped down until the
-text fits its box, and what still does not fit is cut with an ellipsis. The
-estimates lean wide, so a line drawn in a narrower font than guessed only
-leaves more margin.
+- `aura`: soft light over the accent's deep ground, the motif in a glass
+  tile at the centre with a blurred echo of it behind;
+- `relief`: the motif pressed large into the cover, as a stamp in cloth, a
+  small foil mark in the corner.
+
+The page is 1600x900 CSS pixels with inline styles and inline SVG only, no
+script, no font and nothing fetched, so the web app can frame it in a
+sandboxed iframe and scale it to a card, about 0.05 to 0.23 of its size.
+Sizes are chosen for that scale: the motif's tile is a quarter of the width,
+and the grain's frequency is set so it reads at card size.
 """
 
-import math
 import unicodedata
 from dataclasses import dataclass
 from enum import Enum
-from functools import cache
-from pathlib import Path
 
 from opennotebook.cover import motifs
 
@@ -38,16 +32,9 @@ H = 900.0
 _MASK = (1 << 64) - 1
 
 
-@cache
-def theme_css() -> str:
-    """The token sheet: Bootstrap 5.3 names, dark by default, light under
-    `data-bs-theme="light"`."""
-    return (Path(__file__).parent / "theme.css").read_text(encoding="utf-8")
-
-
 class Theme(Enum):
-    """The theme a cover is drawn in: the app's own, dark unless the viewer
-    chose light."""
+    """The theme a cover was asked for. A cover looks the same in both; the
+    page names the theme it was served for, so a cached copy is one theme's."""
 
     DARK = "dark"
     LIGHT = "light"
@@ -60,17 +47,20 @@ class Theme(Enum):
 
 @dataclass(frozen=True)
 class Accent:
-    """A collection's one colour. The same in both themes, as the app's
-    primary is: white reads on it at 4.5:1, and it stands at 3:1 against the
-    page and the card surface of either theme; the tests hold every accent to
-    that."""
+    """A collection's one colour, as a tonal ramp from its ground to its
+    light. `fill` is the colour itself, the studio's primary for blue; the
+    glow is turned a little round the wheel, so the light reads as light and
+    not as a lighter tint. White reads on `base` and the glow stands on it;
+    the tests hold every accent to that."""
 
     id: str
     # What the prompt tells the model it suits.
     mood: str
     fill: str
-    # The motif on the fill.
-    on_fill: str
+    deep: str
+    base: str
+    bright: str
+    glow: str
 
 
 ACCENTS: tuple[Accent, ...] = (
@@ -78,15 +68,74 @@ ACCENTS: tuple[Accent, ...] = (
         "blue",
         "the studio's own blue, for science, technology and anything general",
         "#2563eb",
-        "#ffffff",
+        "#08112b",
+        "#1b3a9c",
+        "#3d6df5",
+        "#7fd0ff",
     ),
-    Accent("teal", "for the sea, climate, data, medicine", "#0f7a72", "#ffffff"),
-    Accent("green", "for nature, biology, ecology, health", "#15803d", "#ffffff"),
-    Accent("amber", "for history, economics, finance, craft", "#a16207", "#ffffff"),
-    Accent("coral", "for geography, travel, food, culture", "#c2410c", "#ffffff"),
-    Accent("rose", "for the arts, music, people, literature", "#d42a5c", "#ffffff"),
-    Accent("violet", "for ideas, philosophy, language, space", "#7c4dee", "#ffffff"),
-    Accent("slate", "for computing, engineering, mathematics, law", "#64748b", "#ffffff"),
+    Accent(
+        "teal",
+        "for the sea, climate, data, medicine",
+        "#0f7a72",
+        "#031a1a",
+        "#0b5f59",
+        "#14a08f",
+        "#9cf0cf",
+    ),
+    Accent(
+        "green",
+        "for nature, biology, ecology, health",
+        "#15803d",
+        "#05170d",
+        "#145f32",
+        "#2ca25a",
+        "#d3ee7a",
+    ),
+    Accent(
+        "amber",
+        "for history, economics, finance, craft",
+        "#a16207",
+        "#1c1003",
+        "#7a4407",
+        "#d1830f",
+        "#ffd889",
+    ),
+    Accent(
+        "coral",
+        "for geography, travel, food, culture",
+        "#c2410c",
+        "#1f0c04",
+        "#8f300a",
+        "#e0571a",
+        "#ffc07a",
+    ),
+    Accent(
+        "rose",
+        "for the arts, music, people, literature",
+        "#d42a5c",
+        "#22040f",
+        "#941d44",
+        "#e0466d",
+        "#ffae8f",
+    ),
+    Accent(
+        "violet",
+        "for ideas, philosophy, language, space",
+        "#7c4dee",
+        "#0f0828",
+        "#4a2bb3",
+        "#8562fb",
+        "#f2a6ff",
+    ),
+    Accent(
+        "slate",
+        "for computing, engineering, mathematics, law",
+        "#64748b",
+        "#0b0f16",
+        "#2f3b4f",
+        "#5b6b85",
+        "#b4c6ff",
+    ),
 )
 
 # The palettes covers were first designed with, each read as the accent
@@ -104,25 +153,24 @@ OLD_PALETTES: tuple[tuple[str, str], ...] = (
     ("graphite", "slate"),
 )
 
-# The three arrangements, with what the prompt says each suits.
+# The two arrangements, with what the prompt says each suits.
 LAYOUTS: tuple[tuple[str, str], ...] = (
-    ("tile", "the symbol in its tile above a large topic, for most subjects"),
+    ("aura", "the symbol in a glass tile on a field of light, for most subjects"),
     (
-        "card",
-        "the topic on a card with the symbol and the terms, for a subject with a few clear parts",
-    ),
-    (
-        "map",
-        "the symbol as the root of a small map of the terms, for a subject of connected ideas",
+        "relief",
+        "the symbol pressed large into the cover, for history, craft, law and anything classic",
     ),
 )
 
-# The first layouts, each read as the one nearest it.
+# Layouts covers were designed with before, each read as the one nearest it.
 OLD_LAYOUTS: tuple[tuple[str, str], ...] = (
-    ("emblem", "card"),
-    ("editorial", "tile"),
-    ("grid", "map"),
-    ("horizon", "tile"),
+    ("tile", "aura"),
+    ("card", "relief"),
+    ("map", "aura"),
+    ("emblem", "relief"),
+    ("editorial", "aura"),
+    ("grid", "aura"),
+    ("horizon", "aura"),
 )
 
 
@@ -143,152 +191,12 @@ class Cover:
     """A cover ready to draw: every field already checked against the lists."""
 
     topic: str
-    terms: tuple[str, ...]
     motif: str
     accent: Accent
     layout: str
     theme: Theme
-    # Places the tile and the grid, so two covers alike still differ.
+    # Places the light and turns the motif, so two covers alike still differ.
     seed: int
-
-
-# ── text ──────────────────────────────────────────────────────────────────────
-
-# The kicker over every topic, as a section label sets it.
-KICKER = "COLLECTION"
-
-
-class Face(Enum):
-    # A title: 600, the heaviest the studio sets.
-    TITLE = "t"
-    # A chip's words: 500.
-    CHIP = "c"
-
-    @property
-    def factor(self) -> float:
-        """How much wider than the estimate this face sets, at most: measured
-        against DejaVu Sans at 600 and 500, the widest of the stack."""
-        return 1.18 if self is Face.TITLE else 1.08
-
-
-_NARROW = set("ilj'|!.,:;·")
-_SLIM = set("ftrI()[]-")
-
-
-def em(c: str) -> float:
-    """A glyph's advance in ems for a bold sans, rounded up: wide enough for
-    Segoe UI, Roboto, Helvetica and Inter alike. Wider faces, such as the
-    DejaVu Sans many Linux desktops resolve `system-ui` to, are covered by
-    each `Face`'s factor."""
-    if c == " ":
-        return 0.28
-    if c in _NARROW:
-        return 0.3
-    if c in _SLIM:
-        return 0.4
-    if c in "mw":
-        return 0.9
-    if c in "MW@%":
-        return 0.98
-    if c in "—…":
-        return 1.0
-    if "A" <= c <= "Z":
-        return 0.72
-    if "0" <= c <= "9":
-        return 0.6
-    if c.isascii():
-        return 0.58
-    # CJK, kana, hangul and other full-width scripts.
-    if "ᄀ" <= c <= "￯" and not (" " <= c <= "⹿"):
-        return 1.04
-    return 0.66
-
-
-def width(s: str, size: float, face: Face) -> float:
-    return sum(em(c) for c in s) * size * face.factor
-
-
-def wrap(text: str, size: float, max_w: float, face: Face) -> list[str]:
-    """Greedy word wrap; a word longer than a line is broken by characters,
-    so a long compound or a line of CJK still fits."""
-    lines: list[str] = []
-    cur = ""
-    for word in text.split():
-        joined = word if not cur else f"{cur} {word}"
-        if width(joined, size, face) <= max_w:
-            cur = joined
-            continue
-        if cur:
-            lines.append(cur)
-            cur = ""
-        if width(word, size, face) <= max_w:
-            cur = word
-            continue
-        for c in word:
-            nxt = cur + c
-            if width(nxt, size, face) > max_w and cur:
-                lines.append(cur)
-                cur = c
-            else:
-                cur = nxt
-    if cur:
-        lines.append(cur)
-    return lines
-
-
-def clip_line(s: str, size: float, max_w: float, face: Face) -> str:
-    """`s` cut to `max_w`, with an ellipsis when anything was cut."""
-    if width(s, size, face) <= max_w:
-        return s
-    out = s
-    while out and width(f"{out}…", size, face) > max_w:
-        out = out[:-1]
-    return f"{out.rstrip(' ,:;-·')}…"
-
-
-@dataclass
-class Fitted:
-    """Text set in a box: the size it fits at and its lines."""
-
-    size: float
-    lines: list[str]
-
-
-def fit(
-    text: str,
-    face: Face,
-    max_w: float,
-    max_h: float,
-    max_lines: int,
-    max: float,
-    min: float,
-) -> Fitted:
-    """The largest size from `max` down to `min` at which `text` wraps into at
-    most `max_lines` lines of `max_w` within `max_h`; at `min` the lines past
-    the last are dropped and the last one ends in an ellipsis."""
-    leading = 1.12
-    size = max
-    while True:
-        lines = wrap(text, size, max_w, face)
-        fits_h = len(lines) * size * leading <= max_h
-        # A word broken across lines reads worse than a smaller size, so
-        # breaking one is a last resort taken only at the smallest.
-        whole = all(width(w, size, face) <= max_w for w in text.split())
-        if len(lines) <= max_lines and fits_h and (whole or size <= min):
-            return Fitted(size, lines)
-        if size <= min:
-            room = math.floor(max_h / (size * leading))
-            room = 1 if room < 1 else room
-            room = max_lines if room > max_lines else room
-            kept = lines[:room]
-            if len(lines) > room and kept:
-                last = clip_line(f"{kept[-1]} …", size, max_w, face)
-                if not last.endswith("…"):
-                    last += "…"
-                kept[-1] = last
-            return Fitted(size, kept)
-        size = size * 0.94
-        size = min if size < min else size
 
 
 def esc(s: str) -> str:
@@ -311,30 +219,6 @@ def esc(s: str) -> str:
     return "".join(out)
 
 
-def _n(v: float) -> str:
-    """A number as the Rust renderer printed it with `{:.0}`."""
-    return f"{v:.0f}"
-
-
-def title(svg: list[str], f: Fitted, x: float, y: float) -> None:
-    """Lines of a title, the first baseline at `y`."""
-    lh = f.size * 1.12
-    for i, line in enumerate(f.lines):
-        svg.append(
-            f'<text class="{Face.TITLE.value}" x="{_n(x)}" y="{_n(y + i * lh)}" '
-            f'font-size="{_n(f.size)}">{esc(line)}</text>'
-        )
-
-
-def block_h(f: Fitted) -> float:
-    """The height a fitted block takes, cap height of the first line to the
-    baseline of the last."""
-    return f.size * 0.74 + max(len(f.lines) - 1, 0) * f.size * 1.12
-
-
-# ── parts ─────────────────────────────────────────────────────────────────────
-
-
 class Rng:
     """Deterministic numbers from the seed: splitmix64."""
 
@@ -352,237 +236,118 @@ class Rng:
         """A number in `[lo, hi)`."""
         return lo + (self.next() >> 11) / float(1 << 53) * (hi - lo)
 
-    def coin(self) -> bool:
-        return self.next() & 1 == 1
+
+def _n(v: float) -> str:
+    return f"{v:.1f}".removesuffix(".0")
 
 
-# The margin on every side: a card's inner padding at card size.
-PAD = 112.0
-# A hairline: about one pixel at card size.
-LINE = 4.0
-# The dot grid's pitch; it reads as the map canvas's at card size.
-GRID = 56.0
-# Radii: the 4 of a chip, the 10 of a card, at card size.
-R_CHIP = 22.0
-R_CARD = 56.0
-CHIP_H = 92.0
-CHIP_TEXT = 48.0
-CHIP_PAD = 34.0
-CHIP_GAP = 20.0
-KICKER_TEXT = 38.0
-
-
-def tile(svg: list[str], name: str, x: float, y: float, size: float, a: Accent) -> None:
-    """The motif's tile: the accent, rounded as a Create tile's glyph is (9 of
-    32), the motif half its size on it."""
-    svg.append(
-        f'<rect x="{_n(x)}" y="{_n(y)}" width="{_n(size)}" height="{_n(size)}" '
-        f'rx="{_n(size * 9.0 / 32.0)}" fill="{a.fill}"/>'
-    )
+def glyph(name: str, style: str) -> str:
+    """The motif as an SVG of its own, sized and coloured by `style`."""
     inner = motifs.motif(name) or motifs.motif(motifs.FALLBACK) or ""
-    g = size * 0.5
-    svg.append(
-        f'<g transform="translate({x + (size - g) / 2.0:.1f} {y + (size - g) / 2.0:.1f}) '
-        f'scale({g / 16.0:.3f})" fill="{a.on_fill}">{inner}</g>'
+    return f'<svg viewBox="0 0 16 16" style="{style}" aria-hidden="true">{inner}</svg>'
+
+
+def grain(freq: str, opacity: float) -> str:
+    """Fine noise laid over the colour, so it reads as a surface."""
+    return (
+        f'<svg class="grain" style="opacity:{opacity}" aria-hidden="true"><filter id="grain">'
+        f'<feTurbulence type="fractalNoise" baseFrequency="{freq}" numOctaves="2" '
+        'stitchTiles="stitch"/><feColorMatrix type="saturate" values="0"/></filter>'
+        '<rect width="100%" height="100%" filter="url(#grain)"/></svg>'
     )
-
-
-def kicker(svg: list[str], x: float, y: float, a: Accent) -> None:
-    """The short accent rule and the section label, its baseline at `y`."""
-    svg.append(
-        f'<rect x="{_n(x)}" y="{_n(y - KICKER_TEXT * 0.37 - 4.0)}" width="48" height="8" '
-        f'rx="4" fill="{a.fill}"/><text class="k" x="{_n(x + 72.0)}" y="{_n(y)}" '
-        f'font-size="{_n(KICKER_TEXT)}">{KICKER}</text>'
-    )
-
-
-def chip_row(
-    svg: list[str], terms: tuple[str, ...], x: float, y: float, max_w: float, max_chip: float
-) -> int:
-    """The terms that fit whole on one row from (`x`, `y`) within `max_w`,
-    each chip at most `max_chip` wide; the first is cut rather than left off,
-    so a row with terms is never empty. Returns how many were drawn."""
-    at = x
-    n = 0
-    for t in terms:
-        w = chip(svg, t, at, y, min(x + max_w - at, max_chip), n == 0)
-        if w is None:
-            continue
-        at += w + CHIP_GAP
-        n += 1
-    return n
-
-
-def chip(svg: list[str], term: str, x: float, y: float, room: float, force: bool) -> float | None:
-    """One chip at (`x`, `y`) no wider than `room`, its width. A term that
-    does not fit whole is left off, unless `force`: then it is cut to the
-    room, if that leaves a few letters."""
-    text_room = room - 2.0 * CHIP_PAD
-    whole = width(term, CHIP_TEXT, Face.CHIP)
-    if whole > text_room and (not force or text_room < 3.0 * CHIP_TEXT):
-        return None
-    line = clip_line(term, CHIP_TEXT, text_room, Face.CHIP)
-    w = width(line, CHIP_TEXT, Face.CHIP) + 2.0 * CHIP_PAD
-    svg.append(
-        f'<rect class="chip" x="{_n(x)}" y="{_n(y)}" width="{_n(w)}" height="{_n(CHIP_H)}" '
-        f'rx="{_n(R_CHIP)}" stroke-width="{_n(LINE)}"/><text class="c" x="{_n(x + CHIP_PAD)}" '
-        f'y="{_n(y + CHIP_H / 2.0 + CHIP_TEXT * 0.36)}" font-size="{_n(CHIP_TEXT)}">'
-        f"{esc(line)}</text>"
-    )
-    return w
 
 
 # ── layouts ───────────────────────────────────────────────────────────────────
 
 
-def tile_layout(svg: list[str], c: Cover, rng: Rng) -> None:
-    """A large motif tile on one side, centred; on the other the label, the
-    topic and a row of chips, centred as a group."""
-    size = 256.0
-    gap = 88.0
-    left = rng.coin()
-    tx = PAD if left else W - PAD - size
-    tile(svg, c.motif, tx, (H - size) / 2.0, size, c.accent)
-
-    x = PAD + size + gap if left else PAD
-    col = W - 2.0 * PAD - size - gap
-    n = chip_row([], c.terms, 0.0, 0.0, col, 560.0)
-    chips_h = 56.0 + CHIP_H if n > 0 else 0.0
-    head = KICKER_TEXT * 0.74 + 48.0
-    room = H - 2.0 * PAD - head - chips_h
-    topic = fit(c.topic, Face.TITLE, col, room, 3, 124.0, 80.0)
-    group = head + block_h(topic) + chips_h
-    top = (H - group) / 2.0
-    kicker(svg, x, top + KICKER_TEXT * 0.74, c.accent)
-    title(svg, topic, x - 4.0, top + head + topic.size * 0.74)
-    if n > 0:
-        y = top + head + block_h(topic) + 56.0
-        chip_row(svg, c.terms, x, y, col, 560.0)
-
-
-def card_layout(svg: list[str], c: Cover, rng: Rng) -> None:
-    """A card floating on the canvas, as tall as what it holds: the tile and
-    the label as its header, the topic, a hairline, and the chips."""
-    x0, x1 = 64.0, W - 64.0
-    inset = 72.0
-    cx0, cx1 = x0 + inset, x1 - inset
-    size = 168.0
-    n = chip_row([], c.terms, 0.0, 0.0, cx1 - cx0, 560.0)
-    foot = 44.0 + 40.0 + CHIP_H if n > 0 else 0.0
-    room = H - 2.0 * 64.0 - 2.0 * inset - size - 48.0 - foot
-    topic = fit(c.topic, Face.TITLE, cx1 - cx0, room, 2, 112.0, 80.0)
-    h = 2.0 * inset + size + 48.0 + block_h(topic) + foot
-    y0 = (H - h) / 2.0
-    svg.append(
-        f'<rect class="panel" x="{_n(x0)}" y="{_n(y0)}" width="{_n(x1 - x0)}" height="{_n(h)}" '
-        f'rx="{_n(R_CARD)}" stroke-width="{_n(LINE)}"/>'
+def aura(c: Cover, rng: Rng) -> tuple[str, str]:
+    """Three glows over the deep ground, the motif's blurred echo, and the
+    motif in a glass tile at the centre. Returns (ground, parts)."""
+    a = c.accent
+    gx, gy = rng.range(55, 95), rng.range(0, 35)
+    bx, by = rng.range(0, 45), rng.range(55, 100)
+    cx, cy = rng.range(30, 70), rng.range(30, 70)
+    ground = (
+        f"radial-gradient(1200px 960px at {_n(gx)}% {_n(gy)}%, {a.glow}d9 0%, {a.glow}00 62%),"
+        f"radial-gradient(1440px 1200px at {_n(bx)}% {_n(by)}%, {a.bright}e6 0%, "
+        f"{a.bright}00 64%),"
+        f"radial-gradient(2080px 1600px at {_n(cx)}% {_n(cy)}%, {a.base} 0%, {a.base}00 72%),"
+        f"{a.deep}"
     )
-    cy0 = y0 + inset
-    # The tile leads the header on the left or closes it on the right.
-    left = rng.coin()
-    tx = cx0 if left else cx1 - size
-    tile(svg, c.motif, tx, cy0, size, c.accent)
-    kx = cx0 + size + 48.0 if left else cx0
-    kicker(svg, kx, cy0 + size / 2.0 + KICKER_TEXT * 0.36, c.accent)
-    first = cy0 + size + 48.0 + topic.size * 0.74
-    title(svg, topic, cx0 - 4.0, first)
-    if n > 0:
-        rule = first - topic.size * 0.74 + block_h(topic) + 44.0
-        svg.append(
-            f'<line class="rule" x1="{_n(cx0)}" y1="{_n(rule)}" x2="{_n(cx1)}" y2="{_n(rule)}" '
-            f'stroke-width="{_n(LINE)}"/>'
+    turn = rng.range(-14, 14)
+    dx, dy = rng.range(-96, 96), rng.range(-64, 64)
+    echo = glyph(
+        c.motif,
+        "position:absolute;left:304px;top:-46px;width:992px;height:992px;"
+        f"fill:{a.glow};opacity:.22;filter:blur(26px);"
+        f"transform:translate({_n(dx)}px,{_n(dy)}px) rotate({_n(turn)}deg)",
+    )
+    tile = (
+        '<div class="glass">'
+        + glyph(
+            c.motif,
+            "width:192px;height:192px;fill:#fff;filter:drop-shadow(0 5px 10px rgba(0,0,0,.28))",
         )
-        chip_row(svg, c.terms, cx0, rule + 40.0, cx1 - cx0, 560.0)
+        + "</div>"
+    )
+    return ground, echo + tile + grain("0.18", 0.4)
 
 
-def map_layout(svg: list[str], c: Cover, rng: Rng) -> None:
-    """The label and the topic at the top; under them the motif's tile as the
-    root of a small map, its links running to the terms as the map draws
-    them."""
-    top = PAD + KICKER_TEXT * 0.74
-    kicker(svg, PAD, top, c.accent)
-    topic = fit(c.topic, Face.TITLE, W - 2.0 * PAD, 236.0, 2, 112.0, 80.0)
-    title(svg, topic, PAD - 4.0, top + 44.0 + topic.size * 0.74)
-    map_top = top + 44.0 + block_h(topic) + 64.0
+def relief(c: Cover, rng: Rng) -> tuple[str, str]:
+    """The motif pressed into the accent: lit on its lower edge, shaded on
+    its upper, a small foil mark beside. Returns (ground, parts)."""
+    a = c.accent
+    ground = f"radial-gradient(1920px 1440px at 18% 0%, {a.bright}66 0%, {a.bright}00 60%),{a.base}"
+    x, y, turn = rng.range(736, 832), rng.range(-128, -32), rng.range(-12, 12)
 
-    bottom = H - PAD
-    size = min(200.0, bottom - map_top)
-    ry = map_top + (bottom - map_top - size) / 2.0
-    mid = ry + size / 2.0
-    shown = c.terms[:3]
-    if shown:
-        gap = 24.0
-        h = len(shown) * CHIP_H + (len(shown) - 1) * gap
-        first = mid - h / 2.0
-        links: list[str] = []
-        chips: list[str] = []
-        for i, t in enumerate(shown):
-            y = first + i * (CHIP_H + gap)
-            x = 560.0 + rng.range(0.0, 72.0)
-            if chip(chips, t, x, y, W - PAD - x, True) is None:
-                continue
-            x1, y1, x2, y2 = PAD + size, mid, x, y + CHIP_H / 2.0
-            k = (x2 - x1) / 2.0
-            links.append(
-                f'<path class="link" d="M{_n(x1)} {_n(y1)}C{_n(x1 + k)} {_n(y1)} {_n(x2 - k)} '
-                f'{_n(y2)} {_n(x2)} {_n(y2)}" stroke-width="{_n(LINE)}"/>'
-            )
-        svg.extend(links)
-        svg.extend(chips)
-    tile(svg, c.motif, PAD, ry, size, c.accent)
+    def at(d: float, paint: str) -> str:
+        return glyph(
+            c.motif,
+            f"position:absolute;left:{_n(x)}px;top:{_n(y)}px;width:1056px;height:1056px;"
+            f"transform:translate({_n(d)}px,{_n(d)}px) rotate({_n(turn)}deg);{paint}",
+        )
+
+    pressed = (
+        at(5.6, "fill:rgba(255,255,255,.16)")
+        + at(-5.6, "fill:rgba(0,0,0,.34)")
+        + at(0, f"fill:{a.base};filter:brightness(.96)")
+    )
+    foil = (
+        '<div class="foil">'
+        + glyph(c.motif, f"width:74px;height:74px;fill:{a.glow}")
+        + f'<i style="background:{a.glow}"></i></div>'
+    )
+    return ground, pressed + foil + grain("0.17 0.015", 0.55)
 
 
-# The tokens a cover draws with, from the sheet the app itself uses.
 STYLE = (
-    "html,body{margin:0;height:100%;overflow:hidden;background:var(--bs-body-bg)}"
-    "svg{display:block}"
-    "text{font-family:var(--bs-font-sans-serif);font-kerning:normal}"
-    ".bg{fill:var(--bs-body-bg)}"
-    ".dot{fill:var(--bs-border-color)}"
-    ".panel{fill:var(--bs-secondary-bg);stroke:var(--bs-border-color)}"
-    ".chip{fill:var(--bs-secondary-bg);stroke:var(--bs-border-color)}"
-    ".card .chip{fill:var(--bs-body-bg)}"
-    ".rule{stroke:var(--bs-border-color-translucent)}"
-    ".link{fill:none;stroke:var(--st-mm-link)}"
-    ".t{fill:var(--bs-emphasis-color);font-weight:600;letter-spacing:-.01em}"
-    ".k{fill:var(--bs-secondary-color);font-weight:600;letter-spacing:.07em}"
-    ".c{fill:var(--bs-body-color);font-weight:500}"
+    "html,body{margin:0;width:1600px;height:900px;overflow:hidden}"
+    ".c{position:relative;width:1600px;height:900px;overflow:hidden;isolation:isolate}"
+    ".c>svg{display:block}"
+    ".glass{position:absolute;left:608px;top:258px;width:384px;height:384px;"
+    "box-sizing:border-box;border-radius:23%;display:grid;place-items:center;"
+    "background:rgba(255,255,255,.14);border:3px solid rgba(255,255,255,.32);"
+    "box-shadow:0 35px 96px rgba(0,0,0,.28),inset 0 3px 0 rgba(255,255,255,.35);"
+    "backdrop-filter:blur(38px) saturate(140%);-webkit-backdrop-filter:blur(38px) saturate(140%)}"
+    ".foil{position:absolute;left:104px;bottom:104px;display:flex;align-items:center;gap:26px}"
+    ".foil i{display:block;width:144px;height:5px;border-radius:3px;opacity:.8}"
+    ".grain{position:absolute;inset:0;width:100%;height:100%;mix-blend-mode:overlay}"
 )
 
 
 def page(c: Cover) -> str:
-    """The page: `<!doctype html>`, a CSP that allows nothing to load, the
-    studio's theme, and the SVG filling the viewport."""
+    """The page: `<!doctype html>`, a CSP that allows nothing to load, and
+    the cover filling its 1600x900 box."""
     rng = Rng(c.seed)
-    svg: list[str] = []
-    # The grid starts at a different point per collection.
-    ox, oy = rng.range(0.0, GRID), rng.range(0.0, GRID)
-    h = GRID / 2.0
-    svg.append(
-        f'<defs><pattern id="dots" width="{_n(GRID)}" height="{_n(GRID)}" '
-        f'patternUnits="userSpaceOnUse" patternTransform="translate({_n(ox)} {_n(oy)})">'
-        f'<circle class="dot" cx="{_n(h)}" cy="{_n(h)}" r="3.5"/></pattern></defs>'
-        f'<rect class="bg" width="{W:g}" height="{H:g}"/>'
-        f'<rect width="{W:g}" height="{H:g}" fill="url(#dots)"/>'
-    )
-    cls = layout(c.layout) or LAYOUTS[0][0]
-    svg.append(f'<g class="{cls}">')
-    if cls == "card":
-        card_layout(svg, c, rng)
-    elif cls == "map":
-        map_layout(svg, c, rng)
-    else:
-        tile_layout(svg, c, rng)
-    svg.append("</g>")
+    ground, parts = relief(c, rng) if layout(c.layout) == "relief" else aura(c, rng)
     theme = ' data-bs-theme="light"' if c.theme is Theme.LIGHT else ""
     t = esc(c.topic)
     return (
         f'<!doctype html><html{theme}><head><meta charset="utf-8">'
-        '<meta name="viewport" content="width=device-width,initial-scale=1">'
+        '<meta name="viewport" content="width=1600">'
         '<meta http-equiv="Content-Security-Policy" '
         "content=\"default-src 'none'; style-src 'unsafe-inline'; img-src data:\">"
-        f"<title>{t}</title><style>{theme_css()}{STYLE}</style></head><body>"
-        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" width="100%" '
-        'height="100%" preserveAspectRatio="xMidYMid slice" role="img" '
-        f'aria-label="{t}">{"".join(svg)}</svg></body></html>'
+        f"<title>{t}</title><style>{STYLE}</style></head><body>"
+        f'<div class="c" role="img" aria-label="{t}" style="background:{ground}">{parts}</div>'
+        "</body></html>"
     )

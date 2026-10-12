@@ -34,7 +34,8 @@ def test_a_good_reply_is_taken_as_it_is() -> None:
     )
     assert s.topic == "Cell Biology"
     assert s.terms == ["Mitosis", "Organelles", "DNA Replication"]
-    assert (s.motif, s.palette, s.layout) == ("virus", "green", "map")
+    assert (s.motif, s.palette) == ("virus", "green")
+    assert s.layout == "aura", "an earlier layout is read as its nearest"
 
 
 def test_a_fenced_reply_with_a_preamble_is_still_read() -> None:
@@ -49,7 +50,7 @@ def test_a_fenced_reply_with_a_preamble_is_still_read() -> None:
     assert (s.motif, s.palette) == ("cpu", "slate")
     old = cover.validate(CID, '{"topic":"Rome","motif":"bank","palette":"sand","layout":"emblem"}')
     # The first palettes and layouts are read as their nearest.
-    assert (old.palette, old.layout) == ("amber", "card")
+    assert (old.palette, old.layout) == ("amber", "relief")
 
 
 @pytest.mark.parametrize(
@@ -125,15 +126,15 @@ def test_versions_change_with_what_is_drawn_and_only_then() -> None:
 
 
 def test_versions_and_seeds_are_the_rust_servers() -> None:
-    """Known answers printed by the Rust renderer, so a cover cached under a
-    version means the same drawing on either side of the move."""
+    """Known answers, so a version changes only when the drawing does: the
+    seed is the Rust server's still; the versions moved with the redesign."""
     cid = "0199a0b2-7c3e-7d4a-9f00-123456789abc"
     assert cover.seed(cid) == 10670302527987844670
     spec = CoverSpec("Cell Biology", ["Mitosis", "Organelles"], "virus", "green", "map")
-    assert cover.version(spec) == "g-ef0bddfcb6361e2f"
+    assert cover.version(spec) == "g-6ef6b7356f9dde2a"
     names = ["a.md", "b.md", "c.md", "d.md", "e.md", "f.md"]
-    assert cover.fallback_version(cid, " Coral Reefs ", names) == "f-74fd18a8d78fb47d"
-    assert cover.fallback_version(cid, "量子力学 Ünïcødé", []) == "f-8573f45e6567f1bd"
+    assert cover.fallback_version(cid, " Coral Reefs ", names) == "f-6162d0ae8d788ad4"
+    assert cover.fallback_version(cid, "量子力学 Ünïcødé", []) == "f-c342012b32f886aa"
 
 
 def assert_safe(html: str) -> None:
@@ -144,47 +145,13 @@ def assert_safe(html: str) -> None:
     assert "http:" not in rest and "https:" not in rest and "//" not in rest, "nothing fetched"
     assert "url(http" not in lower and "@import" not in lower and "<img" not in lower
     assert "content-security-policy" in lower
-    assert 'viewBox="0 0 1600 900"' in html
-    assert 'preserveAspectRatio="xMidYMid slice"' in html
+    assert 'role="img"' in html
 
 
-def attr(el: str, k: str) -> float | None:
-    at = el.find(f' {k}="')
-    if at == -1:
-        return None
-    at += len(k) + 3
-    end = el.find('"', at)
-    try:
-        return float(el[at:end])
-    except ValueError:
-        return None
-
-
-def assert_on_canvas(html: str) -> None:
-    """Every `<text>`, every chip and every tile stays inside the margin a
-    card's padding leaves, by the renderer's own measure, and no text leaves
-    the box it was fitted to."""
-    for t in html.split("<text ")[1:]:
-        x, y, size = attr(t, "x"), attr(t, "y"), attr(t, "font-size")
-        assert x is not None and y is not None and size is not None, t
-        assert size * 0.7 < y < draw.H, f"y {y} off the canvas: {t}"
-        assert 0.0 <= x <= draw.W, f"x {x}: {t}"
-    for r in html.split("<rect ")[1:]:
-        r = r[: r.find(">")]
-        x, y, w, h = attr(r, "x"), attr(r, "y"), attr(r, "width"), attr(r, "height")
-        if x is None or y is None or w is None or h is None:
-            continue
-        assert x >= 40 and y >= 40 and x + w <= draw.W - 40 and y + h <= draw.H - 40, (
-            f"a shape past the margin: {r}"
-        )
-
-
-def assert_topic_legible(html: str) -> None:
-    """The topic's size: at least 80, a 9 px cap height on a 256 px card."""
-    sizes = [attr(f" {t}", "font-size") for t in html.split('<text class="t" ')[1:]]
-    assert sizes, "a topic is drawn"
-    for s in sizes:
-        assert s is not None and s * 0.72 * 256.0 / draw.W >= 9.0, f"topic at {s}"
+def assert_wordless(html: str, topic: str) -> None:
+    """A cover prints no words: the topic is its title and its label only."""
+    assert "<text" not in html
+    assert html.count(draw.esc(topic)) == 2, "in the title and the label, nowhere else"
 
 
 def test_every_layout_and_accent_draws_safely_with_hostile_text() -> None:
@@ -204,10 +171,9 @@ def test_every_layout_and_accent_draws_safely_with_hostile_text() -> None:
                     spec = CoverSpec(topic, terms, "globe-americas", a.id, lay)
                     html = cover.render(f"s17{i:011}", spec, theme)
                     assert_safe(html)
-                    assert_on_canvas(html)
-                    assert_topic_legible(html)
+                    assert_wordless(html, topic)
                     assert "<script>alert" not in html, "escaped"
-                    assert a.fill in html, f"{lay}/{a.id}"
+                    assert a.base in html and a.glow in html, f"{lay}/{a.id}"
 
 
 def test_a_stored_spec_with_unknown_choices_still_draws() -> None:
@@ -246,60 +212,21 @@ def ratio(a: str, b: str) -> float:
     return (max(x, y) + 0.05) / (min(x, y) + 0.05)
 
 
-def tokens(head: str) -> dict[str, str]:
-    """The `--name: value` pairs of the theme block that starts at `head`."""
-    css = draw.theme_css()
-    start = css.index(head) + len(head)
-    body = css[start : css.index("}", start)]
-    out: dict[str, str] = {}
-    for decl in body.split(";"):
-        decl = decl.strip().rsplit("*/", 1)[-1].strip()
-        k, sep, v = decl.partition(":")
-        if sep and k.strip().startswith("--"):
-            out[k.strip()] = v.strip()
-    return out
-
-
-def themes() -> list[tuple[str, dict[str, str]]]:
-    return [("dark", tokens(":root {")), ("light", tokens(':root[data-bs-theme="light"] {'))]
-
-
-def test_every_accent_holds_its_motif_and_stands_on_every_surface_in_both_themes() -> None:
+def test_every_accent_holds_its_motif_and_its_mark() -> None:
     assert 6 <= len(draw.ACCENTS) <= 8
     assert draw.ACCENTS[0].fill == "#2563eb", "the first is the studio's primary"
     fails: list[str] = []
     for a in draw.ACCENTS:
-        r = ratio(a.on_fill, a.fill)
-        if r < 4.5:
-            fails.append(f"{a.id}: motif on fill {r:.2f}:1")
-        # The tile is a graphic: 3:1 against what it sits on.
-        for theme, t in themes():
-            for surface in ("--bs-body-bg", "--bs-secondary-bg"):
-                r = ratio(a.fill, t[surface])
-                if r < 3.0:
-                    fails.append(f"{a.id}: fill on {theme} {surface} {r:.2f}:1")
+        # The white motif in its tile and the foil mark sit on the base.
+        if (r := ratio("#ffffff", a.base)) < 4.5:
+            fails.append(f"{a.id}: white on base {r:.2f}:1")
+        if (r := ratio(a.glow, a.base)) < 3.0:
+            fails.append(f"{a.id}: glow on base {r:.2f}:1")
+        ramp = [lum(c) for c in (a.deep, a.base, a.bright, a.glow)]
+        if ramp != sorted(ramp):
+            fails.append(f"{a.id}: the ramp is not dark to light")
     assert not fails, fails
     assert len({a.id for a in draw.ACCENTS}) == len(draw.ACCENTS)
-
-
-def test_every_word_on_a_cover_reads_at_aa_in_both_themes() -> None:
-    # (text, surface) for the topic, the label and the chips, wherever a
-    # layout puts them.
-    pairs = [
-        ("--bs-emphasis-color", "--bs-body-bg"),
-        ("--bs-emphasis-color", "--bs-secondary-bg"),
-        ("--bs-secondary-color", "--bs-body-bg"),
-        ("--bs-secondary-color", "--bs-secondary-bg"),
-        ("--bs-body-color", "--bs-secondary-bg"),
-        ("--bs-body-color", "--bs-body-bg"),
-    ]
-    fails = [
-        f"{theme}: {fg} on {bg}"
-        for theme, t in themes()
-        for fg, bg in pairs
-        if ratio(t[fg], t[bg]) < 4.5
-    ]
-    assert not fails, fails
 
 
 def test_the_first_palettes_and_layouts_still_name_one() -> None:
@@ -312,45 +239,31 @@ def test_the_first_palettes_and_layouts_still_name_one() -> None:
     assert draw.layout("collage") is None
 
 
-def test_the_theme_is_the_apps_and_dark_unless_chosen() -> None:
+def test_a_cover_is_the_same_in_both_themes() -> None:
     assert Theme.parse("light") == Theme.LIGHT
     assert Theme.parse(" Light ") == Theme.LIGHT
     for s in ("", "dark", "auto", "x"):
         assert Theme.parse(s) == Theme.DARK
 
     def page(theme: Theme) -> str:
-        return draw.page(
-            draw.Cover("Cells", ("Mitosis",), "virus", draw.ACCENTS[0], "card", theme, 7)
-        )
+        return draw.page(draw.Cover("Cells", "virus", draw.ACCENTS[0], "aura", theme, 7))
 
     dark, light = page(Theme.DARK), page(Theme.LIGHT)
     assert dark.startswith("<!doctype html><html><head>")
     assert light.startswith('<!doctype html><html data-bs-theme="light"><head>')
-    assert draw.theme_css() in dark, "the app's own tokens"
     assert dark.replace("<html>", '<html data-bs-theme="light">', 1) == light, (
         "the theme switch is the only difference"
     )
 
 
-def test_a_word_too_long_for_a_line_is_broken_not_overflowed() -> None:
-    lines = draw.wrap(
-        "Pneumonoultramicroscopicsilicovolcanoconiosis", 100.0, 500.0, draw.Face.TITLE
-    )
-    assert len(lines) > 1
-    for line in lines:
-        assert draw.width(line, 100.0, draw.Face.TITLE) <= 500.0, line
+def test_the_seed_places_the_light_and_the_layout_the_arrangement() -> None:
+    def page(layout: str, seed: int) -> str:
+        return draw.page(draw.Cover("Cells", "virus", draw.ACCENTS[2], layout, Theme.DARK, seed))
 
-
-def test_fitting_shrinks_then_clips_with_an_ellipsis() -> None:
-    short = draw.fit("Cells", draw.Face.TITLE, 1000.0, 300.0, 2, 100.0, 50.0)
-    assert (short.size, len(short.lines)) == (100.0, 1)
-    f = draw.fit("word " * 200, draw.Face.TITLE, 600.0, 400.0, 3, 120.0, 60.0)
-    assert f.size == 60.0
-    assert len(f.lines) <= 3
-    assert f.lines[-1].endswith("…"), f.lines
-    for line in f.lines:
-        assert draw.width(line, f.size, draw.Face.TITLE) <= 600.0, line
-    assert len(f.lines) * f.size * 1.12 <= 400.0
+    assert page("aura", 7) == page("aura", 7), "deterministic"
+    assert page("aura", 7) != page("aura", 8)
+    assert 'class="glass"' in page("aura", 7) and 'class="foil"' not in page("aura", 7)
+    assert 'class="foil"' in page("relief", 7) and 'class="glass"' not in page("relief", 7)
 
 
 # ── motifs (cover/motifs.rs) ──────────────────────────────────────────────────
@@ -617,7 +530,7 @@ async def test_a_redraw_designs_the_cover_and_answers_once_drawn(
     monkeypatch.setattr(covers, "ai", model)
     r = await client.post(f"/api/collections/{c['id']}/cover")
     assert r.status_code == 200, r.text
-    spec = CoverSpec("Coral Reefs", ["Polyps", "Bleaching"], "water", "teal", "card")
+    spec = CoverSpec("Coral Reefs", ["Polyps", "Bleaching"], "water", "teal", "relief")
     assert r.json()["cover_version"] == cover.version(spec)
     assert len(model.asked) == 1 and model.asked[0]["max_tokens"] == 300
     prompt = model.asked[0]["messages"][1]["content"]
@@ -627,7 +540,7 @@ async def test_a_redraw_designs_the_cover_and_answers_once_drawn(
     page = await client.get(
         f"/api/collections/{c['id']}/cover", params={"v": r.json()["cover_version"]}
     )
-    assert "Coral Reefs" in page.text and "Polyps" in page.text and "#0f7a72" in page.text
+    assert "Coral Reefs" in page.text and "#0b5f59" in page.text, "the topic and the teal"
     assert (await client.get("/api/collections")).json()[0]["cover_version"] == cover.version(spec)
 
     # Turned off, every cover is the drawn one again, and nothing is asked.

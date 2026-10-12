@@ -22,7 +22,7 @@ from opennotebook.cover.draw import Theme
 __all__ = ["CoverSpec", "Theme"]
 
 # Bumped whenever the drawing changes, so every cached cover is redrawn.
-RENDER_VERSION = 2
+RENDER_VERSION = 3
 
 # How long a design may take before the collection keeps the cover it has.
 DESIGN_TIMEOUT = 30.0
@@ -128,7 +128,6 @@ def render(cid: str, spec: CoverSpec, theme: Theme) -> str:
     return draw.page(
         draw.Cover(
             topic=spec.topic,
-            terms=tuple(spec.terms),
             motif=spec.motif,
             accent=accent,
             layout=spec.layout,
