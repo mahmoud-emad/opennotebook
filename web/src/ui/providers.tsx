@@ -4,11 +4,10 @@
 // the model each kind of work will use. Settings › AI providers draws the
 // same pieces (`ProvidersPanel`).
 
-import { useCallback, useEffect, useState, type ReactNode } from "react";
-import { errText, settingsSet } from "./api";
+import { Suspense, lazy, useCallback, useEffect, useState, type ReactNode } from "react";
+import { errText } from "./api";
 import {
   providerAdd,
-  providerModels,
   providerRecheck,
   providerRemove,
   providersLoad,
@@ -17,7 +16,6 @@ import {
   type Preset,
   type Provider,
   type Providers,
-  type Role,
   type Setup,
 } from "./api-providers";
 import { Icon } from "./Icon";
@@ -191,7 +189,7 @@ export function SetupTour({ setup, onDone }: { setup: Setup; onDone: () => void 
                   Each kind of work uses the model below, picked from what your providers offer. Change any of them now
                   or later in Settings › Models.
                 </p>
-                <RolesList />
+                <Models />
                 <div className="setup-actions">
                   <button className="ghost" onClick={() => setStep("connect")}>
                     <Icon name="plus-lg" />
@@ -371,111 +369,23 @@ export function ProviderForm({ onConnected }: { onConnected: (p: Provider) => vo
 
 // ── the models each kind of work uses ────────────────────────────────────────
 
-/** Every role with the model it uses, each changeable to any model a
- * connected provider offers. A role no provider can do says so. */
-export function RolesList() {
-  const [doc, setDoc] = useState<Providers | null>(null);
-  const [err, setErr] = useState("");
-  const [models, setModels] = useState<string[]>([]);
+// The rows of Settings › Models, loaded with the rest of Settings the first
+// time they are shown: the tour's last step and the providers tab draw the
+// very same controls.
+const ModelSettings = lazy(() => import("./SettingsDialog").then((m) => ({ default: m.ModelSettings })));
 
-  const load = useCallback(() => {
-    providersLoad().then(
-      (d) => {
-        setDoc(d);
-        // Every connected provider's models, for the fields to suggest.
-        void Promise.all(d.providers.map((p) => providerModels(p.id).catch(() => [] as string[]))).then((lists) =>
-          setModels(lists.flat()),
-        );
-      },
-      (e: unknown) => setErr(errText(e)),
-    );
-  }, []);
-
-  useEffect(() => {
-    load();
-  }, [load]);
-
-  if (err !== "") {
-    return (
-      <div className="set-note err" role="alert">
-        The models could not be loaded: {err}
-      </div>
-    );
-  }
-  if (doc === null) {
-    return (
-      <div className="set-note">
-        <span className="mini-spin" /> Loading models…
-      </div>
-    );
-  }
+function Models() {
   return (
-    <div className="prov-roles">
-      <datalist id="prov-models">
-        {models.map((m) => (
-          <option key={m} value={m} />
-        ))}
-      </datalist>
-      {doc.roles.map((r) => (
-        <RoleRow key={r.role} role={r} onSaved={load} />
-      ))}
-    </div>
-  );
-}
-
-function RoleRow({ role, onSaved }: { role: Role; onSaved: () => void }) {
-  const [draft, setDraft] = useState(role.model);
-  const [seen, setSeen] = useState(role.model);
-  const [st, setSt] = useState<{ ok: boolean; text: string } | null>(null);
-  // The field follows the model in force when it changes under it.
-  if (seen !== role.model) {
-    setSeen(role.model);
-    setDraft(role.model);
-  }
-
-  const save = () => {
-    const v = draft.trim();
-    if (v === role.model) return;
-    setSt({ ok: true, text: "Saving…" });
-    // A role can fill more than one setting: maps and notes share one.
-    Promise.all(role.keys.map((k) => settingsSet(k, v))).then(
-      () => {
-        setSt({ ok: true, text: "Saved." });
-        void reloadSettings();
-        onSaved();
-      },
-      (e: unknown) => setSt({ ok: false, text: errText(e) }),
-    );
-  };
-
-  return (
-    <div className="set-row">
-      <div className="set-text">
-        <div className="set-label">{role.label}</div>
-        <div className="set-help">
-          {role.model === ""
-            ? "No connected provider can do this yet. Connect one that can, such as OpenRouter."
-            : role.chosen
-              ? `${role.model_name}, as chosen.`
-              : `${role.model_name}, suggested by your provider.`}
-        </div>
-        {st && <div className={st.ok ? "set-st ok" : "set-st err"}>{st.text}</div>}
-      </div>
-      <div className="set-ctl">
-        <input
-          className="set-input"
-          list="prov-models"
-          spellCheck={false}
-          aria-label={`${role.label} model`}
-          placeholder="Model id"
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onBlur={save}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") save();
-          }}
-        />
-      </div>
+    <div className="prov-models">
+      <Suspense
+        fallback={
+          <div className="set-note">
+            <span className="mini-spin" /> Loading models…
+          </div>
+        }
+      >
+        <ModelSettings />
+      </Suspense>
     </div>
   );
 }
@@ -558,7 +468,7 @@ export function ProvidersPanel() {
       </div>
       <div className="set-grp">
         <h4 className="set-gh">Models for each kind of work</h4>
-        <RolesList key={round} />
+        <Models key={round} />
       </div>
     </>
   );

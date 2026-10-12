@@ -52,10 +52,7 @@ const ADDED = {
   },
 };
 
-const ROLES = [
-  { role: "chat", label: "Chat and Ask", keys: ["OPENNOTEBOOK_CHAT_MODEL"], model: "google/gemini-2.5-flash-lite", model_name: "Gemini 2.5 Flash Lite", chosen: false },
-  { role: "image", label: "Pictures", keys: ["OPENNOTEBOOK_VIDEO_IMAGE_MODEL"], model: "", model_name: "", chosen: false },
-];
+const ROLES: unknown[] = [];
 
 type Route = (method: string, path: string, body: unknown) => Promise<Response> | undefined;
 
@@ -124,7 +121,34 @@ describe("the setup gate", () => {
       if (p === "/ai/providers" && m === "GET") return reply(200, { presets: PRESETS, providers: [ADDED], roles: ROLES });
       if (p === "/ai/providers" && m === "POST") return reply(201, ADDED);
       if (p === "/ai/providers/openrouter/models") return reply(200, { models: ["google/gemini-2.5-flash-lite"] });
-      if (p === "/settings") return reply(200, { tabs: [], settings: [] });
+      if (p === "/settings")
+        return reply(200, {
+          tabs: [{ id: "models", label: "Models", note: "", advanced: true }],
+          settings: [
+            {
+              key: "OPENNOTEBOOK_CHAT_MODEL",
+              tab: "Models",
+              group: "Chat & answers",
+              label: "Chat & Ask model",
+              help: "Answers in Ask.",
+              kind: "text",
+              value: "",
+              default: "google/gemini-2.5-flash-lite",
+              options: [
+                { value: "google/gemini-2.5-flash-lite", label: "Gemini 2.5 Flash Lite", hint: "" },
+                { value: "anthropic/claude-haiku-4.5", label: "Claude Haiku 4.5", hint: "" },
+              ],
+              suggestions: ["google/gemini-2.5-flash-lite", "anthropic/claude-haiku-4.5", "x/other"],
+              min: null,
+              max: null,
+              unit: "",
+              advanced: true,
+              model: true,
+              price: "",
+              scope: "instance",
+            },
+          ],
+        });
       return undefined;
     });
     render(
@@ -137,8 +161,15 @@ describe("the setup gate", () => {
     fireEvent.click(screen.getByText("Test and connect"));
     expect(await screen.findByText("Choose models")).toBeTruthy();
     expect(screen.getByText(/Connected to OpenRouter: \$4\.13 left on this key\./)).toBeTruthy();
-    expect(await screen.findByText("Gemini 2.5 Flash Lite, suggested by your provider.")).toBeTruthy();
-    expect(screen.getByText(/No connected provider can do this yet/)).toBeTruthy();
+    // The same dropdown as Settings › Models, on the model in force.
+    const pick = (await screen.findByLabelText("Chat & Ask model")) as HTMLSelectElement;
+    expect(pick.tagName).toBe("SELECT");
+    expect(pick.value).toBe("google/gemini-2.5-flash-lite");
+    expect([...pick.options].map((o) => o.textContent)).toEqual([
+      "Gemini 2.5 Flash Lite",
+      "Claude Haiku 4.5",
+      "Custom…",
+    ]);
     fireEvent.click(screen.getByText("Open the studio"));
     expect(await screen.findByText("the studio")).toBeTruthy();
   });

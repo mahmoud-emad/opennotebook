@@ -69,21 +69,10 @@ export async function saveSetting(key: string, value: string): Promise<[SettingI
   }
 }
 
-export function SettingsDialog({ onClose }: { onClose: () => void }) {
-  const s = useStore(SETTINGS);
-  const theme = useStore(THEME);
-  // The tab shown, by id. Starts where the link that opened it pointed.
-  const [tab, setTab] = useState(() => SETTINGS.get().open ?? GENERAL);
+/** Each row's save state, and the save that keeps the page's copy of the
+ * settings in step with what the server stored. */
+export function useSaver(): [Record<string, SaveState>, (key: string, value: string) => void] {
   const [status, setStatus] = useState<Record<string, SaveState>>({});
-  const box = useRef<HTMLDivElement>(null);
-
-  // Read again on opening: another tab or an agent may have changed them.
-  // Focus moves into the dialog so Escape and Tab work from the start.
-  useEffect(() => {
-    void reloadSettings();
-    box.current?.focus();
-  }, []);
-
   const save = (key: string, value: string) => {
     setStatus((m) => ({ ...m, [key]: { kind: "saving" } }));
     void saveSetting(key, value).then(([item, st]) => {
@@ -96,6 +85,67 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
       setStatus((m) => ({ ...m, [key]: st }));
     });
   };
+  return [status, save];
+}
+
+/** The model rows of Settings › Models, as they are drawn there, for the
+ * setup tour and Settings › AI providers: one control for choosing a model
+ * everywhere. Read afresh when shown, since connecting a provider changes
+ * what each row offers. */
+export function ModelSettings() {
+  const s = useStore(SETTINGS);
+  const [status, save] = useSaver();
+  useEffect(() => {
+    void reloadSettings();
+  }, []);
+  const rows = s.doc.items.filter((i) => i.model);
+  if (rows.length === 0 && s.err !== "") {
+    return (
+      <div className="set-note err" role="alert">
+        The models could not be loaded: {s.err}
+        <div>
+          <button className="est-retry" onClick={() => void reloadSettings()}>
+            Try again
+          </button>
+        </div>
+      </div>
+    );
+  }
+  if (rows.length === 0) {
+    return (
+      <div className="set-note">
+        <span className="mini-spin" /> Loading models…
+      </div>
+    );
+  }
+  return (
+    <>
+      {grouped(rows).map(([g, items]) => (
+        <div key={`g-${g}`} className="set-grp">
+          {g !== "" && <h4 className="set-gh">{g}</h4>}
+          {items.map((item) => (
+            <SettingRow key={item.key} item={item} status={status[item.key]} onSave={save} />
+          ))}
+        </div>
+      ))}
+    </>
+  );
+}
+
+export function SettingsDialog({ onClose }: { onClose: () => void }) {
+  const s = useStore(SETTINGS);
+  const theme = useStore(THEME);
+  // The tab shown, by id. Starts where the link that opened it pointed.
+  const [tab, setTab] = useState(() => SETTINGS.get().open ?? GENERAL);
+  const [status, save] = useSaver();
+  const box = useRef<HTMLDivElement>(null);
+
+  // Read again on opening: another tab or an agent may have changed them.
+  // Focus moves into the dialog so Escape and Tab work from the start.
+  useEffect(() => {
+    void reloadSettings();
+    box.current?.focus();
+  }, []);
 
   const d = s.doc;
   const loaded = s.loaded;
