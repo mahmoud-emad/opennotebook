@@ -25,6 +25,7 @@ type Role = Literal[
     "long",  # reads every source whole: mind maps, study notes
     "chat",  # Ask, the add-sources assistant, naming: calls tools reliably
     "audio",  # hears a spoken question
+    "transcribe",  # writes down what an audio or video source says
     "search",  # searches the web and returns the pages it cites
     "image",  # paints a picture
     "embed",  # turns text into vectors for search
@@ -39,6 +40,7 @@ ROLES: tuple[Role, ...] = (
     "long",
     "chat",
     "audio",
+    "transcribe",
     "search",
     "image",
     "embed",
@@ -57,6 +59,7 @@ ROLE_LABELS: dict[Role, str] = {
     "long": "Mind maps and notes",
     "chat": "Chat and Ask",
     "audio": "Spoken questions",
+    "transcribe": "Transcribing audio and video",
     "search": "Web search",
     "image": "Pictures",
     "embed": "Search embeddings",
@@ -85,6 +88,9 @@ class Preset:
     usage_cost: bool = False  # `usage: {include: true}` reports the cost
     stream_usage: bool = True  # `stream_options: {include_usage: true}`
     images: bool = False  # `modalities: [image, text]` paints pictures
+    # Has `/audio/transcriptions`; without it, audio is transcribed by a
+    # chat model that hears it.
+    transcription_api: bool = False
     # What the answer's length limit is called; OpenAI's reasoning models
     # refuse `max_tokens`.
     max_tokens_field: str = "max_tokens"
@@ -95,6 +101,12 @@ class Preset:
     listed_prices: bool = False
     # Whether the setup tour offers it; `custom` is offered as its own form.
     listed: bool = True
+    # The header the key goes in, when not `Authorization: Bearer`: Azure
+    # takes `api-key`.
+    key_header: str = ""
+    # Whether the key field is shown though no key is needed: a gateway may
+    # want one, a local server does not.
+    key_optional: bool = False
     # Model ids to suggest for each role, best first.
     suggest: dict[Role, tuple[str, ...]] = field(default_factory=dict[Role, tuple[str, ...]])
 
@@ -113,6 +125,7 @@ PRESETS: tuple[Preset, ...] = (
         images=True,
         listed_prices=True,
         suggest={
+            "transcribe": ("google/gemini-2.5-flash-lite", "google/gemini-2.5-flash"),
             "text": ("anthropic/claude-haiku-4.5",),
             "strong": ("anthropic/claude-haiku-4.5",),
             "video": ("anthropic/claude-sonnet-5.5", "anthropic/claude-haiku-4.5"),
@@ -134,7 +147,9 @@ PRESETS: tuple[Preset, ...] = (
         blurb="GPT models, spoken questions and search embeddings.",
         max_tokens_field="max_completion_tokens",
         fixed_temperature=("gpt-5", "o1", "o3", "o4"),
+        transcription_api=True,
         suggest={
+            "transcribe": ("gpt-4o-mini-transcribe", "whisper-1"),
             "text": ("gpt-5.4-mini", "gpt-5-mini", "gpt-4.1-mini", "gpt-4o-mini"),
             "strong": ("gpt-5.4", "gpt-5", "gpt-4.1"),
             "video": ("gpt-5.4", "gpt-5", "gpt-4.1"),
@@ -174,6 +189,7 @@ PRESETS: tuple[Preset, ...] = (
         key_page="aistudio.google.com/apikey",
         blurb="Gemini models with long context, spoken questions and search embeddings.",
         suggest={
+            "transcribe": ("gemini-2.5-flash-lite", "gemini-2.5-flash"),
             "text": ("gemini-2.5-flash-lite", "gemini-2.5-flash"),
             "strong": ("gemini-2.5-pro", "gemini-2.5-flash"),
             "video": ("gemini-2.5-pro", "gemini-2.5-flash"),
@@ -192,7 +208,9 @@ PRESETS: tuple[Preset, ...] = (
         key_env=("MISTRAL_API_KEY",),
         key_page="console.mistral.ai/api-keys",
         blurb="Mistral models and search embeddings.",
+        transcription_api=True,
         suggest={
+            "transcribe": ("voxtral-mini-latest",),
             "text": ("mistral-small-latest",),
             "strong": ("mistral-large-latest", "mistral-medium-latest"),
             "video": ("mistral-large-latest", "mistral-medium-latest"),
@@ -212,7 +230,9 @@ PRESETS: tuple[Preset, ...] = (
         blurb="Open models served very fast.",
         # Strict schemas only on a few models, and never with tools.
         json_schema=False,
+        transcription_api=True,
         suggest={
+            "transcribe": ("whisper-large-v3-turbo", "whisper-large-v3"),
             "text": ("openai/gpt-oss-120b", "llama-3.3-70b-versatile"),
             "strong": ("openai/gpt-oss-120b",),
             "video": ("openai/gpt-oss-120b",),
@@ -257,6 +277,75 @@ PRESETS: tuple[Preset, ...] = (
         blurb="Grok models.",
     ),
     Preset(
+        kind="azure",
+        label="Azure OpenAI",
+        # Each resource has its own address: https://<resource>.openai.azure.com/openai/v1
+        base_url="",
+        key_env=("AZURE_OPENAI_API_KEY",),
+        url_env=("AZURE_OPENAI_BASE_URL",),
+        key_page="portal.azure.com",
+        blurb="OpenAI models on your Azure resource. Models are named by your deployments.",
+        key_header="api-key",
+        max_tokens_field="max_completion_tokens",
+        fixed_temperature=("gpt-5", "o1", "o3", "o4"),
+    ),
+    Preset(
+        kind="cohere",
+        label="Cohere",
+        base_url="https://api.cohere.ai/compatibility/v1",
+        key_env=("COHERE_API_KEY", "CO_API_KEY"),
+        key_page="dashboard.cohere.com/api-keys",
+        blurb="Command models and multilingual search embeddings.",
+        json_schema=False,
+        stream_usage=False,
+        suggest={
+            "text": ("command-a-03-2025", "command-r-plus-08-2024"),
+            "chat": ("command-a-03-2025", "command-r-plus-08-2024"),
+            "long": ("command-a-03-2025",),
+            "embed": ("embed-v4.0", "embed-multilingual-v3.0"),
+        },
+    ),
+    Preset(
+        kind="fireworks",
+        label="Fireworks AI",
+        base_url="https://api.fireworks.ai/inference/v1",
+        key_env=("FIREWORKS_API_KEY",),
+        key_page="app.fireworks.ai/settings/users/api-keys",
+        blurb="Open models served fast.",
+        json_schema=False,
+    ),
+    Preset(
+        kind="cerebras",
+        label="Cerebras",
+        base_url="https://api.cerebras.ai/v1",
+        key_env=("CEREBRAS_API_KEY",),
+        key_page="cloud.cerebras.ai",
+        blurb="Open models at very high speed.",
+        json_schema=False,
+        suggest={
+            "text": ("gpt-oss-120b", "llama-3.3-70b"),
+            "chat": ("gpt-oss-120b", "llama-3.3-70b"),
+        },
+    ),
+    Preset(
+        kind="qwen",
+        label="Qwen (Alibaba Cloud)",
+        base_url="https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
+        key_env=("DASHSCOPE_API_KEY",),
+        key_page="bailian.console.alibabacloud.com",
+        blurb="Qwen models through DashScope, with long context and embeddings.",
+        json_schema=False,
+        suggest={
+            "text": ("qwen-plus", "qwen-turbo"),
+            "strong": ("qwen-max", "qwen-plus"),
+            "video": ("qwen-max", "qwen-plus"),
+            "strongest": ("qwen-max",),
+            "long": ("qwen-long", "qwen-plus"),
+            "chat": ("qwen-plus", "qwen-turbo"),
+            "embed": ("text-embedding-v4", "text-embedding-v3"),
+        },
+    ),
+    Preset(
         kind="ollama",
         label="Ollama",
         base_url="http://localhost:11434/v1",
@@ -264,6 +353,17 @@ PRESETS: tuple[Preset, ...] = (
         url_env=("OLLAMA_BASE_URL",),
         needs_key=False,
         blurb="Models running on your own machine. Free and private; no key needed.",
+        json_schema=False,
+        stream_usage=False,
+    ),
+    Preset(
+        kind="lmstudio",
+        label="LM Studio",
+        base_url="http://localhost:1234/v1",
+        key_env=(),
+        url_env=("LMSTUDIO_BASE_URL",),
+        needs_key=False,
+        blurb="Models running in LM Studio on your own machine. No key needed.",
         json_schema=False,
         stream_usage=False,
     ),
@@ -278,6 +378,7 @@ PRESETS: tuple[Preset, ...] = (
         json_schema=False,
         stream_usage=False,
         listed=False,
+        key_optional=True,
     ),
 )
 
@@ -294,8 +395,10 @@ def kind_of_url(url: str) -> str:
     `OPENNOTEBOOK_AI_BASE_URL` names no provider, only where it is."""
     u = url.strip().rstrip("/").lower()
     for p in PRESETS:
-        if p.base_url and p.kind not in ("ollama", "custom") and u == p.base_url.lower():
+        if p.base_url and p.needs_key and u == p.base_url.lower():
             return p.kind
     if "openrouter.ai" in u:
         return "openrouter"
+    if ".openai.azure.com" in u:
+        return "azure"
     return "custom"

@@ -73,6 +73,8 @@ def auth_headers(kind: str, key: str) -> dict[str, str]:
         return {}
     if kind == "anthropic":
         return {"x-api-key": key, "anthropic-version": "2023-06-01"}
+    if kind == "azure":
+        return {"api-key": key}
     return {"Authorization": f"Bearer {key}"}
 
 

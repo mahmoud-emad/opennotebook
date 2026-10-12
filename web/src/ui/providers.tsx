@@ -145,8 +145,8 @@ export function SetupTour({ setup, onDone }: { setup: Setup; onDone: () => void 
                     provider.
                   </li>
                   <li>
-                    <Icon name="check-circle-fill" /> OpenRouter, OpenAI, Anthropic, Gemini, Mistral, Groq, DeepSeek,
-                    Ollama and any OpenAI-compatible server all work.
+                    <Icon name="check-circle-fill" /> OpenRouter, OpenAI, Anthropic, Gemini, Azure OpenAI, Mistral,
+                    Groq, DeepSeek, Cohere, Qwen, Ollama, LM Studio and any OpenAI-compatible server all work.
                   </li>
                 </ul>
                 <div className="setup-actions">
@@ -232,7 +232,9 @@ export function ProviderForm({ onConnected }: { onConnected: (p: Provider) => vo
   }, []);
 
   const p = presets.find((x) => x.kind === kind);
-  const local = kind === "ollama" || kind === "custom";
+  // A provider that runs anywhere, or lives at an address of your own
+  // (Azure's resource), is asked where it is.
+  const local = p !== undefined && (!p.needs_key || p.base_url === "");
   const showUrl = local || otherUrl;
   const ready = p !== undefined && (!p.needs_key || key.trim() !== "") && (!showUrl || url.trim() !== "" || p.base_url !== "");
 
@@ -293,15 +295,17 @@ export function ProviderForm({ onConnected }: { onConnected: (p: Provider) => vo
       </div>
       {p && (
         <div className="prov-fields">
-          {p.needs_key && (
+          {(p.needs_key || p.key_optional) && (
             <label className="prov-field">
-              <span className="set-label">{p.label} API key</span>
+              <span className="set-label">
+                {p.label} API key{p.needs_key ? "" : " (if it asks for one)"}
+              </span>
               <input
                 className="set-input prov-input"
                 type="password"
                 autoComplete="off"
                 spellCheck={false}
-                placeholder="Paste your key"
+                placeholder={p.needs_key ? "Paste your key" : "Leave empty if it needs none"}
                 value={key}
                 onChange={(e) => setKey(e.target.value)}
                 onKeyDown={(e) => {
@@ -333,6 +337,7 @@ export function ProviderForm({ onConnected }: { onConnected: (p: Provider) => vo
               <span className="set-help">
                 The server's OpenAI-compatible address; it usually ends in /v1.
                 {kind === "ollama" && " When the studio runs in Docker, use http://host.docker.internal:11434/v1."}
+                {kind === "azure" && " Your resource's address, such as https://my-resource.openai.azure.com/openai/v1."}
               </span>
             </label>
           ) : (

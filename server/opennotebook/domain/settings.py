@@ -101,6 +101,12 @@ VIDEO_ESCALATE_MODEL_DEFAULT = "anthropic/claude-opus-5.5"
 VIDEO_IMAGE_MODEL_KEY = "OPENNOTEBOOK_VIDEO_IMAGE_MODEL"
 VIDEO_IMAGE_MODEL_DEFAULT = "google/gemini-3.1-flash-image"
 
+# The model that writes down what an audio or video source says. A chat
+# model that hears audio does it on OpenRouter; OpenAI and Groq have their
+# own transcription models.
+TRANSCRIBE_MODEL_KEY = "OPENNOTEBOOK_TRANSCRIBE_MODEL"
+TRANSCRIBE_MODEL_DEFAULT = "google/gemini-2.5-flash-lite"
+
 # Perplexity's Sonar does a real web search behind a chat completion and
 # returns the pages it found.
 SEARCH_MODEL_KEY = "OPENNOTEBOOK_SEARCH_MODEL"
@@ -125,6 +131,7 @@ ROLE_OF: dict[str, Role] = {
     NOTES_MODEL_KEY: "long",
     CHAT_MODEL_KEY: "chat",
     ANSWER_MODEL_KEY: "audio",
+    TRANSCRIBE_MODEL_KEY: "transcribe",
     SEARCH_MODEL_KEY: "search",
 }
 
@@ -165,6 +172,10 @@ CHAT_MODELS: Pairs = (
 ANSWER_MODELS: Pairs = (
     ("openai/gpt-audio-mini", "GPT Audio Mini"),
     ("openai/gpt-audio", "GPT Audio"),
+)
+TRANSCRIBE_MODELS: Pairs = (
+    ("google/gemini-2.5-flash-lite", "Gemini 2.5 Flash Lite"),
+    ("google/gemini-2.5-flash", "Gemini 2.5 Flash"),
 )
 # Search models that return the pages they cite.
 SEARCH_MODELS: Pairs = (
@@ -671,6 +682,14 @@ CATALOGUE: tuple[Def, ...] = (
         "Answers questions asked aloud in the player. It must accept audio input.",
         ANSWER_MODELS,
         ANSWER_MODEL_DEFAULT,
+        CHAT,
+    ),
+    _model(
+        TRANSCRIBE_MODEL_KEY,
+        "Transcription model",
+        "Writes down what an audio or video source says. It must hear audio.",
+        TRANSCRIBE_MODELS,
+        TRANSCRIBE_MODEL_DEFAULT,
         CHAT,
     ),
     _model(

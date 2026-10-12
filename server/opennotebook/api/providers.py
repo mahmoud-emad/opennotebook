@@ -65,6 +65,7 @@ class PresetOut(BaseModel):
     blurb: str
     base_url: str = Field(description="Its usual address; empty for a custom server")
     needs_key: bool
+    key_optional: bool = Field(description="Show a key field though none is needed")
     key_page: str = Field(description="Where to make a key, without the scheme")
     key_env: str = Field(description="The environment variable that sets its key instead")
     roles: list[str] = Field(description="The roles it suggests a model for")
@@ -246,6 +247,7 @@ async def list_providers(me: Me) -> ProvidersOut:
                 blurb=p.blurb,
                 base_url=p.base_url,
                 needs_key=p.needs_key,
+                key_optional=p.key_optional,
                 key_page=p.key_page,
                 key_env=(p.key_env or p.url_env or ("",))[0],
                 roles=[r for r in ROLES if r in p.suggest],

@@ -56,8 +56,8 @@ def test_keys_are_unique_and_namespaced() -> None:
         seen.add(d.key)
 
 
-def test_there_are_29_settings_and_no_secret_among_them() -> None:
-    assert len(st.CATALOGUE) == 33
+def test_there_are_34_settings_and_no_secret_among_them() -> None:
+    assert len(st.CATALOGUE) == 34
     # The AI key comes from the environment only, never from a settings row.
     for d in st.CATALOGUE:
         assert "KEY" not in d.key and "SECRET" not in d.key, d.key
@@ -486,9 +486,15 @@ async def test_the_create_panel_offers_what_the_settings_say(client: AsyncClient
     assert o["show_cost"]
     assert o["research"] == {"label": "Standard research", "takes": "a few minutes"}
     up = o["upload"]
-    assert up["accept"] == ".pdf,.docx,.pptx,.xlsx,.md,.markdown,.txt,.csv"
+    assert up["accept"] == (
+        ".pdf,.docx,.pptx,.xlsx,.md,.markdown,.txt,.csv,"
+        ".mp3,.m4a,.wav,.ogg,.oga,.opus,.flac,.aac,.mp4,.m4v,.mov,.webm,.mkv"
+    )
     assert (up["max_mb"], up["max_files"], up["max_links"]) == (25, 10, 8)
-    assert up["hint"] == "PDF, Office, Markdown, text or CSV, up to 25 MB. Or drop them here."
+    assert up["hint"] == (
+        "PDF, Office, Markdown, text, CSV, audio or video. Documents up to 25 MB, recordings up "
+        "to 500 MB. Or drop them here."
+    )
 
 
 async def test_the_create_panel_follows_a_change_of_settings(client: AsyncClient) -> None:

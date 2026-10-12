@@ -19,7 +19,7 @@ import asyncio
 import base64
 import binascii
 import json
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass, field
 from functools import lru_cache
 from typing import Any, Literal
@@ -33,6 +33,15 @@ from opennotebook.ai.prices import Catalogue, Price
 from opennotebook.ai.providers import BY_KIND, Preset
 
 Finish = Literal["stop", "length", "tool_calls", "content_filter"] | str
+
+# How a model that hears audio is asked to write it down, and how long its
+# transcript of one piece (`media.SEGMENT_S`) may be.
+TRANSCRIBE_PROMPT = (
+    "Transcribe this audio verbatim, in the language it is spoken in. Reply with the "
+    "transcript only: no title, no notes, no timestamps. Start a new paragraph where the "
+    "speaker or the topic changes."
+)
+TRANSCRIBE_MAX_TOKENS = 8000
 
 
 @dataclass
@@ -208,6 +217,8 @@ class Ai:
             max_retries=0,
             timeout=timeout,
             http_client=http,
+            # Azure takes the key in its own header.
+            default_headers={self.preset.key_header: api_key} if self.preset.key_header else None,
         )
         self._retries = retries
         self._timeout = timeout
@@ -446,10 +457,54 @@ class Ai:
         return [list(d.embedding) for d in data]
 
     async def _embed_tries(self, model: str, texts: list[str]) -> Any:
+        return await self._tries(lambda: self._client.embeddings.create(model=model, input=texts))
+
+    async def transcribe(self, model: str, audio: bytes, fmt: str = "mp3") -> str:
+        """What a piece of audio says, as text: by the provider's
+        `/audio/transcriptions` where it has one, else by asking a model
+        that hears audio to write it down. Charged like any other call."""
+        if self.preset.transcription_api:
+            try:
+                async with asyncio.timeout(self._timeout):
+                    resp = await self._tries(
+                        lambda: self._client.audio.transcriptions.create(
+                            model=model, file=(f"audio.{fmt}", audio, f"audio/{fmt}")
+                        )
+                    )
+            except TimeoutError as e:
+                raise AiError(Kind.UNAVAILABLE, f"no transcript within {self._timeout:.0f}s") from e
+            u: Any = getattr(resp, "usage", None)
+            usage = _usage(u.model_dump()) if u is not None and hasattr(u, "model_dump") else None
+            await self._charge(model, usage)
+            return str(getattr(resp, "text", "") or "").strip()
+        done = await self.complete(
+            model,
+            [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": TRANSCRIBE_PROMPT},
+                        {
+                            "type": "input_audio",
+                            "input_audio": {
+                                "data": base64.b64encode(audio).decode(),
+                                "format": fmt,
+                            },
+                        },
+                    ],
+                }
+            ],
+            max_tokens=TRANSCRIBE_MAX_TOKENS,
+            temperature=0,
+        )
+        return done.text.strip()
+
+    async def _tries(self, call: Callable[[], Awaitable[Any]]) -> Any:
+        """`call` with the retries a busy or unreachable provider is worth."""
         attempt = 0
         while True:
             try:
-                return await self._client.embeddings.create(model=model, input=texts)
+                return await call()
             except openai.APIStatusError as e:
                 err = AiError.from_status(e.status_code, e.response.text)
             except (openai.APIConnectionError, openai.APITimeoutError) as e:
@@ -545,6 +600,10 @@ class Router:
     async def embed(self, model: str, texts: list[str]) -> list[list[float]]:
         client, own = await self.route(model)
         return await client.embed(own, texts)
+
+    async def transcribe(self, model: str, audio: bytes, fmt: str = "mp3") -> str:
+        client, own = await self.route(model)
+        return await client.transcribe(own, audio, fmt)
 
     async def aclose(self) -> None:
         for _, c in self._clients.values():

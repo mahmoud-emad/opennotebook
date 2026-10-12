@@ -541,3 +541,69 @@ def test_a_gateway_with_openrouter_style_ids_gets_openrouters_picks() -> None:
     assert connections.suggest(c, "image", offered) is None
     # Its list unknown, nothing is guessed.
     assert connections.suggest(c, "text", None) is None
+
+
+async def test_azure_takes_its_key_in_its_own_header() -> None:
+    seen: list[httpx2.Request] = []
+
+    def handler(r: httpx2.Request) -> httpx2.Response:
+        seen.append(r)
+        return reply()
+
+    ai = Ai(
+        "https://res.openai.azure.com/openai/v1",
+        "az-key",
+        http=http(handler),
+        retries=0,
+        preset=BY_KIND["azure"],
+    )
+    await ai.complete("my-deployment", [], max_tokens=5)
+    assert seen[0].headers["api-key"] == "az-key"
+    assert json.loads(seen[0].content)["max_completion_tokens"] == 5
+
+
+def test_azure_and_lm_studio_connect_from_their_own_variables() -> None:
+    found = connections.from_env(
+        {
+            "AZURE_OPENAI_API_KEY": "k",
+            "AZURE_OPENAI_BASE_URL": "https://res.openai.azure.com/openai/v1/",
+            "LMSTUDIO_BASE_URL": "http://localhost:1234/v1",
+        }
+    )
+    assert [(c.id, c.base_url, c.usable) for c in found] == [
+        ("azure", "https://res.openai.azure.com/openai/v1", True),
+        ("lmstudio", "http://localhost:1234/v1", True),
+    ]
+    # An Azure key with no resource address cannot be used.
+    [c] = connections.from_env({"AZURE_OPENAI_API_KEY": "k"})
+    assert not c.usable
+    assert kind_of_url("https://res.openai.azure.com/openai/v1") == "azure"
+
+
+async def test_azures_key_is_checked_in_its_header() -> None:
+    def handler(r: httpx2.Request) -> httpx2.Response:
+        if r.headers.get("api-key") != "good":
+            return httpx2.Response(401, json={})
+        return models("my-deployment") if r.url.path.endswith("/models") else reply()
+
+    az = Connection(
+        "azure", "azure", "Azure OpenAI", "https://res.openai.azure.com/openai/v1", "good", "app"
+    )
+    assert (await check(az, http=http(handler))).ok
+    bad = Connection(
+        "azure", "azure", "Azure OpenAI", "https://res.openai.azure.com/openai/v1", "bad", "app"
+    )
+    assert (await check(bad, http=http(handler))).status == "bad_key"
+
+
+def test_the_tests_clear_every_variable_a_provider_reads() -> None:
+    """No developer's own key reaches a test: conftest unsets each one."""
+    import re
+    from pathlib import Path
+
+    from opennotebook.ai.providers import PRESETS
+
+    names = {n for p in PRESETS for n in (*p.key_env, *p.url_env)}
+    conftest = (Path(__file__).parent.parent / "conftest.py").read_text()
+    cleared = set(re.findall(r'os\.environ\.pop\("([A-Z_]+)"', conftest))
+    assert names <= cleared, sorted(names - cleared)
