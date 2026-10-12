@@ -522,3 +522,22 @@ def test_a_second_provider_fills_the_roles_the_first_cannot(
     connections.forget()
     assert connections.default_for("text", {}) == "claude-haiku-5-5"
     assert connections.default_for("audio", {}) == "gemini:gemini-2.5-flash"
+
+
+def test_openrouters_suggestions_are_the_settings_own_defaults() -> None:
+    """Connecting OpenRouter changes no default: each role's first pick is
+    what the setting already defaulted to."""
+    for key, role in st.ROLE_OF.items():
+        d = st.find(key)
+        assert d is not None
+        assert BY_KIND["openrouter"].suggest[role][0] == d.default, key
+
+
+def test_a_gateway_with_openrouter_style_ids_gets_openrouters_picks() -> None:
+    c = conn("custom", key="", url="http://gateway.lan/v1")
+    offered = {"anthropic/claude-haiku-4.5", "perplexity/sonar", "x/other"}
+    assert connections.suggest(c, "text", offered) == "anthropic/claude-haiku-4.5"
+    assert connections.suggest(c, "search", offered) == "perplexity/sonar"
+    assert connections.suggest(c, "image", offered) is None
+    # Its list unknown, nothing is guessed.
+    assert connections.suggest(c, "text", None) is None

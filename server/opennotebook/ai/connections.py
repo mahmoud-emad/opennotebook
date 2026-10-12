@@ -197,10 +197,18 @@ def ref(c: Connection, model: str, conns: list[Connection]) -> str:
 
 def suggest(c: Connection, role: Role, offered: set[str] | None) -> str | None:
     """`c`'s model for `role`: its preset's first suggestion that `c` offers,
-    or, when its list is not known, its first suggestion."""
+    or, when its list is not known, its first suggestion; failing those, an
+    OpenRouter-style pick its list offers."""
     for m in c.preset.suggest.get(role, ()):
         if not offered or m in offered:
             return m
+    # A gateway with no suggestions of its own (a LiteLLM proxy, a broker)
+    # often names its models the way OpenRouter does: OpenRouter's picks
+    # that it offers.
+    if offered and c.kind != "openrouter":
+        for m in BY_KIND["openrouter"].suggest.get(role, ()):
+            if m in offered:
+                return m
     return None
 
 

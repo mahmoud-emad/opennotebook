@@ -18,7 +18,8 @@ from typing import Literal
 # What a model is used for. Each model setting has one (`ROLE_OF`).
 type Role = Literal[
     "text",  # outlines and spoken scripts: cheap and careful
-    "strong",  # slides as HTML, whiteboard scenes
+    "strong",  # slides as HTML, figures included
+    "video",  # plans a whiteboard video and writes its scenes
     "strongest",  # a scene written once more when repairs failed
     "vision",  # checks a finished board, so it reads images
     "long",  # reads every source whole: mind maps, study notes
@@ -32,6 +33,7 @@ type Role = Literal[
 ROLES: tuple[Role, ...] = (
     "text",
     "strong",
+    "video",
     "strongest",
     "vision",
     "long",
@@ -44,11 +46,12 @@ ROLES: tuple[Role, ...] = (
 
 # The roles one main model can stand in for when a provider suggests nothing
 # better: every role that only reads and writes text.
-TEXT_ROLES: tuple[Role, ...] = ("text", "strong", "strongest", "long", "chat")
+TEXT_ROLES: tuple[Role, ...] = ("text", "strong", "video", "strongest", "long", "chat")
 
 ROLE_LABELS: dict[Role, str] = {
     "text": "Scripts",
-    "strong": "Slides and videos",
+    "strong": "Slides",
+    "video": "Whiteboard videos",
     "strongest": "Hard video scenes",
     "vision": "Checking pictures",
     "long": "Mind maps and notes",
@@ -111,7 +114,8 @@ PRESETS: tuple[Preset, ...] = (
         listed_prices=True,
         suggest={
             "text": ("anthropic/claude-haiku-4.5",),
-            "strong": ("anthropic/claude-sonnet-5.5", "anthropic/claude-haiku-4.5"),
+            "strong": ("anthropic/claude-haiku-4.5",),
+            "video": ("anthropic/claude-sonnet-5.5", "anthropic/claude-haiku-4.5"),
             "strongest": ("anthropic/claude-opus-5.5", "anthropic/claude-sonnet-5.5"),
             "vision": ("anthropic/claude-haiku-4.5",),
             "long": ("google/gemini-2.5-flash-lite",),
@@ -133,6 +137,7 @@ PRESETS: tuple[Preset, ...] = (
         suggest={
             "text": ("gpt-5.4-mini", "gpt-5-mini", "gpt-4.1-mini", "gpt-4o-mini"),
             "strong": ("gpt-5.4", "gpt-5", "gpt-4.1"),
+            "video": ("gpt-5.4", "gpt-5", "gpt-4.1"),
             "strongest": ("gpt-5.4", "gpt-5", "gpt-4.1"),
             "vision": ("gpt-5.4-mini", "gpt-5-mini", "gpt-4.1-mini", "gpt-4o-mini"),
             "long": ("gpt-5.4-mini", "gpt-5-mini", "gpt-4.1-mini"),
@@ -154,6 +159,7 @@ PRESETS: tuple[Preset, ...] = (
         suggest={
             "text": ("claude-haiku-5-5", "claude-haiku-4-5"),
             "strong": ("claude-sonnet-5-5", "claude-sonnet-4-5", "claude-haiku-4-5"),
+            "video": ("claude-sonnet-5-5", "claude-sonnet-4-5", "claude-haiku-4-5"),
             "strongest": ("claude-opus-5-5", "claude-sonnet-5-5", "claude-opus-4-5"),
             "vision": ("claude-haiku-5-5", "claude-haiku-4-5"),
             "long": ("claude-haiku-5-5", "claude-haiku-4-5"),
@@ -170,6 +176,7 @@ PRESETS: tuple[Preset, ...] = (
         suggest={
             "text": ("gemini-2.5-flash-lite", "gemini-2.5-flash"),
             "strong": ("gemini-2.5-pro", "gemini-2.5-flash"),
+            "video": ("gemini-2.5-pro", "gemini-2.5-flash"),
             "strongest": ("gemini-2.5-pro",),
             "vision": ("gemini-2.5-flash", "gemini-2.5-flash-lite"),
             "long": ("gemini-2.5-flash-lite", "gemini-2.5-flash"),
@@ -188,6 +195,7 @@ PRESETS: tuple[Preset, ...] = (
         suggest={
             "text": ("mistral-small-latest",),
             "strong": ("mistral-large-latest", "mistral-medium-latest"),
+            "video": ("mistral-large-latest", "mistral-medium-latest"),
             "strongest": ("mistral-large-latest",),
             "vision": ("mistral-medium-latest", "mistral-small-latest"),
             "long": ("mistral-medium-latest", "mistral-small-latest"),
@@ -207,6 +215,7 @@ PRESETS: tuple[Preset, ...] = (
         suggest={
             "text": ("openai/gpt-oss-120b", "llama-3.3-70b-versatile"),
             "strong": ("openai/gpt-oss-120b",),
+            "video": ("openai/gpt-oss-120b",),
             "strongest": ("openai/gpt-oss-120b",),
             "long": ("openai/gpt-oss-120b",),
             "chat": ("openai/gpt-oss-120b", "llama-3.3-70b-versatile"),
@@ -224,6 +233,7 @@ PRESETS: tuple[Preset, ...] = (
         suggest={
             "text": ("deepseek-chat",),
             "strong": ("deepseek-chat",),
+            "video": ("deepseek-chat",),
             "strongest": ("deepseek-reasoner", "deepseek-chat"),
             "long": ("deepseek-chat",),
             "chat": ("deepseek-chat",),

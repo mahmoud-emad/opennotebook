@@ -11,6 +11,7 @@ from opennotebook.ai.client import ai
 from opennotebook.ai.client import router as ai_router
 from opennotebook.ai.connections import Connection
 from opennotebook.ai.prices import Price, hint
+from opennotebook.ai.providers import BY_KIND
 from opennotebook.api.deps import Db, Me
 from opennotebook.db.session import release
 from opennotebook.domain import collections, settings, styles
@@ -55,12 +56,23 @@ class Setting(BaseModel):
 
     @classmethod
     def of(
-        cls, c: Current, prices: dict[str, Price] | None = None, models: Pairs | None = None
+        cls,
+        c: Current,
+        prices: dict[str, Price] | None = None,
+        models: Pairs | None = None,
+        everything: list[str] | None = None,
     ) -> Setting:
         d = c.d
         kind = d.kind
         if models is not None and kind.name == "model":
             kind = dataclasses.replace(kind, options=models)
+        inforce = c.value or c.default
+        # The model in force is always one of the choices, so the list shows
+        # what is used rather than "Custom…".
+        if kind.name == "model" and inforce and not any(v == inforce for v, _ in kind.options):
+            kind = dataclasses.replace(
+                kind, options=((inforce, est.model_name(inforce)), *kind.options)
+            )
         options: list[SettingOption] = []
         lo: int | None = None
         hi: int | None = None
@@ -89,7 +101,9 @@ class Setting(BaseModel):
             value=c.value,
             default=c.default,
             options=options,
-            suggestions=[v for v, _ in kind.options] if kind.name == "model" else [],
+            suggestions=(everything or [v for v, _ in kind.options])
+            if kind.name == "model"
+            else [],
             min=lo,
             max=hi,
             unit=d.unit,
@@ -101,25 +115,41 @@ class Setting(BaseModel):
 
 
 def model_choices(d: settings.Def, conns: list[Connection], offered: dict[str, set[str]]) -> Pairs:
-    """The models a model setting offers: each connected provider's
-    suggestions for its role that the provider still has, and on OpenRouter
-    the tested ones too. With nothing connected, the tested ones."""
+    """The models a model setting offers: for each connected provider, its
+    own suggestions for the setting's role, then the tested models and
+    OpenRouter's picks, each only where the provider's list names it (an
+    OpenRouter-style gateway offers them too). With nothing connected, the
+    tested ones."""
     role = settings.ROLE_OF.get(d.key)
     usable = [c for c in conns if c.usable]
     if role is None or not usable:
         return d.kind.options
+    tested = dict(d.kind.options)
     out: dict[str, str] = {}
     many = len(usable) > 1
     for c in usable:
         listed = offered.get(c.id)
-        tested = d.kind.options if c.kind == "openrouter" else ()
-        names = dict(tested)
-        for m in [*c.preset.suggest.get(role, ()), *(v for v, _ in tested)]:
+        own = c.preset.suggest.get(role, ())
+        borrowed = (*tested, *BY_KIND["openrouter"].suggest.get(role, ()))
+        for m in [*own, *borrowed]:
+            # Its own suggestions stand while its list is unknown; models
+            # borrowed from elsewhere only when its list names them, except
+            # on OpenRouter, whose they are.
             if listed and m not in listed:
                 continue
-            label = names.get(m) or est.model_name(m)
+            if not listed and m not in own and c.kind != "openrouter":
+                continue
+            label = tested.get(m) or est.model_name(m)
             out.setdefault(connections.ref(c, m, conns), f"{label} · {c.label}" if many else label)
     return tuple(out.items())
+
+
+def model_suggestions(conns: list[Connection], offered: dict[str, set[str]]) -> list[str]:
+    """Every model the connected providers offer, as the settings name
+    them, for a custom model's field to complete from."""
+    return sorted(
+        connections.ref(c, m, conns) for c in conns if c.usable for m in offered.get(c.id, ())
+    )
 
 
 def _hint(prices: dict[str, Price] | None, model: str) -> str:
@@ -158,11 +188,14 @@ async def get_settings(s: Db, me: Me) -> SettingsOut:
     prices = await ai().catalogue.prices()
     conns = await connections.every()
     offered = await ai_router().catalogue.offered() if any(c.usable for c in conns) else {}
+    every = model_suggestions(conns, offered)
     return SettingsOut(
         tabs=[
             SettingTab(id=t.id, label=t.label, note=t.note, advanced=t.advanced) for t in TAB_INFO
         ],
-        settings=[Setting.of(c, prices, model_choices(c.d, conns, offered)) for c in described],
+        settings=[
+            Setting.of(c, prices, model_choices(c.d, conns, offered), every) for c in described
+        ],
     )
 
 
@@ -177,7 +210,8 @@ async def set_setting(key: str, body: SetValue, s: Db, me: Me) -> Setting:
     conns = await connections.every()
     offered = await ai_router().catalogue.offered() if any(c.usable for c in conns) else {}
     choices = model_choices(saved.d, conns, offered)
-    return Setting.of(saved, await ai().catalogue.prices(), choices)
+    every = model_suggestions(conns, offered)
+    return Setting.of(saved, await ai().catalogue.prices(), choices, every)
 
 
 # ── what the Create panel offers ─────────────────────────────────────────────

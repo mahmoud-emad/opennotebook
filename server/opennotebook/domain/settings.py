@@ -117,7 +117,7 @@ AGENT_MODEL_DEFAULT = "google/gemini-2.5-flash-lite"
 ROLE_OF: dict[str, Role] = {
     SCRIPT_MODEL_KEY: "text",
     SLIDE_MODEL_KEY: "strong",
-    VIDEO_MODEL_KEY: "strong",
+    VIDEO_MODEL_KEY: "video",
     VIDEO_CHECK_MODEL_KEY: "vision",
     VIDEO_ESCALATE_MODEL_KEY: "strongest",
     VIDEO_IMAGE_MODEL_KEY: "image",
