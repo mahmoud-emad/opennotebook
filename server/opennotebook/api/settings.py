@@ -153,6 +153,14 @@ def model_suggestions(conns: list[Connection], offered: dict[str, set[str]]) -> 
     )
 
 
+async def _models() -> tuple[list[Connection], dict[str, set[str]], list[str]]:
+    """The connections, the models each offers, and all of them as the
+    settings name them, for the model rows."""
+    conns = await connections.every()
+    offered = await ai_router().catalogue.offered() if any(c.usable for c in conns) else {}
+    return conns, offered, model_suggestions(conns, offered)
+
+
 def _hint(prices: dict[str, Price] | None, model: str) -> str:
     p = (prices or {}).get(model)
     return hint(p) if p else ""
@@ -187,9 +195,7 @@ async def get_settings(s: Db, me: Me) -> SettingsOut:
     # The price list can take seconds to read; no transaction waits for it.
     await release(s)
     prices = await ai().catalogue.prices()
-    conns = await connections.every()
-    offered = await ai_router().catalogue.offered() if any(c.usable for c in conns) else {}
-    every = model_suggestions(conns, offered)
+    conns, offered, every = await _models()
     return SettingsOut(
         tabs=[
             SettingTab(id=t.id, label=t.label, note=t.note, advanced=t.advanced) for t in TAB_INFO
@@ -208,10 +214,8 @@ async def set_setting(key: str, body: SetValue, s: Db, me: Me) -> Setting:
     saved = await settings.save(s, me, key, body.value)
     # Saved before the price list is read, which can take seconds.
     await release(s)
-    conns = await connections.every()
-    offered = await ai_router().catalogue.offered() if any(c.usable for c in conns) else {}
+    conns, offered, every = await _models()
     choices = model_choices(saved.d, conns, offered)
-    every = model_suggestions(conns, offered)
     return Setting.of(saved, await ai().catalogue.prices(), choices, every)
 
 

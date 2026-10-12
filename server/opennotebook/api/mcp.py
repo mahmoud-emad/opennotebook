@@ -45,9 +45,10 @@ def make(app: FastAPI) -> MCPServer:
             r = await http.request(method, f"/api{path}", json=body, headers=headers)
         if r.status_code >= 400:
             try:
-                said = r.json().get("detail")
+                got: Any = r.json()
             except ValueError:
-                said = None
+                got = None
+            said = got.get("detail") if isinstance(got, dict) else None
             raise ToolError(
                 said if isinstance(said, str) and said else "The studio refused that request."
             )

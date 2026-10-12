@@ -10,9 +10,11 @@ do instead: upload its audio, which the studio transcribes (`media.py`).
 import asyncio
 import re
 from dataclasses import dataclass
+from typing import Any
 from urllib.parse import parse_qs, urlsplit
 
 import httpx
+import requests
 from youtube_transcript_api import (
     AgeRestricted,
     IpBlocked,
@@ -25,10 +27,22 @@ from youtube_transcript_api import (
     YouTubeTranscriptApiException,
 )
 
+from opennotebook import media
+
 _ID = re.compile(r"[A-Za-z0-9_-]{11}")
 _HOSTS = {"youtube.com", "www.youtube.com", "m.youtube.com", "music.youtube.com"}
 # A time mark starts a new paragraph at most this often.
 MARK_EVERY_S = 60.0
+# How long YouTube may take to answer one request for captions.
+TIMEOUT_S = 20.0
+
+
+class _TimedSession(requests.Session):
+    """The library's requests with a deadline, which it does not set."""
+
+    def request(self, *args: Any, **kwargs: Any) -> requests.Response:  # type: ignore[override]
+        kwargs.setdefault("timeout", TIMEOUT_S)
+        return super().request(*args, **kwargs)
 
 
 class NoCaptions(Exception):
@@ -62,12 +76,6 @@ def video_id(url: str) -> str | None:
     return found if found and _ID.fullmatch(found) else None
 
 
-def _clock(seconds: float) -> str:
-    s = int(seconds)
-    h, m = divmod(s // 60, 60)
-    return f"{h}:{m:02d}:{s % 60:02d}" if h else f"{m}:{s % 60:02d}"
-
-
 def paragraphs(snippets: list[tuple[float, str]]) -> str:
     """Caption lines joined into paragraphs, each opening with its time
     (`[1:05]`), a new one about every minute."""
@@ -79,19 +87,19 @@ def paragraphs(snippets: list[tuple[float, str]]) -> str:
         if not line:
             continue
         if words and at - start >= MARK_EVERY_S:
-            out.append(f"[{_clock(start)}] " + " ".join(words))
+            out.append(f"[{media.clock(start)}] " + " ".join(words))
             words = []
         if not words:
             start = at
         words.append(line)
     if words:
-        out.append(f"[{_clock(start)}] " + " ".join(words))
+        out.append(f"[{media.clock(start)}] " + " ".join(words))
     return "\n\n".join(out)
 
 
 def _captions(vid: str, languages: tuple[str, ...]) -> list[tuple[float, str]]:
     """The video's captions as (start, line), by YouTube's own API."""
-    api = YouTubeTranscriptApi()
+    api = YouTubeTranscriptApi(http_client=_TimedSession())
     try:
         listed = api.list(vid)
         try:
@@ -119,6 +127,11 @@ def _captions(vid: str, languages: tuple[str, ...]) -> list[tuple[float, str]]:
         raise NoCaptions(
             "YouTube refused to answer this server, as it does for many cloud servers. Upload "
             "the video's audio instead, or try again from another network."
+        ) from None
+    except requests.RequestException:
+        raise NoCaptions(
+            "YouTube did not answer. Check this server's connection, then try again, or upload "
+            "the video's audio instead."
         ) from None
     except YouTubeTranscriptApiException:
         raise NoCaptions(

@@ -47,25 +47,6 @@ ROLES: tuple[Role, ...] = (
     "embed",
 )
 
-# The roles one main model can stand in for when a provider suggests nothing
-# better: every role that only reads and writes text.
-TEXT_ROLES: tuple[Role, ...] = ("text", "strong", "video", "strongest", "long", "chat")
-
-ROLE_LABELS: dict[Role, str] = {
-    "text": "Scripts",
-    "strong": "Slides",
-    "video": "Whiteboard videos",
-    "strongest": "Hard video scenes",
-    "vision": "Checking pictures",
-    "long": "Mind maps and notes",
-    "chat": "Chat and Ask",
-    "audio": "Spoken questions",
-    "transcribe": "Transcribing audio and video",
-    "search": "Web search",
-    "image": "Pictures",
-    "embed": "Search embeddings",
-}
-
 # How a key is checked without spending anything.
 type KeyCheck = Literal["openrouter", "deepseek", "models", "none"]
 

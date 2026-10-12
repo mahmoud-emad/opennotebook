@@ -271,3 +271,36 @@ async def test_a_recording_is_refused_without_a_provider(
     [added] = r.json()
     assert not added["ok"]
     assert added["error"].startswith("No AI provider is connected yet.")
+
+
+def test_youtube_not_answering_is_a_sentence(monkeypatch: pytest.MonkeyPatch) -> None:
+    import requests
+    import youtube_transcript_api as yt
+
+    def down(self: Any, vid: str) -> Any:
+        raise requests.ConnectionError("no route to host")
+
+    monkeypatch.setattr(yt.YouTubeTranscriptApi, "list", down)
+    with pytest.raises(youtube.NoCaptions) as e:
+        youtube._captions("dQw4w9WgXcQ", ("en",))  # pyright: ignore[reportPrivateUsage]
+    assert str(e.value).startswith("YouTube did not answer.")
+
+
+async def test_a_recording_that_takes_too_long_to_read_is_a_sentence(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from opennotebook.build import encode
+
+    async def slow(args: list[str], timeout_s: float) -> tuple[int, bytes, bytes]:
+        raise TimeoutError
+
+    monkeypatch.setattr(encode, "run", slow)
+    monkeypatch.setattr(encode, "ffmpeg", lambda: "ffmpeg")
+    monkeypatch.setattr(encode, "ffprobe", lambda: "ffprobe")
+
+    async def transcribe(audio: bytes) -> str:
+        return "never"
+
+    with pytest.raises(media.Unreadable) as e:
+        await media.transcript("long.mp4", b"x", "mp4", transcribe)
+    assert str(e.value).startswith("long.mp4 took too long to read.")

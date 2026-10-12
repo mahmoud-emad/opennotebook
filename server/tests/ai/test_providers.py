@@ -488,16 +488,11 @@ async def test_only_whoever_runs_the_studio_connects_providers(
     assert r.status_code == 403
 
 
-async def test_the_providers_list_offers_the_presets_and_each_roles_model(
-    client: AsyncClient,
-) -> None:
+async def test_the_providers_list_offers_the_presets(client: AsyncClient) -> None:
     body = (await client.get("/api/ai/providers")).json()
     kinds = [p["kind"] for p in body["presets"]]
     assert kinds[0] == "openrouter" and "anthropic" in kinds and "ollama" in kinds
-    roles = {r["role"]: r for r in body["roles"]}
-    # Nothing connected: no role has a model yet.
-    assert roles["chat"]["model"] == ""
-    assert roles["long"]["keys"] == [st.MINDMAP_MODEL_KEY, st.NOTES_MODEL_KEY]
+    assert body["providers"] == []
 
 
 # ── settings follow the connections ───────────────────────────────────────────
@@ -611,3 +606,48 @@ def test_the_tests_clear_every_variable_a_provider_reads() -> None:
     conftest = (Path(__file__).parent.parent / "conftest.py").read_text()
     cleared = set(re.findall(r'os\.environ\.pop\("([A-Z_]+)"', conftest))
     assert names <= cleared, sorted(names - cleared)
+
+
+async def test_a_key_endpoint_that_answers_oddly_is_not_a_crash() -> None:
+    def handler(r: httpx2.Request) -> httpx2.Response:
+        if r.url.path.endswith("/key"):
+            return httpx2.Response(200, json=["not", "an", "object"])
+        return models("google/gemini-2.5-flash-lite") if r.url.path.endswith("/models") else reply()
+
+    found = await check(conn("openrouter"), http=http(handler))
+    assert found.ok and found.balance == ""
+
+
+async def test_a_provider_whose_key_was_lost_is_replaced_not_duplicated(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from opennotebook.api import providers
+
+    async with engine().begin() as c:
+        await c.execute(
+            text(
+                "INSERT INTO ai_providers (id, kind, base_url, key_encrypted) "
+                "VALUES ('openai', 'openai', 'https://api.openai.com/v1', 'not-decryptable')"
+            )
+        )
+    monkeypatch.setattr(providers, "check", passing())
+    r = await client.post("/api/ai/providers", json={"kind": "openai", "key": "sk-new-key-5678"})
+    assert r.status_code == 201 and r.json()["id"] == "openai"
+    ids = [p["id"] for p in (await client.get("/api/setup")).json()["providers"]]
+    assert ids == ["openai"]
+
+
+async def test_a_providers_address_cannot_be_changed_to_take_its_key(client: AsyncClient) -> None:
+    # No route replaces a provider in place: a stored key never goes to a new
+    # address; a provider is removed and added again with its key.
+    r = await client.put("/api/ai/providers/openrouter", json={"kind": "openrouter"})
+    assert r.status_code in (404, 405)
+
+
+async def test_the_providers_list_says_whether_this_person_may_change_them(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    assert (await client.get("/api/ai/providers")).json()["can_setup"] is True
+    monkeypatch.setattr(config(), "auth", "keys")
+    them = await other_person(client, "guest2@example.com")
+    assert (await client.get("/api/ai/providers", headers=them)).json()["can_setup"] is False

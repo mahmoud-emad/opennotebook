@@ -216,7 +216,8 @@ def convert_file(name: str, data: bytes, ext: str | None = None) -> str:
     file name (a PDF from a link)."""
     ext = ext or _extension(name)
     if len(data) > MAX_UPLOAD_BYTES:
-        raise Refused(f"{name} is larger than 25 MB. Split it, or upload the part you need.")
+        mb = MAX_UPLOAD_BYTES // (1024 * 1024)
+        raise Refused(f"{name} is larger than {mb} MB. Split it, or upload the part you need.")
     if ext in TEXT_EXTENSIONS:
         try:
             text = data.decode("utf-8")

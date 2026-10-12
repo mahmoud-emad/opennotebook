@@ -49,7 +49,7 @@ def create_app() -> FastAPI:
     app = FastAPI(
         lifespan=lifespan,
         title="OpenNotebook",
-        version="0.1.0",
+        version="0.2.0",
         description="Collections of sources, and the decks, audio overviews, mind maps and "
         "notes made from them. Everything the web app does goes through this API.",
         generate_unique_id_function=_operation_id,

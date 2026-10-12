@@ -24,7 +24,6 @@ process changes it; another process (the worker) sees a change within
 
 import asyncio
 import os
-import re
 import time
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -237,8 +236,6 @@ def default_for(role: Role, offered: Mapping[str, set[str]] | None = None) -> st
 
 # ── changing them ─────────────────────────────────────────────────────────────
 
-_SLUG = re.compile(r"[a-z0-9][a-z0-9-]{0,30}")
-
 
 def new_id(kind: str, taken: set[str]) -> str:
     """An id for a new connection of `kind`: the kind itself, then `kind-2`,
@@ -249,10 +246,6 @@ def new_id(kind: str, taken: set[str]) -> str:
     while f"{kind}-{n}" in taken:
         n += 1
     return f"{kind}-{n}"
-
-
-def valid_id(cid: str) -> bool:
-    return bool(_SLUG.fullmatch(cid))
 
 
 async def save(c: Connection, last_check: Mapping[str, Any] | None) -> None:

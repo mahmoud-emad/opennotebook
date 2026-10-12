@@ -20,7 +20,6 @@ const PRESETS = [
     needs_key: true,
     key_page: "openrouter.ai/settings/keys",
     key_env: "OPENROUTER_API_KEY",
-    roles: ["text"],
   },
   {
     kind: "ollama",
@@ -30,7 +29,6 @@ const PRESETS = [
     needs_key: false,
     key_page: "",
     key_env: "OLLAMA_API_KEY",
-    roles: [],
   },
 ];
 
@@ -52,7 +50,6 @@ const ADDED = {
   },
 };
 
-const ROLES: unknown[] = [];
 
 type Route = (method: string, path: string, body: unknown) => Promise<Response> | undefined;
 
@@ -87,7 +84,7 @@ describe("the setup gate", () => {
     const asked: unknown[] = [];
     serve((m, p, body) => {
       if (p === "/setup") return reply(200, { ready: false, can_setup: true, providers: [], message: "Connect" });
-      if (p === "/ai/providers" && m === "GET") return reply(200, { presets: PRESETS, providers: [], roles: [] });
+      if (p === "/ai/providers" && m === "GET") return reply(200, { presets: PRESETS, providers: [], can_setup: true });
       if (p === "/ai/providers" && m === "POST") {
         asked.push(body);
         return reply(422, { detail: "OpenRouter refused this key. Check that you copied all of it." });
@@ -118,9 +115,8 @@ describe("the setup gate", () => {
   it("goes on to the models once a key works, and opens the studio after", async () => {
     serve((m, p) => {
       if (p === "/setup") return reply(200, { ready: false, can_setup: true, providers: [], message: "Connect" });
-      if (p === "/ai/providers" && m === "GET") return reply(200, { presets: PRESETS, providers: [ADDED], roles: ROLES });
+      if (p === "/ai/providers" && m === "GET") return reply(200, { presets: PRESETS, providers: [ADDED], can_setup: true });
       if (p === "/ai/providers" && m === "POST") return reply(201, ADDED);
-      if (p === "/ai/providers/openrouter/models") return reply(200, { models: ["google/gemini-2.5-flash-lite"] });
       if (p === "/settings")
         return reply(200, {
           tabs: [{ id: "models", label: "Models", note: "", advanced: true }],
@@ -177,7 +173,7 @@ describe("the setup gate", () => {
   it("asks for an address, not a key, for a local server", async () => {
     serve((_m, p) => {
       if (p === "/setup") return reply(200, { ready: false, can_setup: true, providers: [], message: "Connect" });
-      if (p === "/ai/providers") return reply(200, { presets: PRESETS, providers: [], roles: [] });
+      if (p === "/ai/providers") return reply(200, { presets: PRESETS, providers: [], can_setup: true });
       return undefined;
     });
     render(

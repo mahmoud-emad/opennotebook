@@ -20,7 +20,6 @@ import {
 } from "./api-providers";
 import { Icon } from "./Icon";
 import { Logo } from "./Logo";
-import { reloadSettings } from "./settings";
 import { store, useStore } from "./store";
 
 // ── the gate ─────────────────────────────────────────────────────────────────
@@ -253,7 +252,7 @@ export function ProviderForm({ onConnected }: { onConnected: (p: Provider) => vo
         setBusy(false);
         setKey("");
         setSaid({ ok: true, text: added.check?.sentence ?? `Connected to ${added.label}.` });
-        void reloadSettings();
+        // The model rows shown next read the settings afresh.
         onConnected(added);
       },
       (e: unknown) => {
@@ -404,18 +403,35 @@ export function ProvidersPanel() {
   const [round, setRound] = useState(0);
 
   const load = useCallback(() => {
-    providersLoad().then(setDoc, (e: unknown) => setErr(errText(e)));
+    providersLoad().then(
+      (d) => {
+        setDoc(d);
+        setErr("");
+      },
+      (e: unknown) => setErr(errText(e)),
+    );
   }, []);
 
   useEffect(() => {
     load();
   }, [load, round]);
 
-  const changed = () => {
-    setRound((n) => n + 1);
-    void reloadSettings();
-  };
+  // The model rows remount, and read the settings afresh as they do.
+  const changed = () => setRound((n) => n + 1);
 
+  if (err !== "" && doc !== null) {
+    // A reload that failed after the first: said, over what was shown.
+    return (
+      <div className="set-note err" role="alert">
+        The providers could not be reloaded: {err}
+        <div>
+          <button className="est-retry" onClick={load}>
+            Try again
+          </button>
+        </div>
+      </div>
+    );
+  }
   if (err !== "" && doc === null) {
     return (
       <div className="set-note err" role="alert">
@@ -442,15 +458,19 @@ export function ProvidersPanel() {
         {doc.providers.length === 0 && <p className="set-gnote">No provider is connected yet.</p>}
         {doc.providers.map((p) => (
           <ProviderRow
-            key={p.id}
+            // A new check is a new row, so it never shows an older one's.
+            key={`${p.id}:${p.check?.checked_at ?? ""}`}
             p={p}
+            canChange={doc.can_setup}
             onRemoved={() => {
               changed();
               recheckSetup();
             }}
           />
         ))}
-        {adding ? (
+        {!doc.can_setup ? (
+          <p className="set-gnote">Only whoever runs this studio can connect or remove providers.</p>
+        ) : adding ? (
           <div className="prov-add">
             <ProviderForm
               onConnected={() => {
@@ -479,7 +499,7 @@ export function ProvidersPanel() {
   );
 }
 
-function ProviderRow({ p, onRemoved }: { p: Provider; onRemoved: () => void }) {
+function ProviderRow({ p, canChange, onRemoved }: { p: Provider; canChange: boolean; onRemoved: () => void }) {
   const [check, setCheck] = useState<KeyCheck | null>(p.check ?? null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
@@ -532,7 +552,7 @@ function ProviderRow({ p, onRemoved }: { p: Provider; onRemoved: () => void }) {
         )}
       </div>
       <div className="set-ctl">
-        {confirm ? (
+        {!canChange ? null : confirm ? (
           <>
             <button className="primary danger" disabled={busy} onClick={remove}>
               Remove {p.label}

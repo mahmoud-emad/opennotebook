@@ -133,8 +133,9 @@ async def _check(c: Connection, http: httpx2.AsyncClient, probe: bool) -> Check:
             if r.status_code in (401, 403):
                 return _fail(c, "bad_key")
             if r.is_success:
-                data: Any = (r.json() or {}).get("data") or {}
-                left = data.get("limit_remaining")
+                body: Any = r.json()
+                data: Any = body.get("data") if isinstance(body, dict) else None
+                left = data.get("limit_remaining") if isinstance(data, dict) else None
                 if isinstance(left, int | float):
                     if left <= 0:
                         return _fail(c, "no_credit")
@@ -144,10 +145,11 @@ async def _check(c: Connection, http: httpx2.AsyncClient, probe: bool) -> Check:
             if r.status_code in (401, 403):
                 return _fail(c, "bad_key")
             if r.is_success:
-                body: Any = r.json() or {}
-                if body.get("is_available") is False:
+                got: Any = r.json()
+                bal: dict[str, Any] = got if isinstance(got, dict) else {}
+                if bal.get("is_available") is False:
                     return _fail(c, "no_credit")
-                for info in body.get("balance_infos") or []:
+                for info in bal.get("balance_infos") or []:
                     try:
                         balance = f"{_money(float(info['total_balance']), info['currency'])} left"
                         known = True

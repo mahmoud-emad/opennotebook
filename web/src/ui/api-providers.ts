@@ -8,7 +8,6 @@ import type * as Rest from "@/client/types.gen";
 export type Setup = Rest.SetupOut;
 export type Preset = Rest.PresetOut;
 export type Provider = Rest.ProviderOut;
-export type Role = Rest.RoleOut;
 export type KeyCheck = Rest.CheckOut;
 export type Providers = Rest.ProvidersOut;
 export type ProviderIn = { kind: string; key?: string; base_url?: string; label?: string };
@@ -18,14 +17,9 @@ export function setupLoad(): Promise<Setup> {
   return call<Setup>("GET", "/setup");
 }
 
-/** The presets, the connected providers, and the model each role uses. */
+/** The presets and the connected providers. */
 export function providersLoad(): Promise<Providers> {
   return call<Providers>("GET", "/ai/providers");
-}
-
-/** Test a key without keeping it. */
-export function providerCheck(p: ProviderIn): Promise<KeyCheck> {
-  return call<KeyCheck>("POST", "/ai/providers/check", p);
 }
 
 /** Test a key and, when it works, connect the provider. A key that does not
@@ -41,9 +35,4 @@ export function providerRemove(id: string): Promise<void> {
 /** Test a connected provider again. */
 export function providerRecheck(id: string): Promise<KeyCheck> {
   return call<KeyCheck>("POST", `/ai/providers/${enc(id)}/check`);
-}
-
-/** The models a connected provider offers, as the settings name them. */
-export async function providerModels(id: string): Promise<string[]> {
-  return (await call<Rest.ModelsOut>("GET", `/ai/providers/${enc(id)}/models`)).models;
 }

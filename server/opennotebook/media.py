@@ -51,7 +51,8 @@ def clock(seconds: float) -> str:
 
 
 async def _duration(path: Path, name: str) -> float:
-    code, out, _ = await encode.run(
+    code, out, _ = await _run(
+        name,
         [
             encode.ffprobe(),
             "-v",
@@ -99,7 +100,8 @@ async def pieces(name: str, data: bytes, ext: str) -> list[tuple[float, bytes]]:
                 f"{name} is {clock(seconds)} long; the studio takes recordings of up to "
                 f"{MAX_SECONDS // 3600} hours. Upload a shorter part."
             )
-        code, _, err = await encode.run(
+        code, _, err = await _run(
+            name,
             [
                 ffmpeg,
                 "-v",
@@ -130,6 +132,16 @@ async def pieces(name: str, data: bytes, ext: str) -> list[tuple[float, bytes]]:
                 "again, then upload it."
             )
         return await asyncio.to_thread(_read_pieces, Path(tmp))
+
+
+async def _run(name: str, args: list[str], timeout_s: float) -> tuple[int, bytes, bytes]:
+    """ffmpeg or ffprobe, with a run that takes too long said as a sentence."""
+    try:
+        return await encode.run(args, timeout_s)
+    except TimeoutError:
+        raise Unreadable(
+            f"{name} took too long to read. Upload a shorter recording, or only its sound."
+        ) from None
 
 
 def _read_pieces(folder: Path) -> list[tuple[float, bytes]]:

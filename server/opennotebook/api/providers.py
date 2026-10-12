@@ -17,13 +17,11 @@ from pydantic import BaseModel, Field
 
 from opennotebook.ai import connections, ledger
 from opennotebook.ai.check import Check, check
-from opennotebook.ai.client import router as ai_router
 from opennotebook.ai.connections import Connection
-from opennotebook.ai.providers import BY_KIND, PRESETS, ROLE_LABELS, ROLES, Role, preset
+from opennotebook.ai.providers import BY_KIND, PRESETS, preset
 from opennotebook.api.deps import Me
 from opennotebook.db.models import User
 from opennotebook.domain import settings
-from opennotebook.domain.sessions_estimate import model_name
 from opennotebook.errors import Problem
 
 router = APIRouter(prefix="/api", tags=["setup"])
@@ -68,7 +66,6 @@ class PresetOut(BaseModel):
     key_optional: bool = Field(description="Show a key field though none is needed")
     key_page: str = Field(description="Where to make a key, without the scheme")
     key_env: str = Field(description="The environment variable that sets its key instead")
-    roles: list[str] = Field(description="The roles it suggests a model for")
 
 
 class ProviderOut(BaseModel):
@@ -84,15 +81,6 @@ class ProviderOut(BaseModel):
     check: CheckOut | None = Field(description="What testing it last said; none for env ones")
 
 
-class RoleOut(BaseModel):
-    role: str
-    label: str
-    keys: list[str] = Field(description="The model settings this role fills")
-    model: str = Field(description="The model in force; empty when no provider can do it")
-    model_name: str
-    chosen: bool = Field(description="Set by someone, rather than suggested")
-
-
 class SetupOut(BaseModel):
     ready: bool = Field(description="A provider is connected, so the studio can be used")
     can_setup: bool = Field(description="This person may connect providers")
@@ -103,7 +91,7 @@ class SetupOut(BaseModel):
 class ProvidersOut(BaseModel):
     presets: list[PresetOut]
     providers: list[ProviderOut]
-    roles: list[RoleOut]
+    can_setup: bool = Field(description="This person may connect, test and remove providers")
 
 
 class ProviderIn(BaseModel):
@@ -111,10 +99,6 @@ class ProviderIn(BaseModel):
     base_url: str = Field(default="", max_length=MAX_URL_CHARS)
     key: str = Field(default="", max_length=MAX_KEY_CHARS)
     label: str = Field(default="", max_length=80)
-
-
-class ModelsOut(BaseModel):
-    models: list[str]
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────
@@ -156,7 +140,7 @@ def _operator(me: User) -> None:
         raise Problem(403, NOT_OPERATOR)
 
 
-def _connection(body: ProviderIn, cid: str, existing: Connection | None) -> Connection:
+def _connection(body: ProviderIn, cid: str) -> Connection:
     if body.kind not in BY_KIND:
         raise Problem(422, "That is not a provider the studio knows. Pick one from the list.")
     p = preset(body.kind)
@@ -164,9 +148,6 @@ def _connection(body: ProviderIn, cid: str, existing: Connection | None) -> Conn
     if url and not url.startswith(("http://", "https://")):
         raise Problem(422, "The address must start with http:// or https://.")
     key = body.key.strip()
-    if not key and existing is not None and existing.kind == body.kind:
-        # Kept when only the address or the name changes.
-        key = existing.key
     return Connection(cid, p.kind, body.label.strip() or p.label, url.rstrip("/"), key, "app", None)
 
 
@@ -175,44 +156,6 @@ async def _tested(c: Connection, me: User) -> Check:
     # is paid for like any call.
     async with ledger.spending(me.id, "setup"):
         return await check(c)
-
-
-async def _roles() -> list[RoleOut]:
-    await settings.learn_models()
-    keys: dict[Role, list[str]] = {}
-    for key, role in settings.ROLE_OF.items():
-        keys.setdefault(role, []).append(key)
-    out: list[RoleOut] = []
-    instance = await _instance_values()
-    for role in ROLES:
-        if role not in keys:
-            continue
-        first = keys[role][0]
-        chosen = settings.from_env(first) or instance.get(first, "")
-        d = settings.find(first)
-        model = chosen or (settings.default_of(d) if d else "")
-        # A default that no connected provider suggests is the catalogue's
-        # own: there is no model for this role.
-        if not chosen and connections.default_for(role) is None:
-            model = ""
-        out.append(
-            RoleOut(
-                role=role,
-                label=ROLE_LABELS[role],
-                keys=keys[role],
-                model=model,
-                model_name=model_name(model) if model else "",
-                chosen=bool(chosen),
-            )
-        )
-    return out
-
-
-async def _instance_values() -> dict[str, str]:
-    from opennotebook.db.session import sessionmaker
-
-    async with sessionmaker()() as s:
-        return await settings.instance_rows(s)
 
 
 # ── routes ────────────────────────────────────────────────────────────────────
@@ -237,8 +180,8 @@ async def get_setup(me: Me) -> SetupOut:
 
 @router.get("/ai/providers")
 async def list_providers(me: Me) -> ProvidersOut:
-    """The providers the studio can connect to, the ones it is connected to,
-    and the model each kind of work uses."""
+    """The providers the studio can connect to, and the ones it is connected
+    to. The model each kind of work uses is a setting (`/api/settings`)."""
     return ProvidersOut(
         presets=[
             PresetOut(
@@ -250,12 +193,11 @@ async def list_providers(me: Me) -> ProvidersOut:
                 key_optional=p.key_optional,
                 key_page=p.key_page,
                 key_env=(p.key_env or p.url_env or ("",))[0],
-                roles=[r for r in ROLES if r in p.suggest],
             )
             for p in PRESETS
         ],
         providers=await _providers(),
-        roles=await _roles(),
+        can_setup=settings.is_operator(me),
     )
 
 
@@ -265,7 +207,7 @@ async def check_provider_key(body: ProviderIn, me: Me) -> CheckOut:
     accept the key, and have credit."""
     _operator(me)
     taken = {c.id for c in await connections.every()}
-    c = _connection(body, connections.new_id(body.kind, taken), None)
+    c = _connection(body, connections.new_id(body.kind, taken))
     return CheckOut.of(await _tested(c, me))
 
 
@@ -275,7 +217,13 @@ async def add_provider(body: ProviderIn, me: Me) -> ProviderOut:
     not work is refused with the reason."""
     _operator(me)
     conns = await connections.every()
-    c = _connection(body, connections.new_id(body.kind, {x.id for x in conns}), None)
+    # One of this kind kept here that can no longer be used (its key could
+    # not be decrypted) is replaced, not joined by a second.
+    stale = next(
+        (x for x in conns if x.id == body.kind and x.source == "app" and not x.usable), None
+    )
+    taken = {x.id for x in conns if x is not stale}
+    c = _connection(body, connections.new_id(body.kind, taken))
     found = await _tested(c, me)
     if not found.ok:
         raise Problem(422, found.sentence)
@@ -283,22 +231,6 @@ async def add_provider(body: ProviderIn, me: Me) -> ProviderOut:
     added = await connections.find(c.id)
     assert added is not None
     return _provider(added, next((x.id for x in await connections.usable()), None))
-
-
-@router.put("/ai/providers/{cid}")
-async def replace_provider(cid: str, body: ProviderIn, me: Me) -> ProviderOut:
-    """Change a connected provider's key, address or name. The key is tested
-    first; an empty key keeps the one it has."""
-    _operator(me)
-    existing = await _app_connection(cid)
-    c = _connection(body, cid, existing)
-    found = await _tested(c, me)
-    if not found.ok:
-        raise Problem(422, found.sentence)
-    await connections.save(c, found.as_dict())
-    changed = await connections.find(cid)
-    assert changed is not None
-    return _provider(changed, next((x.id for x in await connections.usable()), None))
 
 
 @router.delete("/ai/providers/{cid}", status_code=204)
@@ -321,20 +253,6 @@ async def recheck_provider(cid: str, me: Me) -> CheckOut:
     if c.source == "app":
         await connections.remember_check(cid, found.as_dict())
     return CheckOut.of(found)
-
-
-@router.get("/ai/providers/{cid}/models")
-async def provider_models(cid: str, me: Me) -> ModelsOut:
-    """The models a connected provider offers, by the ids the settings take
-    (`provider:model`, bare on the primary provider)."""
-    conns = await connections.every()
-    c = next((x for x in conns if x.id == cid), None)
-    if c is None:
-        raise _gone()
-    if not c.usable:
-        return ModelsOut(models=[])
-    ids = await ai_router().client(c).catalogue.ids()
-    return ModelsOut(models=sorted(connections.ref(c, m, conns) for m in ids))
 
 
 def _gone() -> Problem:

@@ -283,20 +283,11 @@ class Ai:
             extra["usage"] = {"include": True}
         if stream and self.preset.stream_usage:
             extra["stream_options"] = {"include_usage": True}
-        attempt = 0
-        while True:
-            try:
-                return await self._client.chat.completions.with_raw_response.create(
-                    **body, stream=stream, extra_body=extra
-                )
-            except openai.APIStatusError as e:
-                err = AiError.from_status(e.status_code, e.response.text)
-            except (openai.APIConnectionError, openai.APITimeoutError) as e:
-                err = AiError(Kind.UNAVAILABLE, str(e) or type(e).__name__)
-            if not err.retryable or attempt >= self._retries:
-                raise err
-            attempt += 1
-            await asyncio.sleep(self._backoff * 2 ** (attempt - 1))
+        return await self._tries(
+            lambda: self._client.chat.completions.with_raw_response.create(
+                **body, stream=stream, extra_body=extra
+            )
+        )
 
     async def complete(
         self,
@@ -446,7 +437,9 @@ class Ai:
             return []
         try:
             async with asyncio.timeout(self._timeout):
-                resp = await self._embed_tries(model, texts)
+                resp = await self._tries(
+                    lambda: self._client.embeddings.create(model=model, input=texts)
+                )
         except TimeoutError as e:
             raise AiError(Kind.UNAVAILABLE, f"no vectors within {self._timeout:.0f}s") from e
         data = sorted(resp.data, key=lambda d: d.index)
@@ -455,9 +448,6 @@ class Ai:
         u: Any = resp.usage.model_dump() if resp.usage else None
         await self._charge(model, _usage(u))
         return [list(d.embedding) for d in data]
-
-    async def _embed_tries(self, model: str, texts: list[str]) -> Any:
-        return await self._tries(lambda: self._client.embeddings.create(model=model, input=texts))
 
     async def transcribe(self, model: str, audio: bytes, fmt: str = "mp3") -> str:
         """What a piece of audio says, as text: by the provider's
@@ -544,6 +534,7 @@ class Router:
 
     def __init__(self) -> None:
         self._clients: dict[str, tuple[tuple[str, str, str], Ai]] = {}
+        self._retired: list[Ai] = []
         self.catalogue = RouterCatalogue(self)
 
     def client(self, c: connections.Connection) -> Ai:
@@ -555,15 +546,10 @@ class Router:
         made = Ai(c.base_url, c.key, preset=c.preset)
         self._clients[c.id] = (ident, made)
         if kept is not None:
-            # Its address or key changed: the old client's connections close
-            # once nothing is using them.
-            asyncio.get_running_loop().create_task(kept[1].aclose())
+            # Its address or key changed. Calls already under way finish on
+            # the old client, which is closed with the rest at shutdown.
+            self._retired.append(kept[1])
         return made
-
-    @property
-    def has_key(self) -> bool:
-        """Whether a provider is connected, as last read. `ready` reads again."""
-        return any(c.usable for c in connections.snapshot())
 
     async def ready(self) -> bool:
         return bool(await connections.usable())
@@ -606,9 +592,10 @@ class Router:
         return await client.transcribe(own, audio, fmt)
 
     async def aclose(self) -> None:
-        for _, c in self._clients.values():
+        for c in [*(c for _, c in self._clients.values()), *self._retired]:
             await c.aclose()
         self._clients.clear()
+        self._retired.clear()
 
 
 class RouterCatalogue:

@@ -941,11 +941,6 @@ async def _instance_rows(s: AsyncSession) -> dict[str, str]:
     return rows
 
 
-async def instance_rows(s: AsyncSession) -> dict[str, str]:
-    """The instance's stored settings, as a mapping of the caller's own."""
-    return dict(await _instance_rows(s))
-
-
 async def rows(s: AsyncSession, owner: uuid.UUID) -> tuple[dict[str, str], dict[str, str]]:
     """A person's stored settings and the instance's, as mappings of their
     own the caller may change: kept for `CACHE_SECONDS`, else read."""
