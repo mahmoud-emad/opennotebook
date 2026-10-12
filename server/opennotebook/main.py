@@ -14,6 +14,7 @@ from opennotebook.api import (
     ask,
     chat,
     collections,
+    mcp,
     media,
     mindmaps,
     notes,
@@ -35,8 +36,10 @@ def _operation_id(route: APIRoute) -> str:
 
 
 @asynccontextmanager
-async def lifespan(_: FastAPI) -> AsyncGenerator[None]:
-    yield
+async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
+    # The MCP tools' sessions run as long as the app does.
+    async with app.state.mcp.session_manager.run():
+        yield
     # Running chat turns get a moment to finish and keep what they said;
     # then every connection the process holds is closed.
     await close_all()
@@ -78,6 +81,8 @@ def create_app() -> FastAPI:
     # DEPRECATED: the old JSON-RPC API, for one release after cutover; delete
     # this line with api/rpc.py, api/rpc_methods.py and api/rpc_openrpc/.
     app.include_router(rpc.router)
+    # The tools for agents, at /api/mcp, calling the routes above.
+    app.state.mcp = mcp.make(app)
     return app
 
 

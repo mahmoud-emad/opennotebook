@@ -118,7 +118,7 @@ async def test_a_youtube_link_is_added_as_a_source(
         return youtube.Video("dQw4w9WgXcQ", "A talk", "[0:00] Hello and welcome.")
 
     monkeypatch.setattr(youtube, "read", read)
-    cid = (await client.post("/api/collections", json={"name": "Talks"})).json()["id"]
+    cid = (await client.post("/api/collections", json={"title": "Talks"})).json()["id"]
     r = await client.post(
         f"/api/collections/{cid}/sources",
         json={"kind": "urls", "urls": ["https://www.youtube.com/watch?v=dQw4w9WgXcQ"]},
@@ -236,7 +236,7 @@ async def test_an_uploaded_recording_becomes_its_transcript(
     heard = Heard()
     ai = heard.ai("openrouter")
     monkeypatch.setattr(ai_client, "ai", lambda: ai)
-    cid = (await client.post("/api/collections", json={"name": "Talks"})).json()["id"]
+    cid = (await client.post("/api/collections", json={"title": "Talks"})).json()["id"]
     data = await tone(tmp_path, 2)
     r = await client.post(
         f"/api/collections/{cid}/sources/files",
@@ -262,7 +262,7 @@ async def test_a_recording_is_refused_without_a_provider(
 ) -> None:
     if shutil.which("ffmpeg") is None:
         pytest.skip("ffmpeg is not installed")
-    cid = (await client.post("/api/collections", json={"name": "Talks"})).json()["id"]
+    cid = (await client.post("/api/collections", json={"title": "Talks"})).json()["id"]
     data = await tone(tmp_path, 1)
     r = await client.post(
         f"/api/collections/{cid}/sources/files",

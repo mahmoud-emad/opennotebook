@@ -45,6 +45,10 @@ To serve it on your own domain with HTTPS, set `DOMAIN` and `PUBLIC_URL` in `dep
 
 Everything else (styles, voices, language, a spending limit) can be changed in the app's Settings.
 
+## Agents (MCP)
+
+The studio is also an [MCP](https://modelcontextprotocol.io) server at `/api/mcp` (streamable HTTP). An agent can list collections, create one, add links, YouTube videos or notes, read sources, and ask questions answered with citations. It signs in with an API key, sent as `Authorization: Bearer <key>`, and sees only its owner's collections. Make a key with `POST /api/keys` (`{"name": "my agent"}`); in `local` mode an agent on the same machine needs none. Every model call it causes is charged to that owner.
+
 ## Working on it
 
 The code is split into three folders:
