@@ -6,6 +6,7 @@ import uuid
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
+from opennotebook import media
 from opennotebook.ai import connections
 from opennotebook.ai.client import ai
 from opennotebook.ai.client import router as ai_router
@@ -262,7 +263,9 @@ class UploadRules(BaseModel):
     extensions: list[str] = Field(description="Without the dot, lower case")
     accept: str = Field(description="The file picker's `accept`, from the same list")
     kinds: str = Field(description="What can be uploaded, in words")
-    max_mb: int
+    max_mb: int = Field(description="The largest document, in MB")
+    media_extensions: list[str] = Field(description="The audio and video kinds, without the dot")
+    media_max_mb: int = Field(description="The largest recording, in MB")
     max_files: int = Field(description="Files one upload takes")
     max_links: int = Field(description="Links one add takes")
     hint: str = Field(description="What can be uploaded, as the add box says it")
@@ -366,6 +369,7 @@ def studio_options(v: dict[str, str], sources: int) -> StudioOptions:
     exts: list[str] = list(sources_domain.UPLOAD_EXTENSIONS)
     kinds = sources_domain.UPLOAD_KINDS
     mb = sources_domain.MAX_UPLOAD_BYTES // (1024 * 1024)
+    media_mb = media.MAX_BYTES // (1024 * 1024)
     return StudioOptions(
         styles=[_style_choice(st) for st in STYLES],
         audio_formats=formats,
@@ -393,10 +397,14 @@ def studio_options(v: dict[str, str], sources: int) -> StudioOptions:
             accept=",".join(f".{e}" for e in exts),
             kinds=kinds,
             max_mb=mb,
+            media_extensions=list(media.EXTENSIONS),
+            media_max_mb=media_mb,
             max_files=sources_domain.MAX_FILES,
             max_links=sources_domain.MAX_URLS,
-            hint=f"PDF, Office, Markdown, text or CSV, up to {mb} MB. Or drop them here.",
-            title=f"{kinds}, up to {mb} MB each. Or drop files on this panel.",
+            hint=f"PDF, Office, Markdown, text, CSV, audio or video. Documents up to {mb} MB, "
+            f"recordings up to {media_mb} MB. Or drop them here.",
+            title=f"{kinds}. Documents up to {mb} MB, recordings up to {media_mb} MB. Or drop "
+            "files on this panel.",
         ),
     )
 

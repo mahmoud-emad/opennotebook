@@ -104,7 +104,7 @@ export type BodyAddFiles = {
     /**
      * Files
      *
-     * pdf, docx, pptx, xlsx, md, txt or csv
+     * pdf, docx, pptx, xlsx, md, txt, csv, or an audio or video file
      */
     files: Array<Blob | File>;
 };
@@ -1492,6 +1492,12 @@ export type PresetOut = {
      * Needs Key
      */
     needs_key: boolean;
+    /**
+     * Key Optional
+     *
+     * Show a key field though none is needed
+     */
+    key_optional: boolean;
     /**
      * Key Page
      *
@@ -3153,8 +3159,22 @@ export type UploadRules = {
     kinds: string;
     /**
      * Max Mb
+     *
+     * The largest document, in MB
      */
     max_mb: number;
+    /**
+     * Media Extensions
+     *
+     * The audio and video kinds, without the dot
+     */
+    media_extensions: Array<string>;
+    /**
+     * Media Max Mb
+     *
+     * The largest recording, in MB
+     */
+    media_max_mb: number;
     /**
      * Max Files
      *

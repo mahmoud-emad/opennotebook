@@ -249,8 +249,9 @@ export const listSources = <ThrowOnError extends boolean = false>(options: Optio
 /**
  * Add Sources
  *
- * Add a note, or read web pages, into a collection. One result per thing
- * asked for, failures included, each saying why.
+ * Add a note, or read web pages and YouTube videos' captions, into a
+ * collection. One result per thing asked for, failures included, each
+ * saying why.
  */
 export const addSources = <ThrowOnError extends boolean = false>(options: Options<AddSourcesData, ThrowOnError>): RequestResult<AddSourcesResponses, AddSourcesErrors, ThrowOnError> => (options.client ?? client).post<AddSourcesResponses, AddSourcesErrors, ThrowOnError>({
     url: '/api/collections/{cid}/sources',
@@ -264,9 +265,9 @@ export const addSources = <ThrowOnError extends boolean = false>(options: Option
 /**
  * Add Files
  *
- * Add documents to a collection, at most ten at a time. Each is read
- * into text verbatim and titled by its file name; a result says why when
- * one could not be read.
+ * Add documents and recordings to a collection, at most ten at a time.
+ * A document is read into text verbatim, a recording transcribed, each
+ * titled by its file name; a result says why when one could not be read.
  */
 export const addFiles = <ThrowOnError extends boolean = false>(options: Options<AddFilesData, ThrowOnError>): RequestResult<AddFilesResponses, AddFilesErrors, ThrowOnError> => (options.client ?? client).post<AddFilesResponses, AddFilesErrors, ThrowOnError>({
     ...formDataBodySerializer,

@@ -8,10 +8,11 @@ from typing import Annotated, Literal
 from fastapi import APIRouter, BackgroundTasks, File, Response, UploadFile
 from pydantic import BaseModel, Field, HttpUrl, computed_field
 from sqlalchemy import Select, delete, select
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import defer
 
-from opennotebook import jobs, research, storage
-from opennotebook.ai import ledger
+from opennotebook import jobs, research, storage, youtube
+from opennotebook.ai import client, ledger
 from opennotebook.ai.errors import AiError
 from opennotebook.api import paging
 from opennotebook.api.deps import Db, Me
@@ -139,8 +140,9 @@ def listed() -> Select[Source]:
 async def add_sources(
     cid: uuid.UUID, body: Annotated[AddNote | AddUrls, Field(discriminator="kind")], s: Db, me: Me
 ) -> list[AddResult]:
-    """Add a note, or read web pages, into a collection. One result per thing
-    asked for, failures included, each saying why."""
+    """Add a note, or read web pages and YouTube videos' captions, into a
+    collection. One result per thing asked for, failures included, each
+    saying why."""
     await collections.editable(s, me.id, cid)
     # Pages are read and text is embedded with no transaction open; each
     # source is then kept in a short one under the collection's lock.
@@ -154,12 +156,19 @@ async def add_sources(
         await refresh.schedule(s, me.id, cid)
         return [AddResult(url="", ok=True, source=SourceOut.of(src), error="")]
     out: list[AddResult] = []
-    async with sources.http_client() as http:
+    languages = await _languages(s, me.id)
+    async with sources.http_client() as http, ledger.spending(me.id, "sources", collection_id=cid):
         for u in dict.fromkeys(str(u) for u in body.urls):
             try:
-                ready = await sources.prepare_page(http, u)
+                if youtube.video_id(u) is not None:
+                    ready = await sources.prepare_youtube(http, u, languages)
+                else:
+                    ready = await sources.prepare_page(http, u)
             except sources.Refused as e:
                 out.append(AddResult(url=u, ok=False, error=str(e)))
+                continue
+            except AiError as e:
+                out.append(AddResult(url=u, ok=False, error=e.sentence))
                 continue
             src = await sources.keep(s, me.id, cid, ready)
             # Committed before the next page is read, so the lock is not
@@ -176,11 +185,14 @@ async def add_files(
     cid: uuid.UUID,
     s: Db,
     me: Me,
-    files: Annotated[list[UploadFile], File(description="pdf, docx, pptx, xlsx, md, txt or csv")],
+    files: Annotated[
+        list[UploadFile],
+        File(description="pdf, docx, pptx, xlsx, md, txt, csv, or an audio or video file"),
+    ],
 ) -> list[AddResult]:
-    """Add documents to a collection, at most ten at a time. Each is read
-    into text verbatim and titled by its file name; a result says why when
-    one could not be read."""
+    """Add documents and recordings to a collection, at most ten at a time.
+    A document is read into text verbatim, a recording transcribed, each
+    titled by its file name; a result says why when one could not be read."""
     if len(files) > sources.MAX_FILES:
         raise Problem(
             422,
@@ -188,19 +200,28 @@ async def add_files(
             "Add the rest in another go.",
         )
     await collections.editable(s, me.id, cid)
+    model = await config.value(s, me.id, config.TRANSCRIBE_MODEL_KEY)
     await release(s)
+
+    async def transcribe(audio: bytes) -> str:
+        return await client.ai().transcribe(model, audio)
+
     out: list[AddResult] = []
-    for f in files:
-        name = f.filename or "document"
-        data = await f.read(sources.MAX_UPLOAD_BYTES + 1)
-        try:
-            ready = await sources.prepare_file(name, data)
-        except sources.Refused as e:
-            out.append(AddResult(url="", ok=False, error=str(e)))
-            continue
-        src = await sources.keep(s, me.id, cid, ready)
-        await release(s)
-        out.append(AddResult(url="", ok=True, source=SourceOut.of(src), error=""))
+    async with ledger.spending(me.id, "sources", collection_id=cid):
+        for f in files:
+            name = f.filename or "document"
+            data = await f.read(sources.MAX_READ_BYTES + 1)
+            try:
+                ready = await sources.prepare_file(name, data, transcribe)
+            except sources.Refused as e:
+                out.append(AddResult(url="", ok=False, error=str(e)))
+                continue
+            except AiError as e:
+                out.append(AddResult(url="", ok=False, error=e.sentence))
+                continue
+            src = await sources.keep(s, me.id, cid, ready)
+            await release(s)
+            out.append(AddResult(url="", ok=True, source=SourceOut.of(src), error=""))
     if any(r.ok for r in out):
         await refresh.schedule(s, me.id, cid)
     return out
@@ -264,3 +285,10 @@ async def deep_research(cid: uuid.UUID, body: ResearchReq, s: Db, me: Me) -> Job
     args = {"job_id": str(job.id), "owner_id": str(me.id), "collection_id": str(cid)}
     await jobs.defer(s, job, RESEARCH_TASK, {**args, "topic": body.topic.strip()}, queue=WORK_QUEUE)
     return JobOut.of(job)
+
+
+async def _languages(s: AsyncSession, owner: uuid.UUID) -> tuple[str, ...]:
+    """The caption languages to prefer: the person's output language, then
+    English."""
+    tag = config.language_tag(await config.value(s, owner, config.LANGUAGE_KEY)).split("-")[0]
+    return tuple(dict.fromkeys((tag, "en")))

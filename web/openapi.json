@@ -990,7 +990,7 @@
           "sources"
         ],
         "summary": "Add Sources",
-        "description": "Add a note, or read web pages, into a collection. One result per thing\nasked for, failures included, each saying why.",
+        "description": "Add a note, or read web pages and YouTube videos' captions, into a\ncollection. One result per thing asked for, failures included, each\nsaying why.",
         "operationId": "add_sources",
         "parameters": [
           {
@@ -1063,7 +1063,7 @@
           "sources"
         ],
         "summary": "Add Files",
-        "description": "Add documents to a collection, at most ten at a time. Each is read\ninto text verbatim and titled by its file name; a result says why when\none could not be read.",
+        "description": "Add documents and recordings to a collection, at most ten at a time.\nA document is read into text verbatim, a recording transcribed, each\ntitled by its file name; a result says why when one could not be read.",
         "operationId": "add_files",
         "parameters": [
           {
@@ -4967,7 +4967,7 @@
             },
             "type": "array",
             "title": "Files",
-            "description": "pdf, docx, pptx, xlsx, md, txt or csv"
+            "description": "pdf, docx, pptx, xlsx, md, txt, csv, or an audio or video file"
           }
         },
         "type": "object",
@@ -6969,6 +6969,11 @@
             "type": "boolean",
             "title": "Needs Key"
           },
+          "key_optional": {
+            "type": "boolean",
+            "title": "Key Optional",
+            "description": "Show a key field though none is needed"
+          },
           "key_page": {
             "type": "string",
             "title": "Key Page",
@@ -6995,6 +7000,7 @@
           "blurb",
           "base_url",
           "needs_key",
+          "key_optional",
           "key_page",
           "key_env",
           "roles"
@@ -9284,7 +9290,21 @@
           },
           "max_mb": {
             "type": "integer",
-            "title": "Max Mb"
+            "title": "Max Mb",
+            "description": "The largest document, in MB"
+          },
+          "media_extensions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Media Extensions",
+            "description": "The audio and video kinds, without the dot"
+          },
+          "media_max_mb": {
+            "type": "integer",
+            "title": "Media Max Mb",
+            "description": "The largest recording, in MB"
           },
           "max_files": {
             "type": "integer",
@@ -9313,6 +9333,8 @@
           "accept",
           "kinds",
           "max_mb",
+          "media_extensions",
+          "media_max_mb",
           "max_files",
           "max_links",
           "hint",

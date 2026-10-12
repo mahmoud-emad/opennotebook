@@ -7,6 +7,8 @@ const rules: UploadRules = {
   accept: ".pdf,.docx,.pptx,.xlsx,.md,.markdown,.txt,.csv",
   kinds: "PDF, Word, PowerPoint, Excel, Markdown, text or CSV",
   max_mb: 25,
+  media_extensions: ["mp3", "mp4"],
+  media_max_mb: 500,
   max_files: 10,
   max_links: 8,
   hint: "PDF, Office, Markdown, text or CSV, up to 25 MB. Or drop them here.",
@@ -25,6 +27,12 @@ describe("what the sources panel takes", () => {
     expect(big).toBe("30 MB, over the 25 MB limit");
     expect(uploadProblem("max.pdf", 25 * 1024 * 1024, rules)).toBeNull();
     expect(uploadProblem("empty.txt", 0, rules)).toBe("the file is empty");
+  });
+
+  it("takes a recording up to its own, larger limit", () => {
+    const withMedia = { ...rules, extensions: [...rules.extensions, "mp3", "mp4"] };
+    expect(uploadProblem("talk.mp3", 300 * 1024 * 1024, withMedia)).toBeNull();
+    expect(uploadProblem("talk.mp4", 600 * 1024 * 1024, withMedia)).toBe("600 MB, over the 500 MB limit");
   });
 
   it("follows the server's limit when it changes", () => {

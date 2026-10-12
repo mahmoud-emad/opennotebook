@@ -7,7 +7,7 @@ OpenNotebook is an open-source study studio, in the spirit of NotebookLM, that y
 
 <img width="1706" height="931" alt="A collection in OpenNotebook, with its sources and what was made from them" src="https://github.com/user-attachments/assets/35eaeaa8-2068-4aa9-991e-88c50d6ce76c" />
 
-Put your sources into a collection: PDFs, slides, web links, pasted notes, or a research report it writes for you. Then turn them into something you can learn from:
+Put your sources into a collection: PDFs, Office files, web links, YouTube videos, audio and video recordings (transcribed for you), pasted notes, or a research report it writes for you. Then turn them into something you can learn from:
 
 - **Narrated slide decks.** You can stop them at any point and ask a question out loud.
 - **Video overviews.** Slides or a hand-drawn whiteboard, with chapters and captions that follow along word by word.
@@ -18,7 +18,7 @@ Every claim links back to the passage it came from, so you can check it. When a 
 
 ## Try it
 
-You need Docker and an AI provider: [OpenRouter](https://openrouter.ai), OpenAI, Anthropic, Google Gemini, Mistral, Groq, DeepSeek, Together, xAI, a local [Ollama](https://ollama.com), or any OpenAI-compatible server.
+You need Docker and an AI provider: [OpenRouter](https://openrouter.ai), OpenAI, Azure OpenAI, Anthropic, Google Gemini, Mistral, Groq, DeepSeek, Cohere, Qwen, Fireworks, Cerebras, Together, xAI, a local [Ollama](https://ollama.com) or LM Studio, or any OpenAI-compatible server.
 
 ```sh
 git clone https://github.com/mahmoud-emad/opennotebook.git

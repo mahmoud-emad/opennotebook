@@ -19,6 +19,7 @@ import ipaddress
 import re
 import socket
 import uuid
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from pathlib import PurePosixPath
 from urllib.parse import urlsplit
@@ -28,7 +29,7 @@ import trafilatura
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from opennotebook import memory, storage
+from opennotebook import media, memory, storage, youtube
 from opennotebook.convert import ConvertError, InputKind, to_markdown
 from opennotebook.db.models import Source
 from opennotebook.domain import collections
@@ -55,8 +56,12 @@ TEXT_EXTENSIONS = {"md", "markdown", "txt", "text", "csv"}
 # What a person is offered to upload, by extension and in words: the
 # documents the converter reads and the plain text kinds. The file picker
 # offers these; anything else is refused with `UPLOAD_KINDS`.
-UPLOAD_EXTENSIONS = ("pdf", "docx", "pptx", "xlsx", "md", "markdown", "txt", "csv")
-UPLOAD_KINDS = "PDF, Word, PowerPoint, Excel, Markdown, text or CSV"
+DOCUMENT_EXTENSIONS = ("pdf", "docx", "pptx", "xlsx", "md", "markdown", "txt", "csv")
+UPLOAD_EXTENSIONS = (*DOCUMENT_EXTENSIONS, *media.EXTENSIONS)
+UPLOAD_KINDS = "PDF, Word, PowerPoint, Excel, Markdown, text, CSV, audio or video"
+# What one upload is read up to: a recording may be far larger than a
+# document, which `convert_file` holds to `MAX_UPLOAD_BYTES`.
+MAX_READ_BYTES = max(MAX_UPLOAD_BYTES, media.MAX_BYTES)
 
 USER_AGENT = (
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
@@ -239,13 +244,42 @@ def convert_file(name: str, data: bytes, ext: str | None = None) -> str:
     return md
 
 
-async def prepare_file(name: str, data: bytes) -> Ready:
-    """An uploaded file, read into text and titled by its name."""
+async def prepare_file(
+    name: str, data: bytes, transcribe: Callable[[bytes], Awaitable[str]] | None = None
+) -> Ready:
+    """An uploaded file, read into text and titled by its name. An audio or
+    video file is transcribed with `transcribe`; the recording itself is not
+    kept, only what it says."""
     name = one_line(PurePosixPath(name).name) or "document"
+    title = PurePosixPath(name).stem or name
+    ext = _extension(name)
+    if media.is_media(ext):
+        if transcribe is None:
+            raise Refused(f"{name} is a recording, and nothing here can transcribe it.")
+        try:
+            said = await media.transcript(name, data, ext, transcribe)
+        except media.Unreadable as e:
+            raise Refused(str(e)) from None
+        return await prepare("file", title, f"# {title}\n\n{said}")
     # Converting is CPU work on untrusted bytes; off the event loop.
     text = await asyncio.to_thread(convert_file, name, data)
-    title = PurePosixPath(name).stem or name
     return await prepare("file", title, text, upload=(PurePosixPath(name).suffix, data))
+
+
+# ── YouTube ───────────────────────────────────────────────────────────────────
+
+
+async def prepare_youtube(
+    http: httpx.AsyncClient, url: str, languages: tuple[str, ...] = ("en",)
+) -> Ready:
+    """A YouTube video's captions, ready to keep, or `Refused`."""
+    try:
+        video = await youtube.read(http, url, languages)
+    except youtube.NoCaptions as e:
+        raise Refused(str(e)) from None
+    title = video.title or f"YouTube video {video.id}"
+    body = f"# {title}\n\nSource: {url}\n\n{video.text}"
+    return await prepare("url", title, body, url=url)
 
 
 # ── web pages ─────────────────────────────────────────────────────────────────

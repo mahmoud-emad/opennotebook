@@ -46,6 +46,8 @@ const opts: StudioOptions = {
     accept: ".pdf",
     kinds: "PDF",
     max_mb: 25,
+    media_extensions: [],
+    media_max_mb: 500,
     max_files: 10,
     max_links: 8,
     hint: "PDF, up to 25 MB.",

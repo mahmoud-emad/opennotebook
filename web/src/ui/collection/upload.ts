@@ -13,8 +13,9 @@ export function uploadProblem(name: string, size: number, rules: UploadRules | n
   const dot = name.lastIndexOf(".");
   const ext = dot >= 0 ? name.slice(dot + 1).toLowerCase() : "";
   if (!rules.extensions.includes(ext)) return `not a file the studio reads: ${rules.kinds}`;
-  if (size > rules.max_mb * 1024 * 1024)
-    return `${Math.ceil(size / (1024 * 1024))} MB, over the ${rules.max_mb} MB limit`;
+  // A recording may be far larger than a document.
+  const limit = rules.media_extensions.includes(ext) ? rules.media_max_mb : rules.max_mb;
+  if (size > limit * 1024 * 1024) return `${Math.ceil(size / (1024 * 1024))} MB, over the ${limit} MB limit`;
   if (size === 0) return "the file is empty";
   return null;
 }
