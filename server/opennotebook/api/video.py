@@ -72,7 +72,7 @@ NO_KEY = (
 )
 MADE_FROM_FAILED = (
     "The output this video was to be made from could not be made, so neither could the video. "
-    "Make it again."
+    "Try the output again, and its video follows."
 )
 LOST = "The video stopped before it was finished. Make it again to start over."
 MISSING = "This video is missing from the studio's files. Make it again."
@@ -234,6 +234,8 @@ def _require_encoder() -> None:
 
 
 async def _start(s: AsyncSession, o: Session, style: Style, theme: ThemeId) -> VideoState:
+    if o.state == "failed":
+        raise Problem(409, MADE_FROM_FAILED)
     if o.state != "ready":
         raise Problem(409, NOT_READY)
     current = await state_of(s, o, style)

@@ -364,7 +364,7 @@ export function VideoLine({ sid, ready, ro }: { sid: string; ready: boolean; ro:
           </span>
           {v.state === "failed" && <span className="out-d bad">{v.failure}</span>}
           {v.playable && <WatchLink sid={sid} style={v.style} />}
-          {v.state === "failed" && !ro && (
+          {v.state === "failed" && !ro && ready && (
             <button className="link-btn" disabled={starting} onClick={start}>
               <Icon name="arrow-clockwise" />
               Try again

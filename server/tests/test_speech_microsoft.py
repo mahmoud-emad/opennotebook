@@ -13,6 +13,8 @@ import aiohttp
 import edge_tts.exceptions
 import httpx
 import pytest
+from multidict import CIMultiDict, CIMultiDictProxy
+from yarl import URL
 
 from opennotebook import speech, storage
 from opennotebook.build import wav as build_wav
@@ -206,6 +208,22 @@ async def test_an_edge_that_never_answers_says_what_to_do() -> None:
         "OPENNOTEBOOK_TTS_PROVIDER to azure or openai."
     )
     assert "blocked" in str(e.value)
+
+
+async def test_an_edge_that_refuses_is_not_tried_again_and_says_what_to_set() -> None:
+    refused = aiohttp.WSServerHandshakeError(
+        aiohttp.RequestInfo(URL("wss://speech.test/"), "GET", CIMultiDictProxy(CIMultiDict())),
+        (),
+        status=403,
+        message="Invalid response status",
+    )
+    fake = Edge(refused)
+    with pytest.raises(speech.SpeechError) as e:
+        await edge(fake).synthesize("Hello", AVA)
+    assert len(fake.calls) == 1, "a refusal is refused again"
+    assert "Microsoft refused" in e.value.sentence
+    assert "OPENNOTEBOOK_TTS_PROVIDER to azure" in e.value.sentence
+    assert "403" in str(e.value)
 
 
 async def test_an_edge_that_sends_no_audio_names_the_voice() -> None:

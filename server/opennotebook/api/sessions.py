@@ -729,6 +729,20 @@ def retry_request(o: Session) -> BuildReq:
     )
 
 
+def waiting_videos(o: Session) -> dict[str, Any]:
+    """The videos asked for with a failed output, asked for again: each style
+    waiting, with the theme it was asked in."""
+    out: dict[str, Any] = {}
+    for style, v in (o.video or {}).items():
+        if not isinstance(v, dict):
+            continue
+        asked: dict[str, Any] = {"state": video.WAITING}
+        if theme := v.get("theme"):  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
+            asked["theme"] = theme
+        out[style] = asked
+    return out
+
+
 @router.post("/sessions/{sid}/retry", status_code=202)
 async def retry_session(sid: uuid.UUID, s: Db, me: Me, after: BackgroundTasks) -> SessionSummary:
     """Make a failed output again, with the options it was made with, as a
@@ -740,6 +754,8 @@ async def retry_session(sid: uuid.UUID, s: Db, me: Me, after: BackgroundTasks) -
     if old.state != "failed":
         raise Problem(409, NOT_FAILED)
     o = await start(s, me.id, old.collection_id, retry_request(old))
+    # The videos asked for with it wait for the new one instead.
+    o.video = waiting_videos(old) or None
     # Read again under the collection's lock `start` holds: another tab may
     # have removed or retried it while the price list was read.
     gone = await s.execute(

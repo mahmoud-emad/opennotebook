@@ -22,6 +22,7 @@ from pydantic import ValidationError
 
 from opennotebook.ai import client as ai_client
 from opennotebook.ai.client import Ai
+from opennotebook.api import video as video_api
 from opennotebook.api.video import lines_of_vtt
 from opennotebook.build.whiteboard import (
     check,
@@ -657,11 +658,21 @@ async def test_a_video_whose_output_fails_says_so(
     cid = (await client.post("/api/collections", json={"title": "Linux"})).json()["id"]
     await add_note(client, cid, "The kernel manages memory, disks and every program. " * 10)
     studio.fail["outline"] = 500
-    sid = (await client.post(f"/api/collections/{cid}/videos", json={})).json()["session"]["id"]
+    body = {"theme": "chalkboard"}
+    r = await client.post(f"/api/collections/{cid}/videos", json=body)
+    sid = r.json()["session"]["id"]
     await drain("prep")
     assert (await client.get(f"/api/sessions/{sid}")).json()["state"] == "failed"
     st = (await client.get(f"/api/sessions/{sid}/videos")).json()[1]
-    assert st["state"] == "failed" and "could not be made" in st["failure"]
+    assert st["state"] == "failed" and st["failure"] == video_api.MADE_FROM_FAILED
+    # Its video cannot be tried on its own: the output is what failed.
+    r = await client.post(f"/api/sessions/{sid}/video", json={"style": "whiteboard"})
+    assert r.status_code == 409 and r.json()["detail"] == video_api.MADE_FROM_FAILED
+    # Trying the output again asks for its video again, in the same theme.
+    studio.fail.pop("outline")
+    new = (await client.post(f"/api/sessions/{sid}/retry")).json()["id"]
+    st = (await client.get(f"/api/sessions/{new}/videos")).json()[1]
+    assert (st["state"], st["theme"]) == ("waiting", "chalkboard")
 
 
 # ── the watch page: the script, and the explainer ────────────────────────────

@@ -93,6 +93,15 @@ def edge_unreachable(detail: str) -> speech.SpeechError:
     )
 
 
+def edge_refused(status: int) -> speech.SpeechError:
+    return speech.SpeechError(
+        f"Microsoft's Edge voice service refused the connection (HTTP {status})",
+        "Microsoft refused this server's requests for its free voices, as it does from some "
+        f"networks. Set {providers.PROVIDER_KEY} to azure, with an Azure Speech key, or to "
+        "openai, with a speech server, then make it again.",
+    )
+
+
 def edge_silent(voice: str) -> speech.SpeechError:
     return speech.SpeechError(
         f"Microsoft's Edge voice service sent no audio for voice {voice}",
@@ -353,6 +362,11 @@ class MicrosoftSpeech(speech.Speech):
             raise _Again(edge_unreachable(f"no whole line within {EDGE_LINE_TIMEOUT_S} s")) from e
         except edge_tts.exceptions.NoAudioReceived as e:
             raise _Again(edge_silent(voice)) from e
+        except aiohttp.WSServerHandshakeError as e:
+            # Refused rather than unreachable: another try is refused too.
+            if e.status in (401, 403):
+                raise edge_refused(e.status) from e
+            raise _Again(edge_unreachable(str(e) or type(e).__name__)) from e
         except (
             aiohttp.ClientError,
             edge_tts.exceptions.EdgeTTSException,
