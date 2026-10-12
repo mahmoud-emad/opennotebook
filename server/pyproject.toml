@@ -1,6 +1,6 @@
 [project]
 name = "opennotebook"
-version = "0.1.0"
+version = "0.2.0"
 description = "OpenNotebook server: collections, sources, studio outputs and the chat agent"
 readme = "README.md"
 requires-python = ">=3.14"

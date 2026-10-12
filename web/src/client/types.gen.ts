@@ -1166,16 +1166,6 @@ export type MindNode = {
 };
 
 /**
- * ModelsOut
- */
-export type ModelsOut = {
-    /**
-     * Models
-     */
-    models: Array<string>;
-};
-
-/**
  * NewKey
  */
 export type NewKey = {
@@ -1510,12 +1500,6 @@ export type PresetOut = {
      * The environment variable that sets its key instead
      */
     key_env: string;
-    /**
-     * Roles
-     *
-     * The roles it suggests a model for
-     */
-    roles: Array<string>;
 };
 
 /**
@@ -1597,9 +1581,11 @@ export type ProvidersOut = {
      */
     providers: Array<ProviderOut>;
     /**
-     * Roles
+     * Can Setup
+     *
+     * This person may connect, test and remove providers
      */
-    roles: Array<RoleOut>;
+    can_setup: boolean;
 };
 
 /**
@@ -1659,42 +1645,6 @@ export type Retitle = {
      * Title
      */
     title: string;
-};
-
-/**
- * RoleOut
- */
-export type RoleOut = {
-    /**
-     * Role
-     */
-    role: string;
-    /**
-     * Label
-     */
-    label: string;
-    /**
-     * Keys
-     *
-     * The model settings this role fills
-     */
-    keys: Array<string>;
-    /**
-     * Model
-     *
-     * The model in force; empty when no provider can do it
-     */
-    model: string;
-    /**
-     * Model Name
-     */
-    model_name: string;
-    /**
-     * Chosen
-     *
-     * Set by someone, rather than suggested
-     */
-    chosen: boolean;
 };
 
 /**
@@ -4211,36 +4161,6 @@ export type RemoveProviderResponses = {
 
 export type RemoveProviderResponse = RemoveProviderResponses[keyof RemoveProviderResponses];
 
-export type ReplaceProviderData = {
-    body: ProviderIn;
-    path: {
-        /**
-         * Cid
-         */
-        cid: string;
-    };
-    query?: never;
-    url: '/api/ai/providers/{cid}';
-};
-
-export type ReplaceProviderErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type ReplaceProviderError = ReplaceProviderErrors[keyof ReplaceProviderErrors];
-
-export type ReplaceProviderResponses = {
-    /**
-     * Successful Response
-     */
-    200: ProviderOut;
-};
-
-export type ReplaceProviderResponse = ReplaceProviderResponses[keyof ReplaceProviderResponses];
-
 export type RecheckProviderData = {
     body?: never;
     path: {
@@ -4270,36 +4190,6 @@ export type RecheckProviderResponses = {
 };
 
 export type RecheckProviderResponse = RecheckProviderResponses[keyof RecheckProviderResponses];
-
-export type ProviderModelsData = {
-    body?: never;
-    path: {
-        /**
-         * Cid
-         */
-        cid: string;
-    };
-    query?: never;
-    url: '/api/ai/providers/{cid}/models';
-};
-
-export type ProviderModelsErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type ProviderModelsError = ProviderModelsErrors[keyof ProviderModelsErrors];
-
-export type ProviderModelsResponses = {
-    /**
-     * Successful Response
-     */
-    200: ModelsOut;
-};
-
-export type ProviderModelsResponse = ProviderModelsResponses[keyof ProviderModelsResponses];
 
 export type ListCollectionsData = {
     body?: never;

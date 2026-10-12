@@ -3,7 +3,7 @@
   "info": {
     "title": "OpenNotebook",
     "description": "Collections of sources, and the decks, audio overviews, mind maps and notes made from them. Everything the web app does goes through this API.",
-    "version": "0.1.0"
+    "version": "0.2.0"
   },
   "paths": {
     "/api/health": {
@@ -252,7 +252,7 @@
           "setup"
         ],
         "summary": "List Providers",
-        "description": "The providers the studio can connect to, the ones it is connected to,\nand the model each kind of work uses.",
+        "description": "The providers the studio can connect to, and the ones it is connected\nto. The model each kind of work uses is a setting (`/api/settings`).",
         "operationId": "list_providers",
         "responses": {
           "200": {
@@ -351,57 +351,6 @@
       }
     },
     "/api/ai/providers/{cid}": {
-      "put": {
-        "tags": [
-          "setup"
-        ],
-        "summary": "Replace Provider",
-        "description": "Change a connected provider's key, address or name. The key is tested\nfirst; an empty key keeps the one it has.",
-        "operationId": "replace_provider",
-        "parameters": [
-          {
-            "name": "cid",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Cid"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ProviderIn"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProviderOut"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      },
       "delete": {
         "tags": [
           "setup"
@@ -463,49 +412,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/CheckOut"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/ai/providers/{cid}/models": {
-      "get": {
-        "tags": [
-          "setup"
-        ],
-        "summary": "Provider Models",
-        "description": "The models a connected provider offers, by the ids the settings take\n(`provider:model`, bare on the primary provider).",
-        "operationId": "provider_models",
-        "parameters": [
-          {
-            "name": "cid",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Cid"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ModelsOut"
                 }
               }
             }
@@ -6497,22 +6403,6 @@
         ],
         "title": "MindNode"
       },
-      "ModelsOut": {
-        "properties": {
-          "models": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Models"
-          }
-        },
-        "type": "object",
-        "required": [
-          "models"
-        ],
-        "title": "ModelsOut"
-      },
       "NewKey": {
         "properties": {
           "name": {
@@ -6983,14 +6873,6 @@
             "type": "string",
             "title": "Key Env",
             "description": "The environment variable that sets its key instead"
-          },
-          "roles": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Roles",
-            "description": "The roles it suggests a model for"
           }
         },
         "type": "object",
@@ -7002,8 +6884,7 @@
           "needs_key",
           "key_optional",
           "key_page",
-          "key_env",
-          "roles"
+          "key_env"
         ],
         "title": "PresetOut"
       },
@@ -7117,19 +6998,17 @@
             "type": "array",
             "title": "Providers"
           },
-          "roles": {
-            "items": {
-              "$ref": "#/components/schemas/RoleOut"
-            },
-            "type": "array",
-            "title": "Roles"
+          "can_setup": {
+            "type": "boolean",
+            "title": "Can Setup",
+            "description": "This person may connect, test and remove providers"
           }
         },
         "type": "object",
         "required": [
           "presets",
           "providers",
-          "roles"
+          "can_setup"
         ],
         "title": "ProvidersOut"
       },
@@ -7210,50 +7089,6 @@
           "title"
         ],
         "title": "Retitle"
-      },
-      "RoleOut": {
-        "properties": {
-          "role": {
-            "type": "string",
-            "title": "Role"
-          },
-          "label": {
-            "type": "string",
-            "title": "Label"
-          },
-          "keys": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Keys",
-            "description": "The model settings this role fills"
-          },
-          "model": {
-            "type": "string",
-            "title": "Model",
-            "description": "The model in force; empty when no provider can do it"
-          },
-          "model_name": {
-            "type": "string",
-            "title": "Model Name"
-          },
-          "chosen": {
-            "type": "boolean",
-            "title": "Chosen",
-            "description": "Set by someone, rather than suggested"
-          }
-        },
-        "type": "object",
-        "required": [
-          "role",
-          "label",
-          "keys",
-          "model",
-          "model_name",
-          "chosen"
-        ],
-        "title": "RoleOut"
       },
       "RunCommand": {
         "properties": {
