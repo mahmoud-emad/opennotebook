@@ -69,7 +69,8 @@ def unseal(sealed: str) -> str:
     try:
         return _fernet().decrypt(sealed.encode()).decode()
     except InvalidToken, ValueError:
-        log.warning("a stored AI key could not be decrypted; was %s changed?", SECRET_ENV)
+        # Nothing about the secret is logged, not even its variable's name.
+        log.warning("a stored AI key could not be decrypted; the encryption secret changed")
         return ""
 
 

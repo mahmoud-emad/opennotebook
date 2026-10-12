@@ -14,6 +14,7 @@ suggestion for a role leaves that role to another provider, or to the person.
 
 from dataclasses import dataclass, field
 from typing import Literal
+from urllib.parse import urlsplit
 
 # What a model is used for. Each model setting has one (`ROLE_OF`).
 type Role = Literal[
@@ -397,8 +398,14 @@ def kind_of_url(url: str) -> str:
     for p in PRESETS:
         if p.base_url and p.needs_key and u == p.base_url.lower():
             return p.kind
-    if "openrouter.ai" in u:
+    # By the host itself, never a substring of the address: a look-alike
+    # such as openrouter.ai.example.com is a custom server.
+    try:
+        host = (urlsplit(u).hostname or "").rstrip(".")
+    except ValueError:
+        return "custom"
+    if host == "openrouter.ai" or host.endswith(".openrouter.ai"):
         return "openrouter"
-    if ".openai.azure.com" in u:
+    if host.endswith(".openai.azure.com"):
         return "azure"
     return "custom"

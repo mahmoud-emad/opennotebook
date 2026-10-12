@@ -94,6 +94,10 @@ def test_an_address_names_its_provider() -> None:
     assert kind_of_url("https://openrouter.ai/api/v1") == "openrouter"
     assert kind_of_url("https://api.anthropic.com/v1") == "anthropic"
     assert kind_of_url("http://localhost:1234/v1") == "custom"
+    # A look-alike host is not the provider it imitates.
+    assert kind_of_url("https://openrouter.ai.example.com/api/v1") == "custom"
+    assert kind_of_url("https://example.com/openrouter.ai/v1") == "custom"
+    assert kind_of_url("https://evil.com/?x=.openai.azure.com") == "custom"
 
 
 # ── naming a model ────────────────────────────────────────────────────────────
