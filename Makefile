@@ -30,6 +30,9 @@ check: check-server check-web
 check-server:
 	cd server && $(UV) run ruff format --check . && $(UV) run ruff check .
 	cd server && $(UV) run pyright
+	cd server && test "$$($(UV) run alembic heads | wc -l)" -eq 1 && $(UV) run alembic check
+	cd server && $(UV) run opennotebook openapi | diff -q ../web/openapi.json - >/dev/null || \
+		{ echo "web/openapi.json is out of date: run make api-client"; exit 1; }
 	cd server && $(UV) run pytest -q
 
 check-web:

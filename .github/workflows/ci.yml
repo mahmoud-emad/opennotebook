@@ -1,7 +1,9 @@
-# The checks `make check` runs, on every push to main and every pull request: the server
-# (format, lint, types, tests against Postgres with pgvector) and the web app
-# (lint, tests, the build with its first-screen size budget), then the
-# end-to-end suite (web/e2e, `make e2e`) in a browser against the whole stack.
+# The checks `make check` runs, on every push to main and every pull request:
+# the server (format, lint, types, migrations, the API contract, tests
+# against Postgres with pgvector), the web app (its generated client, lint,
+# tests, the build with its first-screen size budget), known vulnerabilities
+# in both, the compose file, then the end-to-end suite (web/e2e, `make e2e`)
+# in a browser against the whole stack.
 
 name: CI
 
@@ -42,6 +44,8 @@ jobs:
           --health-retries 10
     env:
       TEST_DATABASE_URL: postgresql://opennotebook:opennotebook@localhost:5432/opennotebook_test
+      # What the migration and contract checks connect to: the same database.
+      DATABASE_URL: postgresql://opennotebook:opennotebook@localhost:5432/opennotebook_test
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
@@ -62,6 +66,23 @@ jobs:
         run: uv run ruff check .
       - name: Types
         run: uv run pyright
+      # One migration head (two would leave a deploy guessing), and models
+      # that match what the migrations build.
+      - name: Migrations
+        run: |
+          heads=$(uv run alembic heads | wc -l)
+          if [ "$heads" -ne 1 ]; then
+            echo "There are $heads migration heads; add a merge revision."; uv run alembic heads; exit 1
+          fi
+          uv run alembic upgrade heads
+          uv run alembic check
+      # The web app's client is generated from this document, so a server
+      # change that was not carried over fails here, not in a browser.
+      - name: API contract
+        run: |
+          uv run opennotebook openapi > /tmp/openapi.json
+          diff -u ../web/openapi.json /tmp/openapi.json || {
+            echo "web/openapi.json is out of date: run make api-client and commit the result."; exit 1; }
       - name: Tests
         run: uv run pytest -q
 
@@ -82,6 +103,13 @@ jobs:
           cache-dependency-path: web/pnpm-lock.yaml
       - name: Install
         run: pnpm install --frozen-lockfile
+      # The committed client must be what the committed OpenAPI document
+      # generates.
+      - name: Generated client
+        run: |
+          pnpm exec openapi-ts
+          git diff --exit-code -- src/client || {
+            echo "src/client is out of date: run make api-client and commit the result."; exit 1; }
       - name: Lint
         run: pnpm lint
       - name: Tests
@@ -89,6 +117,37 @@ jobs:
       # Includes the type check and the first screen's size budget.
       - name: Build
         run: pnpm build
+
+  # Known vulnerabilities in what the server and the web app ship with.
+  audit:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: "0.12.23"
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          version: "12.9.1"
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24.21.0"
+      - name: Server dependencies
+        working-directory: server
+        run: |
+          uv export --frozen --no-dev --no-emit-project > /tmp/requirements.txt
+          uvx pip-audit==2.10.1 -r /tmp/requirements.txt --disable-pip --progress-spinner off
+      - name: Web dependencies
+        working-directory: web
+        run: pnpm audit --prod
+
+  # The production stack's compose file reads as Docker reads it.
+  deploy:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Compose file
+        run: POSTGRES_PASSWORD=check docker compose -f deploy/compose.yaml config -q
 
   # The main path in a real browser: the api, the worker and the web app's dev
   # server against an empty Postgres, as `make dev` runs them. The suite asks
