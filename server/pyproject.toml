@@ -9,7 +9,7 @@ dependencies = [
     # Microsoft's free neural voices (speech/microsoft.py). LGPLv3, used
     # unmodified as a dependency.
     "edge-tts==7.2.8",
-    "fastapi==0.142.2",
+    "fastapi==0.143.0",
     "fonttools==4.66.1",
     "httpx==0.28.1",
     # The openai SDK's own fork of httpx; the AI client uses it directly.
@@ -20,24 +20,24 @@ dependencies = [
     "miniaudio==1.71",
     # The silence gate: Silero VAD (MIT, bundled in speech/silero/) on
     # onnxruntime (MIT), the same runtime version the page uses.
-    "numpy==2.5.3",
-    "onnxruntime==1.30.0",
-    "openai==3.24.0",
+    "numpy==2.5.4",
+    "onnxruntime==1.31.0",
+    "openai==3.29.0",
     "openpyxl==3.1.5",
     "pdfplumber==0.11.10",
-    "pgvector==0.5.0",
+    "pgvector==0.5.1",
     "playwright==1.63.0",
     "procrastinate==3.10.0",
     "psycopg[binary,pool]==3.3.6",
-    "pydantic==2.13.5",
+    "pydantic==2.14.1",
     "pydantic-settings==2.15.0",
     "pypdfium2==5.14.0",
     "python-multipart>=0.0.20",
     "python-pptx==1.0.2",
     "semantic-text-splitter==0.33.0",
     "skia-python==144.0.post2",
-    "sqlalchemy[asyncio]==2.1.3",
-    "trafilatura==2.3.0",
+    "sqlalchemy[asyncio]==2.1.4",
+    "trafilatura==2.3.1",
     "uvicorn[standard]==0.54.0",
     # YouTube captions for a video link (youtube.py). MIT.
     "youtube-transcript-api==1.2.4",
@@ -48,7 +48,7 @@ dev = [
     "pyright==1.1.414",
     "pytest==9.1.1",
     "pytest-asyncio>=1.2",
-    "ruff==0.16.10",
+    "ruff==0.17.0",
 ]
 
 [project.scripts]
