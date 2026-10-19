@@ -3,7 +3,7 @@
 # compose picks which by its command. Built from the repository root:
 #   docker build -f deploy/server.Dockerfile .
 
-FROM ghcr.io/astral-sh/uv:0.12.23 AS uv
+FROM ghcr.io/astral-sh/uv:0.13.1 AS uv
 
 # ── build: resolve the locked dependencies into /app/.venv ───────────────────
 FROM python:3.14.8-slim-trixie AS build
