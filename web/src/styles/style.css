@@ -904,6 +904,7 @@ select.set-input { padding-right: 6px; }
 .cite:hover .cite-pop, .cite:focus .cite-pop, .cite:focus-within .cite-pop { display: block; animation: pop-in var(--st-dur-fast) var(--st-ease-enter); }
 .cites { margin-top: 8px; font-size: 12px; color: var(--bs-tertiary-color); }
 .cites a { color: var(--bs-link-color); }
+.cact { margin-top: 6px; font-size: 12px; }
 
 /* ── a phone ──────────────────────────────────────────────────────────────── */
 @media (max-width: 700px) {

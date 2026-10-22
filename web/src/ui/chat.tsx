@@ -414,10 +414,69 @@ export function ChatInput({ onSend }: { onSend: (t: string) => void }) {
   );
 }
 
+/** Whether a line can be kept as a note: something the Studio said, that is
+ * not its opening line. */
+export function savable(m: Msg): boolean {
+  return !m.me && m.kind === "" && m.text.trim() !== "" && !m.text.startsWith(GREETING_START);
+}
+
+const GREETING_START = "**Ask me anything about your sources.**";
+
+/** An answer as the text of a note: what was said, then the passages it cites,
+ * numbered as its `[n]` markers are. */
+export function noteOf(m: Msg): { title: string; text: string } {
+  const plain = m.text.replace(/\[\d+(?:\s*,\s*\d+)*\]/g, "").replace(/[*_#`>]/g, "").replace(/\s+/g, " ").replace(/ ([.,;:!?])/g, "$1").trim();
+  const title = [...plain].slice(0, 60).join("").trim();
+  const cited = m.cites.map((c) => `${c.n}. ${c.title}${c.url === "" ? "" : ` (${c.url})`}`);
+  return { title, text: cited.length === 0 ? m.text : `${m.text}\n\nSources:\n\n${cited.join("\n")}` };
+}
+
+/** Keeps an answer as a note source: the button, then what became of it. */
+export function SaveAsNote({ m, onSave }: { m: Msg; onSave: (text: string, title: string) => Promise<void> }) {
+  const [state, setState] = useState<"idle" | "saving" | "saved">("idle");
+  const [err, setErr] = useState("");
+  const save = () => {
+    const { title, text } = noteOf(m);
+    setState("saving");
+    setErr("");
+    onSave(text, title).then(
+      () => setState("saved"),
+      (e) => {
+        setState("idle");
+        setErr(`It could not be saved. ${errText(e)}`);
+      },
+    );
+  };
+  return (
+    <div className="cact">
+      {state === "saved" ? (
+        <span className="dim small">
+          <Icon name="check-lg" /> Saved as a note in your sources
+        </span>
+      ) : (
+        <button className="link-btn" disabled={state === "saving"} onClick={save} title="Add this answer to your sources as a note">
+          <Icon name="journal-text" /> {state === "saving" ? "Saving…" : "Save as note"}
+        </button>
+      )}
+      {err !== "" && (
+        <div className="src-note bad" role="alert">
+          {err}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** One line of the conversation. Drawn once per line: a line that has not
  * changed keeps its object, so its Markdown is not parsed, sanitised and
  * chipped again for every new line below it. */
-const Message = memo(function Message({ m }: { m: Msg }) {
+const Message = memo(function Message({
+  m,
+  onSave,
+}: {
+  m: Msg;
+  onSave?: (text: string, title: string) => Promise<void>;
+}) {
   // Only the Studio's answers are Markdown.
   const html = useMemo(
     () =>
@@ -482,6 +541,7 @@ const Message = memo(function Message({ m }: { m: Msg }) {
               </div>
             </>
           )}
+          {onSave !== undefined && savable(m) && <SaveAsNote m={m} onSave={onSave} />}
         </div>
       </div>
     )
@@ -492,10 +552,13 @@ const Message = memo(function Message({ m }: { m: Msg }) {
 export function AskTab({
   st,
   onSend,
+  onSave,
   note,
 }: {
   st: ChatState;
   onSend: (t: string) => void;
+  /** Keeps an answer as a note source; absent where nothing can be added. */
+  onSave?: (text: string, title: string) => Promise<void>;
   /** Who answers, as the server words it from the settings; null until read. */
   note: string | null;
 }) {
@@ -527,7 +590,7 @@ export function AskTab({
         }}
       >
         {msgs.map((m) => (
-          <Message key={m.key} m={m} />
+          <Message key={m.key} m={m} onSave={m.key === last?.key && talking ? undefined : onSave} />
         ))}
         {loading && (
           <div className="step-row run">

@@ -114,7 +114,12 @@ export function CollectionPage(props: CollectionPageProps) {
               <OutputsList S={S} A={A} ro={ro} open={open} onOpen={onOpen} />
             </div>
           ) : (
-            <AskTab st={chat} onSend={(t) => void A.sendChat(t)} note={opts?.ask_note ?? null} />
+            <AskTab
+              st={chat}
+              onSend={(t) => void A.sendChat(t)}
+              onSave={ro ? undefined : A.saveAsNote}
+              note={opts?.ask_note ?? null}
+            />
           )}
         </section>
 

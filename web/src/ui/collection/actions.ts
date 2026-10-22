@@ -320,6 +320,15 @@ export function pageActions(cid: string, S: PageState, chat: ChatState) {
     })();
   };
 
+  // An answer from the chat, kept as a note source. Throws why it could not
+  // be, for the answer's own button to say.
+  const saveAsNote = async (text: string, title: string) => {
+    const r = await sourceAddText(cid, text, title);
+    if (!r.ok) throw new Error(r.error);
+    await loadSources();
+    await load();
+  };
+
   // A source switched on or off. Its row waits on the server's word, so the
   // switch never shows a state the server does not hold.
   const useSource = (s: Src, active: boolean) => {
@@ -638,6 +647,7 @@ export function pageActions(cid: string, S: PageState, chat: ChatState) {
     research,
     removeSource,
     useSource,
+    saveAsNote,
     setRowErr,
     uploadFiles,
     rename,
