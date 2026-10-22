@@ -19,6 +19,7 @@ import asyncio
 import base64
 import binascii
 import json
+import time
 from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass, field
 from functools import lru_cache
@@ -31,6 +32,7 @@ from opennotebook.ai import connections, ledger
 from opennotebook.ai.errors import AiError, Kind
 from opennotebook.ai.prices import Catalogue, Price
 from opennotebook.ai.providers import BY_KIND, Preset
+from opennotebook.jobs import logs
 
 Finish = Literal["stop", "length", "tool_calls", "content_filter"] | str
 
@@ -50,6 +52,17 @@ class Usage:
     output_tokens: int | None = None
     # USD as the provider reported it; None when it does not say.
     cost_usd: float | None = None
+
+
+def _spent(u: Usage | None, secs: float) -> str:
+    """How a model call went, as a log line says it: its time, its tokens
+    and what it cost when the provider said."""
+    parts = [f"{secs:.1f}s"]
+    if u is not None and (u.input_tokens is not None or u.output_tokens is not None):
+        parts.append(f"{u.input_tokens or 0:,} in, {u.output_tokens or 0:,} out")
+    if u is not None and u.cost_usd:
+        parts.append(f"${u.cost_usd:.4f}")
+    return " · ".join(parts)
 
 
 @dataclass
@@ -574,7 +587,14 @@ class Router:
 
     async def complete(self, model: str, messages: list[dict[str, Any]], **kw: Any) -> Completion:
         client, own = await self.route(model)
-        return await client.complete(own, messages, **kw)
+        began = time.monotonic()
+        try:
+            done = await client.complete(own, messages, **kw)
+        except AiError as e:
+            await logs.warn(f"{own} did not answer ({time.monotonic() - began:.1f}s): {e}")
+            raise
+        await logs.say(f"{own} answered · {_spent(done.usage, time.monotonic() - began)}")
+        return done
 
     async def stream(
         self, model: str, messages: list[dict[str, Any]], **kw: Any

@@ -51,7 +51,7 @@ export async function estimateOutput(cid: string, req: BuildReq, signal?: AbortS
  * estimate prices it, and its render. A theme is sent for a whiteboard only. */
 export async function overviewEstimate(
   cid: string,
-  req: { style: "whiteboard" | "slides"; length: "short" | "default" | "long"; theme?: string },
+  req: { style: "whiteboard" | "slides" | "motion"; length: "short" | "default" | "long"; theme?: string },
   signal?: AbortSignal,
 ): Promise<Estimate> {
   return estimateOf(

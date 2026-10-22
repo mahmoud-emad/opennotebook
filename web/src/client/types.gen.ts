@@ -417,7 +417,7 @@ export type CollectionVideo = {
     /**
      * Style
      */
-    style: 'slides' | 'whiteboard';
+    style: 'slides' | 'whiteboard' | 'motion';
     /**
      * State
      *
@@ -709,7 +709,7 @@ export type ExplainReq = {
     /**
      * Style
      */
-    style?: 'slides' | 'whiteboard';
+    style?: 'slides' | 'whiteboard' | 'motion';
     /**
      * T Ms
      *
@@ -842,6 +842,12 @@ export type JobOut = {
      * Why queued work has not started, in a sentence: no worker is running. Null otherwise
      */
     waiting?: string | null;
+    /**
+     * Log
+     *
+     * What the work said while it ran, oldest first
+     */
+    log?: Array<LogLine>;
 };
 
 /**
@@ -884,6 +890,30 @@ export type LengthChoice = {
      * Label
      */
     label: string;
+};
+
+/**
+ * LogLine
+ *
+ * One thing a job's work said while it ran.
+ */
+export type LogLine = {
+    /**
+     * At
+     *
+     * When, in milliseconds since the epoch
+     */
+    at: number;
+    /**
+     * Level
+     *
+     * `step`: a phase beginning; `ok`: something done; `warn`: something that did not go to plan but did not stop the work; `bad`: something that failed
+     */
+    level: 'info' | 'step' | 'ok' | 'warn' | 'bad';
+    /**
+     * Text
+     */
+    text: string;
 };
 
 /**
@@ -1415,7 +1445,7 @@ export type OverviewReq = {
     /**
      * Style
      */
-    style?: 'slides' | 'whiteboard';
+    style?: 'slides' | 'whiteboard' | 'motion';
     /**
      * Length
      */
@@ -3186,7 +3216,7 @@ export type VideoReq = {
     /**
      * Style
      */
-    style?: 'slides' | 'whiteboard';
+    style?: 'slides' | 'whiteboard' | 'motion';
     /**
      * Theme
      *
@@ -3242,7 +3272,7 @@ export type VideoState = {
     /**
      * Style
      */
-    style: 'slides' | 'whiteboard';
+    style: 'slides' | 'whiteboard' | 'motion';
     /**
      * State
      *
@@ -6432,7 +6462,7 @@ export type GetVideoData = {
          *
          * The video's style
          */
-        style?: 'slides' | 'whiteboard';
+        style?: 'slides' | 'whiteboard' | 'motion';
         /**
          * Download
          *
@@ -6541,7 +6571,7 @@ export type GetCaptionsData = {
          *
          * The video's style
          */
-        style?: 'slides' | 'whiteboard';
+        style?: 'slides' | 'whiteboard' | 'motion';
     };
     url: '/api/sessions/{sid}/video/captions';
 };
@@ -6580,7 +6610,7 @@ export type SharedVideoData = {
          *
          * The video's style
          */
-        style?: 'slides' | 'whiteboard';
+        style?: 'slides' | 'whiteboard' | 'motion';
         /**
          * Download
          *
@@ -6631,7 +6661,7 @@ export type SharedCaptionsData = {
          *
          * The video's style
          */
-        style?: 'slides' | 'whiteboard';
+        style?: 'slides' | 'whiteboard' | 'motion';
     };
     url: '/api/shares/{share_id}/sessions/{sid}/video/captions';
 };
@@ -6666,7 +6696,7 @@ export type GetScriptData = {
          *
          * The video's style
          */
-        style?: 'slides' | 'whiteboard';
+        style?: 'slides' | 'whiteboard' | 'motion';
     };
     url: '/api/sessions/{sid}/video/script';
 };
@@ -6707,7 +6737,7 @@ export type SharedScriptData = {
          *
          * The video's style
          */
-        style?: 'slides' | 'whiteboard';
+        style?: 'slides' | 'whiteboard' | 'motion';
     };
     url: '/api/shares/{share_id}/sessions/{sid}/video/script';
 };

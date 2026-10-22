@@ -1,11 +1,14 @@
 """An output as a video: its narration over its pictures, one MP4 that plays
 anywhere (`docs/video-overview-spec.md`).
 
-Two styles. Slides: each slide held on screen while it is narrated, the
+Three styles. Slides: each slide held on screen while it is narrated, the
 episode's audio under it, a chapter per slide (`stills.py`); an audio
 overview has no slides, so each of its chapters is shown as a title card.
 Whiteboard: the narration rewritten for one presenter and drawn on a board
-scene by scene (`whiteboard/render.py`). Either way the narration is a
+scene by scene (`whiteboard/render.py`). Motion: one HTML page animating the
+whole narration, written by a model and recorded frame by frame
+(`motion/render.py`); it uses the session's own narration, not a
+presenter's rewrite. Either way the narration is a
 subtitle track that is off until the viewer turns it on (captions burned
 into the picture repeat the narration, which costs learning: the
 redundancy principle).
@@ -57,7 +60,7 @@ from opennotebook.script.retrieval import Scope
 
 log = logging.getLogger(__name__)
 
-STYLES = ("slides", "whiteboard")
+STYLES = ("slides", "whiteboard", "motion")
 
 # The phases a render reports, in order, by style.
 PHASES = (
@@ -75,6 +78,15 @@ WHITEBOARD_PHASES = (
     "Drawing the scenes",
     "Checking the video",
 )
+# A motion video has no narration of its own: the session's is animated by
+# one page, planned, written, recorded and checked (`build/motion/`).
+MOTION_PHASES = (
+    "Putting the narration together",
+    "Planning the scenes",
+    "Writing the page",
+    "Recording the animation",
+    "Checking the video",
+)
 
 RENDER_TASK = "render_video"
 # A video asked for together with the output it is made from: it starts when
@@ -86,7 +98,9 @@ Phase = Callable[[str], Awaitable[None]]
 
 
 def phases_of(style: str) -> tuple[str, ...]:
-    return WHITEBOARD_PHASES if style == "whiteboard" else PHASES
+    if style == "whiteboard":
+        return WHITEBOARD_PHASES
+    return MOTION_PHASES if style == "motion" else PHASES
 
 
 class AudioMissing(BuildError):
@@ -276,6 +290,17 @@ async def render(
                 )  # fmt: skip
             extra |= drawn.state
             extra["theme"] = look.id
+            scenes = drawn.board
+            await encode(work, out, timing.total_ms, captions=bool(caps), drawn=True)
+        elif style == "motion":
+            from opennotebook.build.motion import render as motion
+
+            scope = Scope(o.owner_id, o.collection_id)
+            drawn = await motion.run(
+                work, models, parts, timing, phases, phase, phase_done,
+                scope=scope, title=o.title,
+            )  # fmt: skip
+            extra |= drawn.state
             scenes = drawn.board
             await encode(work, out, timing.total_ms, captions=bool(caps), drawn=True)
         else:

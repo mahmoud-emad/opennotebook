@@ -33,7 +33,12 @@ export type View =
   | { kind: "play"; sid: string; share: string | null }
   /** A video's watch page, with the tutor beside it: an output's video in
    * one style (`?style=`), of yours or one a share includes. */
-  | { kind: "watch"; sid: string; style: "whiteboard" | "slides"; share: string | null };
+  | {
+      kind: "watch";
+      sid: string;
+      style: "whiteboard" | "slides" | "motion";
+      share: string | null;
+    };
 
 /** The path segment of the page listing every collection of yours. */
 export const MY_COLLECTIONS_ROUTE = "my-collections";
@@ -52,10 +57,13 @@ export const WATCH_ROUTE = "watch";
 export function routeFromLocation(): View {
   const path = window.location.pathname;
   const i = path.indexOf("/ui");
-  return i >= 0 ? parseRoute(path.slice(i + 3), window.location.search) : { kind: "discover" };
+  return i >= 0
+    ? parseRoute(path.slice(i + 3), window.location.search)
+    : { kind: "discover" };
 }
 
-const ok = (s: string | undefined): s is string => !!s && /^[A-Za-z0-9_-]+$/.test(s);
+const ok = (s: string | undefined): s is string =>
+  !!s && /^[A-Za-z0-9_-]+$/.test(s);
 
 function item(kind: string, id: string | undefined): Open | null {
   if (!ok(id)) return null;
@@ -75,18 +83,27 @@ export function parseRoute(rest: string, search = ""): View {
   if (a === WATCH_ROUTE && parts.length === 2 && ok(b)) {
     const q = new URLSearchParams(search);
     const share = q.get("share") ?? "";
-    const style = q.get("style") === "slides" ? "slides" : "whiteboard";
+    const raw = q.get("style");
+    const style = raw === "slides" || raw === "motion" ? raw : "whiteboard";
     return { kind: "watch", sid: b, style, share: ok(share) ? share : null };
   }
   if (parts.length === 1 && a === "") return { kind: "discover" };
   if (parts.length === 1 && a === MY_COLLECTIONS_ROUTE) return { kind: "mine" };
   // Before Discover: the list of every collection.
-  if (parts.length === 1 && a === LEGACY_COLLECTIONS_ROUTE) return { kind: "mine" };
-  if (a === SHARED_ROUTE && parts.length === 2 && ok(b)) return { kind: "shared", id: b };
-  if (a === "c" && parts.length === 2 && ok(b)) return { kind: "collection", cid: b, open: null };
-  if (a === "c" && parts.length === 4 && ok(b)) return { kind: "collection", cid: b, open: item(c!, d) };
+  if (parts.length === 1 && a === LEGACY_COLLECTIONS_ROUTE)
+    return { kind: "mine" };
+  if (a === SHARED_ROUTE && parts.length === 2 && ok(b))
+    return { kind: "shared", id: b };
+  if (a === "c" && parts.length === 2 && ok(b))
+    return { kind: "collection", cid: b, open: null };
+  if (a === "c" && parts.length === 4 && ok(b))
+    return { kind: "collection", cid: b, open: item(c!, d) };
   // Before collections: a map's or notes' own address, on its sid.
-  if ((a === MIND_MAP_ROUTE || a === STUDY_NOTES_ROUTE) && parts.length === 3 && ok(b))
+  if (
+    (a === MIND_MAP_ROUTE || a === STUDY_NOTES_ROUTE) &&
+    parts.length === 3 &&
+    ok(b)
+  )
     return { kind: "collection", cid: b, open: item(a, c) };
   const legacy: Record<string, Output> = {
     "new-session": "session",
@@ -94,7 +111,8 @@ export function parseRoute(rest: string, search = ""): View {
     "new-study-notes": "notes",
     "new-audio-overview": "audio",
   };
-  if (parts.length === 1 && a && legacy[a]) return { kind: "new", output: legacy[a] };
+  if (parts.length === 1 && a && legacy[a])
+    return { kind: "new", output: legacy[a] };
   return { kind: "discover" };
 }
 

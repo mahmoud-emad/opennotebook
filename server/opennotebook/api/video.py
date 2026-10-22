@@ -51,7 +51,7 @@ from opennotebook.script.errors import ScriptError, problem
 
 router = APIRouter(prefix="/api", tags=["video"])
 
-Style = Literal["slides", "whiteboard"]
+Style = Literal["slides", "whiteboard", "motion"]
 # Every style, in the order the studio lists them.
 STYLES: tuple[Style, ...] = video.STYLES  # pyright: ignore[reportAssignmentType]
 StyleQuery = Annotated[Style, Query(description="The video's style")]
@@ -246,6 +246,10 @@ async def _start(s: AsyncSession, o: Session, style: Style, theme: ThemeId) -> V
     if style == "whiteboard" and not await client.ai().ready():
         # The scenes are written by a model: without a key the render would
         # fail at its first call, after waiting its turn.
+        raise Problem(503, NO_KEY)
+    if style == "motion" and not await client.ai().ready():
+        # The page is written by a model too: refused at once, as a
+        # whiteboard's scenes are.
         raise Problem(503, NO_KEY)
     await video.queue(s, o, style, theme)
     return VideoState.of(style, _kept(o, style))

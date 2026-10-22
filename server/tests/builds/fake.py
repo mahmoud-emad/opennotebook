@@ -93,6 +93,14 @@ class Studio:
         # scene gets wrong before a right one (a large number: never right).
         self.plan_ok = True
         self.scene_wrong = 0
+        # The motion page: how many times it has been written (a repair
+        # round asks again); whether every answer is unusable (the writer
+        # never delivers, so every scene falls back); and for how many
+        # writes its things appear before their words (faulty while
+        # page_tries <= page_early).
+        self.page_tries = 0
+        self.page_flat = False
+        self.page_early = 0
         # The scene check: how many of a scene's checks fail before one
         # passes, and whether the checker answers at all.
         self.check_fail = 0
@@ -135,6 +143,10 @@ class Studio:
             return "slides"
         if system.startswith("You plan a whiteboard explainer video."):
             return "video_plan"
+        if system.startswith("You write one page for an animated explainer video."):
+            return "motion_page"
+        if system.startswith("You check one scene of an animated explainer video"):
+            return "motion_check"
         if system.startswith("You draw one scene of a whiteboard explainer video."):
             return "video_scene"
         if system.startswith("You check one scene of a whiteboard explainer video"):
@@ -224,7 +236,9 @@ class Studio:
             )  # fmt: skip
         elif kind == "video_scene":
             text = self._scene(user)
-        elif kind == "video_check":
+        elif kind == "motion_page":
+            text = self._motion_page(user)
+        elif kind == "motion_check" or kind == "video_check":
             text = self._check(body)
         elif kind == "video_presenter":
             # Each part's lines as one paragraph: the same words, said whole.
@@ -257,6 +271,80 @@ class Studio:
         else:
             text = "ok"
         return kind, {"text": text, "extra": extra}
+
+    def _motion_page(self, user: str) -> str:
+        """A whole motion page: one text label a scene, on its beat, marked
+        with data-mn, plus a claim. `page_flat` answers something that is
+        not a page for the first try; `page_faulty` keeps its fault (labels
+        before their words) every time, so the ladder runs out."""
+        self.page_tries += 1
+        if self.page_flat:
+            return "no page today"
+        early = self.page_tries <= self.page_early
+        # Each scene's section: its header (ids, window) and its numbered
+        # narration under it.
+        heads = re.findall(r"^## Scene \d+:.*$", user, flags=re.M)
+        parts = re.split(r"^## Scene \d+:.*$", user, flags=re.M)[1:]
+        # The narration's line ids: each line is "<id>: [0]first word ...",
+        # and the section may open with "Shows:" or "Concepts:" instead.
+        lines = [(re.findall(r"^(\S+): \[0\]", body, flags=re.M) or ["l0"])[0] for body in parts]
+        scenes = parts
+        _ = heads
+        spans: list[str] = []
+        nodes: list[dict[str, Any]] = []
+        claims: list[dict[str, Any]] = []
+        for i, body in enumerate(scenes):
+            m = re.search(r"^(\S+): (\[0\].*)$", body, flags=re.M)
+            assert m is not None, "each scene carries its numbered narration"
+            line = lines[i]
+            words = [re.sub(r"^\[\d+\]", "", w) for w in m.group(2).split()]
+            said = [w.strip(".,;:!?\"'()") for w in words if len(w) > 3]
+            words2 = [*said, "thing", "other"]
+            a, b = words2[0], words2[1]
+            beat0 = -2000 if early else 0
+            spans.append(
+                f'<div class="s" data-scene="{i}">'
+                f'<span data-mn="text:t{i}a" data-beat="{beat0}">{a}</span>'
+                f'<span data-mn="text:t{i}b" data-beat="{beat0}">{b}</span></div>'
+            )
+            nodes += [
+                {
+                    "id": f"t{i}a",
+                    "kind": "text",
+                    "text": a,
+                    "beat": {"line": line, "word": 0},
+                    "scene": i,
+                },
+                {
+                    "id": f"t{i}b",
+                    "kind": "text",
+                    "text": b,
+                    "beat": {"line": line, "word": 1},
+                    "scene": i,
+                },
+            ]
+            claims.append({"text": f"{a} matters", "passages": ["p1"], "scene": i})
+        html = (
+            '<!doctype html><html><head><meta charset="utf-8"><style>'
+            "html,body{margin:0;width:1920px;height:1080px;background:#1e293b;"
+            "color:#e2e8f0;font-family:sans-serif}"
+            ".s{display:none;position:absolute;left:0;top:0;width:100%;height:100%}"
+            "span{position:absolute;left:180px;font-size:64px}"
+            "span[data-mn$=a]{top:300px}span[data-mn$=b]{top:640px}"
+            "</style></head><body>" + "".join(spans) + "<script>"
+            "window.__Prelude.onFrame(function(t){"
+            "var ss=window.__SCENES,ds=document.querySelectorAll('.s');"
+            "for(var i=0;i<ds.length;i++){var s=ss[i];"
+            "ds[i].style.display=(t>=s.start_ms&&t<s.end_ms)?'block':'none';"
+            "var el=ds[i].querySelectorAll('span');"
+            "for(var j=0;j<el.length;j++){"
+            "var w=window.__BEATS.find(function(b){return b.line===ss[i].elements[j].beat.line"
+            "&&b.w===ss[i].elements[j].beat.word;});"
+            "var at=(w?w.start_ms:0)+Number(el[j].dataset.beat);"
+            "el[j].style.display=(t>=at+Number(el[j].dataset.beat))?'block':'none';}}});"
+            "</script></body></html>"
+        )
+        return json.dumps({"html": html, "elements": nodes, "claims": claims})
 
     def _check(self, body: dict[str, Any]) -> str:
         if self.check_down:

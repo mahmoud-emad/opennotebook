@@ -4,6 +4,7 @@
 
 import { useState, type ReactNode } from "react";
 import { errText, type OutputProgress, type SessionSummary } from "./api";
+import { JobLog } from "./joblog";
 import {
   mindmapDelete,
   mindmapRetitle,
@@ -30,11 +31,19 @@ export type Made =
   | { kind: "notes"; n: StudyNotesSummary };
 
 export function madeCreated(m: Made): number {
-  return m.kind === "session" ? m.s.created_ms : m.kind === "map" ? m.m.created_ms : m.n.created_ms;
+  return m.kind === "session"
+    ? m.s.created_ms
+    : m.kind === "map"
+      ? m.m.created_ms
+      : m.n.created_ms;
 }
 
 export function madeKey(m: Made): string {
-  return m.kind === "session" ? `s-${m.s.sid}` : m.kind === "map" ? `m-${m.m.id}` : `n-${m.n.id}`;
+  return m.kind === "session"
+    ? `s-${m.s.sid}`
+    : m.kind === "map"
+      ? `m-${m.m.id}`
+      : `n-${m.n.id}`;
 }
 
 /** One output, by its kind and its id: what a rename or a delete acts on. */
@@ -42,7 +51,11 @@ export type Target = { kind: "session" | "map" | "notes"; id: string };
 
 /** Rename one output of collection `cid`. Throws why it was not renamed,
  * including one that is no longer there. */
-export async function retitle(cid: string, t: Target, title: string): Promise<void> {
+export async function retitle(
+  cid: string,
+  t: Target,
+  title: string,
+): Promise<void> {
   if (t.kind === "session") await sessionRetitle(t.id, title);
   else if (t.kind === "map") await mindmapRetitle(cid, t.id, title);
   else await notesRetitle(cid, t.id, title);
@@ -106,7 +119,9 @@ export function OutputMenu({
             if (next !== "" && next !== was) onRename(next);
           });
         } else {
-          askConfirm(`Delete “${shown}”?`, consequence, "Delete", () => onDelete());
+          askConfirm(`Delete “${shown}”?`, consequence, "Delete", () =>
+            onDelete(),
+          );
         }
       }}
     />
@@ -146,7 +161,12 @@ export function ErrRow({
         </button>
       )}
       {onDismiss && (
-        <button className="icon-btn" title="Dismiss" aria-label="Dismiss" onClick={onDismiss}>
+        <button
+          className="icon-btn"
+          title="Dismiss"
+          aria-label="Dismiss"
+          onClick={onDismiss}
+        >
           <Icon name="x-lg" />
         </button>
       )}
@@ -163,7 +183,9 @@ export function removedLine(what: string): string {
 
 /** A rename or delete on its way, where the row's ⋯ menu was. */
 function RowBusy({ text }: { text: string }) {
-  return <span className="mini-spin" role="status" title={text} aria-label={text} />;
+  return (
+    <span className="mini-spin" role="status" title={text} aria-label={text} />
+  );
 }
 
 /** A map or a set of notes in the outputs list: opens beside the Studio.
@@ -363,9 +385,21 @@ export function SessionRow({
 
   return (
     <>
-      <div className={state === "failed" ? "out-row bad" : state === "preparing" ? "out-row run" : "out-row"}>
+      <div
+        className={
+          state === "failed"
+            ? "out-row bad"
+            : state === "preparing"
+              ? "out-row run"
+              : "out-row"
+        }
+      >
         {state === "ready" ? (
-          <a className="out-open" href={playerUrl(s.sid)} title={audio ? "Listen" : "Play"}>
+          <a
+            className="out-open"
+            href={playerUrl(s.sid)}
+            title={audio ? "Listen" : "Play"}
+          >
             {body}
             <span className="out-play">
               <Icon name="play-fill" />
@@ -396,7 +430,9 @@ export function SessionRow({
         )}
       </div>
       {extra}
-      {retryErr !== "" && <RowErr text={retryErr} onDismiss={() => setRetryErr("")} />}
+      {retryErr !== "" && (
+        <RowErr text={retryErr} onDismiss={() => setRetryErr("")} />
+      )}
       {err !== "" && <RowErr text={err} onDismiss={() => onDismissErr?.()} />}
       {why && why[1] !== "" && (
         <details className="whydetail out-why">
@@ -411,7 +447,13 @@ export function SessionRow({
 /** A prep's progress: the step it is on and how far, as the collection's
  * event stream says it (`at`), null until it has. Until a step has started,
  * why the build has not started yet, when the server says one is waiting. */
-export function Progress({ at, waiting = "" }: { at: OutputProgress | null; waiting?: string }) {
+export function Progress({
+  at,
+  waiting = "",
+}: {
+  at: OutputProgress | null;
+  waiting?: string;
+}) {
   const step = at?.step ?? "";
   const done = at?.steps_done ?? 0;
   const total = at?.steps_total ?? 0;
@@ -424,7 +466,9 @@ export function Progress({ at, waiting = "" }: { at: OutputProgress | null; wait
         {label !== "" && ` ${label}`}
         {total > 0 && ` · ${done}/${total}`}
       </span>
-      {waiting !== "" && step === "" && <span className="out-d">{waiting}</span>}
+      {waiting !== "" && step === "" && (
+        <span className="out-d">{waiting}</span>
+      )}
       {/* Indeterminate until a step count is known: no value to announce. */}
       <span
         className="pbar wide"
@@ -434,8 +478,13 @@ export function Progress({ at, waiting = "" }: { at: OutputProgress | null; wait
         aria-valuemin={0}
         aria-valuemax={100}
       >
-        {total > 0 ? <span className="pfill" style={{ width: `${pct}%` }} /> : <span className="pbar-run" />}
+        {total > 0 ? (
+          <span className="pfill" style={{ width: `${pct}%` }} />
+        ) : (
+          <span className="pbar-run" />
+        )}
       </span>
+      <JobLog lines={at?.log ?? []} />
     </>
   );
 }

@@ -55,7 +55,7 @@ from opennotebook.domain.sessions import (
     duration_of,
     shape,
 )
-from opennotebook.jobs import NoJob, Progress
+from opennotebook.jobs import NoJob, Progress, logs
 from opennotebook.memory import qa
 from opennotebook.script import budget
 from opennotebook.script.errors import ScriptError
@@ -248,9 +248,12 @@ async def _run(spec: PrepSpec, progress: Progress, spend: ledger.Spend) -> None:
     topic = (spec.research_topic or "").strip()
     if topic:
         spend.kind = "research"
+        await logs.say(f"Searching the web for “{topic}”")
         try:
             await add_research(owner, cid, await research.gather(values, topic))
+            await logs.ok("Web findings added to the sources")
         except research.ResearchError as e:
+            await logs.warn(f"Web research did not arrive ({e}); using your own sources")
             # Not fatal while the person gave us something of their own: the
             # output is built from that and the log says what was missing.
             # With nothing of theirs it is — see ingest.
@@ -259,6 +262,7 @@ async def _run(spec: PrepSpec, progress: Progress, spend: ledger.Spend) -> None:
 
     await progress.phase(PHASES[1])
     spend.kind = "qa_extract"
+    await logs.say("Reading the sources and indexing what they say")
     await ingest(owner, cid)
     await progress.phase_done(PHASES[1])
 
@@ -300,7 +304,12 @@ async def _run(spec: PrepSpec, progress: Progress, spend: ledger.Spend) -> None:
     )
     await progress.phase(PHASES[2])
     spend.kind = "script"
+    await logs.say(
+        f"{minutes} minutes over {script.slide_count} parts, {len(speakers)} "
+        f"{'voice' if len(speakers) == 1 else 'voices'}, on {script.model}"
+    )
     parts = await generate_script(Scope(owner, cid), script)
+    await logs.ok(f"Script written: {len(parts)} parts, {sum(len(p.lines) for p in parts)} lines")
     await progress.phase_done(PHASES[2])
     await persist(
         sid,
@@ -317,7 +326,9 @@ async def _run(spec: PrepSpec, progress: Progress, spend: ledger.Spend) -> None:
     voice = speech.speech()
     fields: dict[str, Any] = {}
     if audio is not None:
+        await logs.say(f"Recording the voices for {len(parts)} chapters")
         await narrate.synthesise_all(voice, sid, speakers, parts)
+        await logs.ok(f"{len(parts)} chapters recorded")
         log.info("output %s narrated: %d chapters", sid, len(parts))
     else:
         plan = slides.DeckPlan(
@@ -328,6 +339,9 @@ async def _run(spec: PrepSpec, progress: Progress, spend: ledger.Spend) -> None:
             model=values[st.SLIDE_MODEL_KEY],
             language_rule=st.language_rule(values[st.LANGUAGE_KEY]),
             sid=str(sid),
+        )
+        await logs.say(
+            f"Recording the voices and drawing {len(parts)} slides on {values[st.SLIDE_MODEL_KEY]}"
         )
         drawn, voiced = await asyncio.gather(
             slides.write_deck(plan, parts),
@@ -340,6 +354,10 @@ async def _run(spec: PrepSpec, progress: Progress, spend: ledger.Spend) -> None:
             if isinstance(outcome, BaseException):
                 raise outcome
         assert isinstance(drawn, slides.DeckOutcome)
+        await logs.ok(
+            f"{len(drawn.written)} slides drawn"
+            + (f", {drawn.fallbacks} of them plain" if drawn.fallbacks else "")
+        )
         log.info(
             "output %s: %d slides on %s (%d drawn plain), %dk characters in, %dk out",
             sid,
@@ -354,6 +372,7 @@ async def _run(spec: PrepSpec, progress: Progress, spend: ledger.Spend) -> None:
     await persist(sid, spend, slides=[p.as_json() for p in parts], **fields)
 
     await progress.phase(PHASES[4])
+    await logs.say("Checking every line has its voice and every slide renders")
     validate.narration_is_playable(parts)
     if audio is None:
         validate.slides_are_written(sid, parts)

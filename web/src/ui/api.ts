@@ -11,6 +11,7 @@
 import type * as Rest from "@/client/types.gen";
 import { UNKNOWN, UNREACHABLE, unworded } from "./errors";
 import { fromWireKind, ms } from "./helpers";
+import type { LogLine } from "./joblog";
 import { sseFrames } from "./sse";
 
 /** The service root this bundle was served under, with no trailing slash:
@@ -25,7 +26,8 @@ export function apiBase(): string {
   return `${serviceRoot()}/api`;
 }
 
-const UNREADABLE = "The studio's answer could not be read. Reload the page and try again.";
+const UNREADABLE =
+  "The studio's answer could not be read. Reload the page and try again.";
 
 /** A request the server refused: its sentence, and the status it came with,
  * so a caller can tell "not there" (404) from any other refusal without
@@ -44,7 +46,8 @@ export const isGone = (e: unknown) => e instanceof ApiError && e.status === 404;
 
 /** Whether a call was cancelled by its caller, which is not a failure to
  * show anyone: the page that asked has gone, or asked again. */
-export const isAbort = (e: unknown) => e instanceof DOMException && e.name === "AbortError";
+export const isAbort = (e: unknown) =>
+  e instanceof DOMException && e.name === "AbortError";
 
 /** Send one request. A refusal comes back as the server's own sentence; a
  * request that never got an answer as the sentence for that. `init` carries
@@ -70,8 +73,12 @@ async function send<T>(
     const isForm = body instanceof FormData;
     resp = await fetch(`${apiBase()}${path}`, {
       method,
-      headers: body === undefined || isForm ? undefined : { "Content-Type": "application/json" },
-      body: body === undefined ? undefined : isForm ? body : JSON.stringify(body),
+      headers:
+        body === undefined || isForm
+          ? undefined
+          : { "Content-Type": "application/json" },
+      body:
+        body === undefined ? undefined : isForm ? body : JSON.stringify(body),
       ...init,
     });
   } catch (e) {
@@ -79,7 +86,8 @@ async function send<T>(
     throw new Error(UNREACHABLE, { cause: e });
   }
   if (!resp.ok) throw new ApiError(await refusal(resp), resp.status);
-  if (resp.status === 204) return { data: undefined as T, headers: resp.headers };
+  if (resp.status === 204)
+    return { data: undefined as T, headers: resp.headers };
   try {
     return { data: (await resp.json()) as T, headers: resp.headers };
   } catch {
@@ -102,7 +110,10 @@ function withParam(path: string, key: string, value: string): string {
 /** A whole list the server answers a page at a time: each page asked for in
  * turn, from where the `X-Next-Offset` header of the one before says the
  * next starts, until a page says there is no more. */
-export async function callAll<T>(path: string, init: RequestInit = {}): Promise<T[]> {
+export async function callAll<T>(
+  path: string,
+  init: RequestInit = {},
+): Promise<T[]> {
   const out: T[] = [];
   let next: string | null = null;
   for (let i = 0; i < PAGES_MAX; i++) {
@@ -122,7 +133,10 @@ export async function callAll<T>(path: string, init: RequestInit = {}): Promise<
 /** A whole list the server answers newest page first, each page in order:
  * the pages before are asked for from the `X-Next-Before` header, and put
  * ahead of the ones already read. */
-export async function callAllBack<T>(path: string, init: RequestInit = {}): Promise<T[]> {
+export async function callAllBack<T>(
+  path: string,
+  init: RequestInit = {},
+): Promise<T[]> {
   let out: T[] = [];
   let before: string | null = null;
   for (let i = 0; i < PAGES_MAX; i++) {
@@ -346,15 +360,26 @@ export function sessionOf(o: Rest.SessionSummary): SessionSummary {
 }
 
 export async function listCollections(): Promise<CollectionSummary[]> {
-  return (await callAll<Rest.CollectionSummary>("/collections")).map(collectionOf);
+  return (await callAll<Rest.CollectionSummary>("/collections")).map(
+    collectionOf,
+  );
 }
 
 export async function getCollection(
   cid: string,
   signal?: AbortSignal,
-): Promise<{ found: boolean; collection?: CollectionSummary; outputs: SessionSummary[] }> {
+): Promise<{
+  found: boolean;
+  collection?: CollectionSummary;
+  outputs: SessionSummary[];
+}> {
   try {
-    const d = await call<Rest.CollectionDetail>("GET", `/collections/${enc(cid)}`, undefined, { signal });
+    const d = await call<Rest.CollectionDetail>(
+      "GET",
+      `/collections/${enc(cid)}`,
+      undefined,
+      { signal },
+    );
     return {
       found: true,
       collection: collectionOf(d.collection),
@@ -374,6 +399,8 @@ export type OutputProgress = {
   label: string;
   steps_done: number;
   steps_total: number;
+  /** What its work has said so far, oldest first (ui/joblog.tsx). */
+  log?: LogLine[];
 };
 
 /** A map's or notes' job that ended, as a collection's stream says it. */
@@ -401,7 +428,10 @@ export type CollectionEvents = {
 
 /** Follow a collection as the server says it changes, until the returned
  * function is called. One connection for the whole page. */
-export function followCollection(cid: string, on: CollectionEvents): () => void {
+export function followCollection(
+  cid: string,
+  on: CollectionEvents,
+): () => void {
   let es: EventSource;
   try {
     es = new EventSource(`${apiBase()}/collections/${enc(cid)}/events`);
@@ -409,7 +439,7 @@ export function followCollection(cid: string, on: CollectionEvents): () => void 
     on.up?.(false);
     return () => {};
   }
-  const listen = <T,>(name: string, use: (v: T) => void) =>
+  const listen = <T>(name: string, use: (v: T) => void) =>
     es.addEventListener(name, (e: MessageEvent) => {
       let v: T;
       try {
@@ -419,10 +449,16 @@ export function followCollection(cid: string, on: CollectionEvents): () => void 
       }
       use(v);
     });
-  listen<Rest.CollectionSummary>("collection", (v) => on.collection?.(collectionOf(v)));
-  listen<Rest.SessionSummary[]>("outputs", (v) => on.outputs?.(v.map(sessionOf)));
+  listen<Rest.CollectionSummary>("collection", (v) =>
+    on.collection?.(collectionOf(v)),
+  );
+  listen<Rest.SessionSummary[]>("outputs", (v) =>
+    on.outputs?.(v.map(sessionOf)),
+  );
   listen<OutputProgress>("progress", (v) => on.progress?.(v));
-  listen<Rest.SourceOut[]>("sources", (v) => on.sources?.(v.map(serverSourceOf)));
+  listen<Rest.SourceOut[]>("sources", (v) =>
+    on.sources?.(v.map(serverSourceOf)),
+  );
   listen<Rest.MindMapSummary[]>("mindmaps", (v) => on.mindmaps?.(v));
   listen<Rest.NotesSummary[]>("notes", (v) => on.notes?.(v));
   listen<JobEnded>("ended", (v) => on.ended?.(v));
@@ -441,11 +477,17 @@ export async function createCollection(): Promise<string> {
 }
 
 /** Rename a collection. Empty hands the naming back to the studio. */
-export async function collectionRetitle(cid: string, title: string): Promise<void> {
+export async function collectionRetitle(
+  cid: string,
+  title: string,
+): Promise<void> {
   await call("PATCH", `/collections/${enc(cid)}`, { title });
 }
 
-export async function collectionPin(cid: string, pinned: boolean): Promise<void> {
+export async function collectionPin(
+  cid: string,
+  pinned: boolean,
+): Promise<void> {
   await call("PATCH", `/collections/${enc(cid)}`, { pinned });
 }
 
@@ -461,7 +503,11 @@ export async function collectionDelete(cid: string): Promise<void> {
 /** Where a collection's cover is drawn, in the viewer's theme. The version and
  * the theme are part of the address, so the browser keeps a cover until either
  * changes. */
-export function coverUrl(cid: string, version: string, theme: "dark" | "light"): string {
+export function coverUrl(
+  cid: string,
+  version: string,
+  theme: "dark" | "light",
+): string {
   return `${apiBase()}/collections/${enc(cid)}/cover?v=${enc(version)}&theme=${theme}`;
 }
 
@@ -469,7 +515,14 @@ export function coverUrl(cid: string, version: string, theme: "dark" | "light"):
 
 /** A source as the server holds it, with the line under its name and its icon
  * as the server words them. */
-export type ServerSource = { name: string; title: string; url: string; chars: number; detail: string; icon: string };
+export type ServerSource = {
+  name: string;
+  title: string;
+  url: string;
+  chars: number;
+  detail: string;
+  icon: string;
+};
 
 const serverSourceOf = (s: Rest.SourceOut): ServerSource => ({
   name: s.name,
@@ -480,8 +533,15 @@ const serverSourceOf = (s: Rest.SourceOut): ServerSource => ({
   icon: s.icon,
 });
 
-export async function sourceList(cid: string, signal?: AbortSignal): Promise<ServerSource[]> {
-  return (await callAll<Rest.SourceOut>(`/collections/${enc(cid)}/sources`, { signal })).map(serverSourceOf);
+export async function sourceList(
+  cid: string,
+  signal?: AbortSignal,
+): Promise<ServerSource[]> {
+  return (
+    await callAll<Rest.SourceOut>(`/collections/${enc(cid)}/sources`, {
+      signal,
+    })
+  ).map(serverSourceOf);
 }
 
 /** One thing asked to be added, as the old `Fetched` shape the rows read. */
@@ -510,20 +570,35 @@ function fetchedOf(r: Rest.AddResult): Fetched {
   };
 }
 
-export async function sourceAddUrls(cid: string, urls: string[]): Promise<Fetched[]> {
-  const out = await call<Rest.AddResult[]>("POST", `/collections/${enc(cid)}/sources`, {
-    kind: "urls",
-    urls,
-  });
+export async function sourceAddUrls(
+  cid: string,
+  urls: string[],
+): Promise<Fetched[]> {
+  const out = await call<Rest.AddResult[]>(
+    "POST",
+    `/collections/${enc(cid)}/sources`,
+    {
+      kind: "urls",
+      urls,
+    },
+  );
   return out.map(fetchedOf);
 }
 
-export async function sourceAddText(cid: string, text: string, title = ""): Promise<Fetched> {
-  const out = await call<Rest.AddResult[]>("POST", `/collections/${enc(cid)}/sources`, {
-    kind: "text",
-    text,
-    title,
-  });
+export async function sourceAddText(
+  cid: string,
+  text: string,
+  title = "",
+): Promise<Fetched> {
+  const out = await call<Rest.AddResult[]>(
+    "POST",
+    `/collections/${enc(cid)}/sources`,
+    {
+      kind: "text",
+      text,
+      title,
+    },
+  );
   return fetchedOf(only(out));
 }
 
@@ -535,12 +610,17 @@ function only(out: Rest.AddResult[]): Rest.AddResult {
   return r;
 }
 
-const UNSAID = "The studio did not say whether it was added. Reload the page to see your sources.";
+const UNSAID =
+  "The studio did not say whether it was added. Reload the page to see your sources.";
 
 export async function sourceAddFile(cid: string, file: File): Promise<Fetched> {
   const form = new FormData();
   form.append("files", file);
-  const out = await call<Rest.AddResult[]>("POST", `/collections/${enc(cid)}/sources/files`, form);
+  const out = await call<Rest.AddResult[]>(
+    "POST",
+    `/collections/${enc(cid)}/sources/files`,
+    form,
+  );
   const r = fetchedOf(only(out));
   if (!r.ok) throw new Error(r.error);
   return r;
@@ -579,7 +659,12 @@ export type SettingItem = {
   value: string;
   advanced: boolean;
 };
-export type TabInfo = { id: string; label: string; note: string; advanced: boolean };
+export type TabInfo = {
+  id: string;
+  label: string;
+  note: string;
+  advanced: boolean;
+};
 export type SettingsDoc = { tab_info: TabInfo[]; items: SettingItem[] };
 
 function itemOf(s: Rest.Setting): SettingItem {
@@ -609,8 +694,13 @@ export async function settingsLoad(): Promise<SettingsDoc> {
 }
 
 /** Save one setting; an empty value resets it. Returns the saved item. */
-export async function settingsSet(key: string, value: string): Promise<SettingItem> {
-  return itemOf(await call<Rest.Setting>("PATCH", `/settings/${enc(key)}`, { value }));
+export async function settingsSet(
+  key: string,
+  value: string,
+): Promise<SettingItem> {
+  return itemOf(
+    await call<Rest.Setting>("PATCH", `/settings/${enc(key)}`, { value }),
+  );
 }
 
 export function enc(s: string): string {

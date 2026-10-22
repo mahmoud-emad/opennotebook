@@ -19,7 +19,7 @@ from opennotebook import jobs
 from opennotebook.build import pipeline
 from opennotebook.db.models import Job
 from opennotebook.db.session import engine, sessionmaker
-from opennotebook.jobs import Progress, tasks, worker
+from opennotebook.jobs import Progress, logs, tasks, worker
 from opennotebook.jobs.app import app, conninfo
 from tests.builds.conftest import drain
 from tests.builds.fake import install
@@ -92,6 +92,49 @@ async def test_progress_is_announced_on_the_one_row(client: AsyncClient) -> None
         4,
         "running",
     )
+
+
+async def test_a_job_says_what_it_does_in_order_and_only_while_it_runs(
+    client: AsyncClient,
+) -> None:
+    owner = uuid.UUID((await client.get("/api/me")).json()["id"])
+    async with sessionmaker()() as s, s.begin():
+        job = await jobs.create(s, owner, "prep", steps_total=2)
+    # Outside a job, saying does nothing and fails nothing.
+    await logs.say("nobody hears this")
+    p = Progress(job.id, 2)
+    await p.start()
+    await p.phase("script")
+    await logs.warn("  a   slow\nmodel  ")
+    await logs.say("x" * 1000)
+    await p.phase_done("script")
+    await p.finish(None)
+    # Closed: a late line from work that has not seen the end is dropped.
+    await logs.say("too late")
+    row = await client.get(f"/api/jobs/{job.id}")
+    lines = row.json()["log"]
+    assert [(ln["level"], ln["text"][:24]) for ln in lines] == [
+        ("info", "Started"),
+        ("step", "[1/2] Writing the script"),
+        ("warn", "a slow model"),
+        ("info", "x" * 24),
+        ("ok", "Writing the script done "),
+        ("ok", "Finished"),
+    ]
+    assert len(lines[3]["text"]) == logs.WIDTH and lines[3]["text"].endswith("…")
+
+
+async def test_a_jobs_log_keeps_only_the_newest_lines(client: AsyncClient) -> None:
+    owner = uuid.UUID((await client.get("/api/me")).json()["id"])
+    async with sessionmaker()() as s, s.begin():
+        job = await jobs.create(s, owner, "prep", steps_total=1)
+    await Progress(job.id, 1).start()
+    for i in range(logs.KEPT + 5):
+        await logs.say(f"line {i}")
+    lines = (await client.get(f"/api/jobs/{job.id}")).json()["log"]
+    assert len(lines) == logs.KEPT
+    assert lines[-1]["text"] == f"line {logs.KEPT + 4}"
+    assert lines[0]["text"] == "line 5", "the oldest six, Started included, made room"
 
 
 async def test_a_stop_holds_and_progress_for_no_row_is_an_error(client: AsyncClient) -> None:

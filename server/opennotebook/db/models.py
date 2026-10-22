@@ -567,6 +567,9 @@ class Job(Base):
     steps_done: Mapped[int] = _count()
     steps_total: Mapped[int] = _count()
     error: Mapped[str | None] = mapped_column(Text)
+    # What the work said while it ran, oldest first: `{at, level, text}`
+    # (`jobs/logs.py`), capped, for the page to show as a terminal.
+    log: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, server_default="[]")
     procrastinate_job_id: Mapped[int | None] = mapped_column(BigInteger)
     created_at: Mapped[datetime] = _now()
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

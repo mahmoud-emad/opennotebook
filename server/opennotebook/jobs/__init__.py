@@ -19,6 +19,7 @@ Stopping is Procrastinate's abort, which arrives in an async task as
 """
 
 import json
+import time
 import uuid
 from collections.abc import Sequence
 from datetime import UTC, datetime
@@ -28,8 +29,10 @@ from sqlalchemy import select, text, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from opennotebook.build import phases
 from opennotebook.db.models import Job
 from opennotebook.db.session import sessionmaker
+from opennotebook.jobs import logs
 
 # Our statuses. Procrastinate keeps its own, on its own table.
 QUEUED, RUNNING, DONE, FAILED, CANCELLED = "queued", "running", "done", "failed", "cancelled"
@@ -238,17 +241,24 @@ class Progress:
         self.job_id = job_id
         self.total = total
         self.done = 0
+        # When the running phase began, for the log's "done in".
+        self._began: float | None = None
 
     async def start(self) -> None:
         """Take the row over. `steps_total` is written at once rather than at
         the first phase, so a screen polling before phase one gets a
-        determinate bar instead of the "does not report" zero."""
+        determinate bar instead of the "does not report" zero. What the work
+        says from here on goes to the job's log (`logs.py`)."""
+        logs.bind(self.job_id)
         await self._write(RUNNING, "", 0, None, started=True)
+        await logs.say("Started")
 
     async def phase(self, label: str) -> None:
         """Name the phase now running. Called on entry to a phase, so
         `steps_done` counts phases finished rather than phases started."""
         await self._write(RUNNING, label, self.done, None)
+        self._began = time.monotonic()
+        await logs.step(f"[{min(self.done + 1, self.total)}/{self.total}] {phases.label(label)}")
 
     async def phase_done(self, label: str) -> None:
         """Mark the phase that was running as finished. `steps_done` never
@@ -256,11 +266,18 @@ class Progress:
         its end."""
         self.done = min(self.done + 1, self.total)
         await self._write(RUNNING, label, self.done, None)
+        took = "" if self._began is None else f" in {time.monotonic() - self._began:.1f}s"
+        self._began = None
+        await logs.ok(f"{phases.label(label)} done{took}")
 
     async def finish(self, error: str | None) -> None:
         """Close the job. Reaching `steps_total` does not imply success, so
         the outcome is carried by `status` and `error`, which is where a
         reader is told to look for it."""
+        if error is None:
+            await logs.ok("Finished")
+        else:
+            await logs.bad(error)
         await self._write(DONE if error is None else FAILED, "", self.done, error, ended=True)
 
     async def cancelled(self) -> None:

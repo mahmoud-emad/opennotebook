@@ -27,6 +27,7 @@ from opennotebook.db.models import Job, Source
 from opennotebook.db.session import release, sessionmaker
 from opennotebook.domain import collections, covers, refresh
 from opennotebook.errors import Problem
+from opennotebook.jobs import logs
 from opennotebook.jobs.events import JOB, REREAD_SECONDS, hub
 
 router = APIRouter(prefix="/api/collections", tags=["collections"])
@@ -297,6 +298,7 @@ def _progress(made: list[Job]) -> dict[str, dict[str, Any]]:
             "label": phases.label(j.step),
             "steps_done": j.steps_done,
             "steps_total": j.steps_total,
+            "log": logs.shown(j.log),
         }
         for j in made
         if j.steps_total and j.session_id is not None
@@ -390,7 +392,8 @@ async def collection_events(cid: uuid.UUID, request: Request) -> StreamingRespon
     """Server-sent events while a collection is open: `collection` (its
     summary, as the list has it), `outputs` (its decks and audio overviews),
     `progress` (`session_id`, `step`, `label` (the step as a person reads
-    it), `steps_done`, `steps_total` of one being made), `sources` (its
+    it), `steps_done`, `steps_total` and `log`, the lines its work has said,
+    of one being made), `sources` (its
     sources), `mindmaps` and `notes` (as their lists have them, those being
     made included), each when the stream starts and again when it changes;
     `ended` (`job_id`, and `error`: why it was not made, or null) once a map

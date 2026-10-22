@@ -362,6 +362,17 @@ class SessionEstimate(BaseModel):
         )
 
 
+class LogLine(BaseModel):
+    """One thing a job's work said while it ran."""
+
+    at: int = Field(description="When, in milliseconds since the epoch")
+    level: Literal["info", "step", "ok", "warn", "bad"] = Field(
+        description="`step`: a phase beginning; `ok`: something done; `warn`: something that "
+        "did not go to plan but did not stop the work; `bad`: something that failed"
+    )
+    text: str
+
+
 class JobOut(BaseModel):
     """A piece of background work and how far it got."""
 
@@ -381,6 +392,9 @@ class JobOut(BaseModel):
         default=None,
         description="Why queued work has not started, in a sentence: no worker is running. "
         "Null otherwise",
+    )
+    log: list[LogLine] = Field(
+        default_factory=list[LogLine], description="What the work said while it ran, oldest first"
     )
 
     @classmethod

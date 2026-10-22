@@ -555,7 +555,7 @@ async def test_a_deck_becomes_a_whiteboard_video(
     assert r.status_code == 200 and r.headers["content-type"] == "video/mp4"
     # The slides video is a style of its own, untouched.
     states = (await client.get(f"/api/sessions/{sid}/videos")).json()
-    assert [s["state"] for s in states] == ["none", "ready"]
+    assert [s["state"] for s in states] == ["none", "ready", "none"]
 
 
 @needs_ffmpeg

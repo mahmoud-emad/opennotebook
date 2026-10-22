@@ -410,6 +410,7 @@ async def test_no_encoder_is_said_at_once(
     assert [(v["style"], v["state"], v["playable"]) for v in states] == [
         ("slides", "none", False),
         ("whiteboard", "none", False),
+        ("motion", "none", False),
     ]
 
 

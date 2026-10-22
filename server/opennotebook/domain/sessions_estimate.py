@@ -640,6 +640,10 @@ GROUP_VIDEO = "Making the video"
 # Not priced call by call: how many scenes a part becomes, and how many need a
 # repair or the stronger model, is not known before it runs.
 WHITEBOARD_USD_PER_PART = (0.045, 0.06, 0.125)
+# A motion video's page is one call over the whole narration, plus its repair
+# rounds; reasoned from the whiteboard's per-part price (its scenes and plan
+# are the same calls for one page), not yet measured.
+MOTION_USD = (0.12, 0.16, 0.40)
 # Scenes a part becomes: 8 to 13 for the same six parts.
 SCENES_PER_PART = (1.3, 1.8, 2.2)
 # What a theme's family adds a scene, in USD. A drawn theme is drawn in
@@ -652,7 +656,7 @@ SCENE_USD_BY_FAMILY = {"drawn": 0.0, "illustrated": 0.04}
 class Render:
     """A video overview's render, priced on top of the deck it is made from."""
 
-    style: Literal["slides", "whiteboard"]
+    style: Literal["slides", "whiteboard", "motion"]
     # A whiteboard's theme, as a person reads it, and its family.
     theme: str = ""
     family: Literal["drawn", "illustrated"] = "drawn"
@@ -671,7 +675,27 @@ def _scaled(per: tuple[float, float, float], n: float) -> tuple[float, float, fl
 
 def render_lines(r: Render, parts: int, model: str) -> list[Line]:
     """The render's steps for a deck of `parts`: none paid for slides, the
-    scenes' model calls for a whiteboard, and a theme's own cost a scene."""
+    scenes' model calls for a whiteboard, a motion page written and checked,
+    and a theme's own cost a scene."""
+    if r.style == "motion":
+        scenes = Range(*(math.ceil(parts * k) for k in SCENES_PER_PART))
+        return [
+            Line(
+                GROUP_VIDEO,
+                "Animated page",
+                f"one page animating the whole narration over {parts} parts (about "
+                f"{scenes.typical} scenes), written, recorded frame by frame and checked "
+                "against your sources, with up to two repair rounds",
+                model,
+                SCRIPT_VIA,
+                # The plan and the page, then the vision check a scene and a
+                # repair round when a check fails; at worst to the stronger model.
+                Range(2 + scenes.low, 2 + scenes.typical, 4 + 2 * scenes.high),
+                0,
+                Range.exact(0),
+                MOTION_USD,
+            )
+        ]
     if r.style != "whiteboard":
         return [
             free(
@@ -730,7 +754,12 @@ def with_render(e: Estimate, r: Render, parts: int, model: str) -> Estimate:
         "Estimated: the whiteboard's scenes, at about $0.06 a part on the default video models, "
         "from five past renders of six parts ($0.27 to $0.75); the range covers them."
         if r.style == "whiteboard"
-        else "The video is put together on the studio's machine and calls no model."
+        else (
+            "Estimated: one page over the whole narration, plus its checks and repairs, "
+            "reasoned from the whiteboard's own prices; not yet measured."
+            if r.style == "motion"
+            else "The video is put together on the studio's machine and calls no model."
+        )
     )
     return Estimate(lines, total, [*e.assumptions, said], e.source_chars)
 

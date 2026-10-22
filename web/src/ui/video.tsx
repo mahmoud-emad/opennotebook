@@ -7,17 +7,18 @@
 // is the deck's row, with its video under it. Any finished deck or audio
 // overview can be made into a video from its row as well.
 
-import { useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useState } from "react";
 import type * as Rest from "@/client/types.gen";
 import { call, enc, errText, isAbort, storage } from "./api";
 import { overviewEstimate } from "./api-studio";
 import { EstimateBanner } from "./cost";
 import { CostDialog, LimitNote, type Estimate } from "./dialogs";
 import { Icon } from "./Icon";
+import { JobLog, useJobLog } from "./joblog";
 import { follow, routeUrl, type View } from "./routes";
 import "../styles/video.css";
 
-export type VideoStyle = "whiteboard" | "slides";
+export type VideoStyle = "whiteboard" | "slides" | "motion";
 /** A whiteboard's look (the server's build/whiteboard/theme.py). */
 type VideoTheme = Rest.ThemeOut;
 type VideoLength = "short" | "default" | "long";
@@ -26,10 +27,12 @@ export type Video = Rest.VideoState;
 const STYLE_LABEL: Record<VideoStyle, string> = {
   whiteboard: "Whiteboard",
   slides: "Slides",
+  motion: "Motion",
 };
 const STYLE_BLURB: Record<VideoStyle, string> = {
   whiteboard: "A presenter explains while each idea is drawn as it is said.",
   slides: "The deck's slides, each on screen while it is narrated.",
+  motion: "One animated page for the whole narration, recorded frame by frame.",
 };
 /** A theme's name, for a video's line and the watch page. */
 const THEME_LABEL: Record<string, string> = {
@@ -51,7 +54,10 @@ function themeLabel(id: string | null | undefined): string | null {
 }
 
 /** What a video is called on its row: its theme's name when it has one. */
-export function videoName(v: { style: VideoStyle; theme?: string | null }): string {
+export function videoName(v: {
+  style: VideoStyle;
+  theme?: string | null;
+}): string {
   return `${themeLabel(v.theme) ?? STYLE_LABEL[v.style]} video`;
 }
 
@@ -61,7 +67,11 @@ const THEME_KEY = "video-theme";
 function lastTheme(cid?: string): string {
   try {
     const s = storage();
-    return (cid && s?.getItem(`${THEME_KEY}:${cid}`)) || s?.getItem(THEME_KEY) || "whiteboard";
+    return (
+      (cid && s?.getItem(`${THEME_KEY}:${cid}`)) ||
+      s?.getItem(THEME_KEY) ||
+      "whiteboard"
+    );
   } catch {
     return "whiteboard";
   }
@@ -112,8 +122,15 @@ async function videosOf(sid: string): Promise<Video[]> {
   return call<Video[]>("GET", `/sessions/${enc(sid)}/videos`);
 }
 
-async function makeVideo(sid: string, style: VideoStyle, theme?: string): Promise<Video> {
-  return call<Video>("POST", `/sessions/${enc(sid)}/video`, { style, ...(theme ? { theme } : {}) });
+async function makeVideo(
+  sid: string,
+  style: VideoStyle,
+  theme?: string,
+): Promise<Video> {
+  return call<Video>("POST", `/sessions/${enc(sid)}/video`, {
+    style,
+    ...(theme ? { theme } : {}),
+  });
 }
 
 /** Whether a video is still on its way: asked for, or being made. */
@@ -122,20 +139,32 @@ const pending = (v: Video) => v.state === "waiting" || v.state === "rendering";
 // ── the Studio tool ──────────────────────────────────────────────────────────
 
 /** The Video overview tile, beside the Studio's others. */
-export function VideoTile({ on, disabled, title, onClick }: {
+export function VideoTile({
+  on,
+  disabled,
+  title,
+  onClick,
+}: {
   on: boolean;
   disabled: boolean;
   title: string;
   onClick: () => void;
 }) {
   return (
-    <button className={on ? "tile on" : "tile"} aria-pressed={on} disabled={disabled} title={title}
-      onClick={onClick}>
+    <button
+      className={on ? "tile on" : "tile"}
+      aria-pressed={on}
+      disabled={disabled}
+      title={title}
+      onClick={onClick}
+    >
       <span className="tile-i">
         <Icon name="collection-play" className="lg" />
       </span>
       <span className="tile-n">Video overview</span>
-      <span className="tile-d">A presenter explains it, drawing as they go.</span>
+      <span className="tile-d">
+        A presenter explains it, drawing as they go.
+      </span>
     </button>
   );
 }
@@ -143,15 +172,28 @@ export function VideoTile({ on, disabled, title, onClick }: {
 /** What a video overview as chosen would cost, asked again whenever the
  * choice changes. Null while it is asked, and when it could not be had, which
  * `failed` says; an answer for an older choice is dropped. */
-function useOverviewEstimate(cid: string, style: VideoStyle, length: VideoLength, theme: string) {
+function useOverviewEstimate(
+  cid: string,
+  style: VideoStyle,
+  length: VideoLength,
+  theme: string,
+) {
   const [tries, setTries] = useState(0);
   // What was asked, as one key: an answer is shown only for the choice it
   // was asked for, so a choice changed since reads as being asked.
   const key = `${cid} ${style} ${length} ${style === "whiteboard" ? theme : ""} ${tries}`;
-  const [got, setGot] = useState<{ key: string; est: Estimate | null; err: string } | null>(null);
+  const [got, setGot] = useState<{
+    key: string;
+    est: Estimate | null;
+    err: string;
+  } | null>(null);
   useEffect(() => {
     const ask = new AbortController();
-    overviewEstimate(cid, { style, length, ...(style === "whiteboard" ? { theme } : {}) }, ask.signal)
+    overviewEstimate(
+      cid,
+      { style, length, ...(style === "whiteboard" ? { theme } : {}) },
+      ask.signal,
+    )
       .then((est) => setGot({ key, est, err: "" }))
       .catch((e) => {
         if (!isAbort(e)) setGot({ key, est: null, err: errText(e) });
@@ -224,8 +266,13 @@ export function VideoOptions({
       <div className="opt-l">Style</div>
       <div className="ao-formats" role="radiogroup" aria-label="Style">
         {(["whiteboard", "slides"] as const).map((s) => (
-          <button key={s} className={style === s ? "ao-f on" : "ao-f"} role="radio"
-            aria-checked={style === s} onClick={() => setStyle(s)}>
+          <button
+            key={s}
+            className={style === s ? "ao-f on" : "ao-f"}
+            role="radio"
+            aria-checked={style === s}
+            onClick={() => setStyle(s)}
+          >
             <span className="ao-n">{STYLE_LABEL[s]}</span>
             <span className="ao-d">{STYLE_BLURB[s]}</span>
           </button>
@@ -236,12 +283,25 @@ export function VideoOptions({
           <div className="opt-l">Theme</div>
           <div className="vt-grid" role="radiogroup" aria-label="Theme">
             {themes.map((t) => (
-              <button key={t.id} className={chosen === t.id ? "vt on" : "vt"} role="radio"
-                aria-checked={chosen === t.id} onClick={() => setTheme(t.id)}>
-                <img src={themeThumb(t.id)} alt="" loading="lazy" width={192} height={108} />
+              <button
+                key={t.id}
+                className={chosen === t.id ? "vt on" : "vt"}
+                role="radio"
+                aria-checked={chosen === t.id}
+                onClick={() => setTheme(t.id)}
+              >
+                <img
+                  src={themeThumb(t.id)}
+                  alt=""
+                  loading="lazy"
+                  width={192}
+                  height={108}
+                />
                 <span className="vt-n">
                   {t.label}
-                  {t.family === "illustrated" && <span className="vt-cost">+ about 30 cents</span>}
+                  {t.family === "illustrated" && (
+                    <span className="vt-cost">+ about 30 cents</span>
+                  )}
                 </span>
               </button>
             ))}
@@ -251,18 +311,27 @@ export function VideoOptions({
       <div className="ao-len" role="radiogroup" aria-label="Length">
         <span className="opt-l">Length</span>
         {(["short", "default", "long"] as const).map((l) => (
-          <button key={l} className={length === l ? "chip on" : "chip"} role="radio"
-            aria-checked={length === l} onClick={() => setLength(l)}>
+          <button
+            key={l}
+            className={length === l ? "chip on" : "chip"}
+            role="radio"
+            aria-checked={length === l}
+            onClick={() => setLength(l)}
+          >
             {LENGTH_LABEL[l]}
           </button>
         ))}
       </div>
       <p className="opt-hint">
-        One narrator, in the first voice of Settings › Voices. Every label on the board is checked
-        against your sources before it is drawn.
+        One narrator, in the first voice of Settings › Voices. Every label on
+        the board is checked against your sources before it is drawn.
       </p>
       {showCost && !over && (
-        <EstimateBanner est={cost.est} loading={cost.loading} failed={cost.err !== ""} />
+        <EstimateBanner
+          est={cost.est}
+          loading={cost.loading}
+          failed={cost.err !== ""}
+        />
       )}
       {over && cost.est && <LimitNote e={cost.est} className="opt-err" />}
       {err !== "" && (
@@ -271,7 +340,10 @@ export function VideoOptions({
         </div>
       )}
       <div className="opts-a">
-        <button title="Every step and what it costs, before you start" onClick={() => setCostOpen(true)}>
+        <button
+          title="Every step and what it costs, before you start"
+          onClick={() => setCostOpen(true)}
+        >
           Estimate cost
         </button>
         <span className="grow" />
@@ -308,7 +380,15 @@ const POLL_MS = 3000;
  * Watch for one that is ready, why one failed, and Make video for a
  * finished output that has none. Asks again every few seconds while one is
  * on its way. */
-export function VideoLine({ sid, ready, ro }: { sid: string; ready: boolean; ro: boolean }) {
+export function VideoLine({
+  sid,
+  ready,
+  ro,
+}: {
+  sid: string;
+  ready: boolean;
+  ro: boolean;
+}) {
   const [videos, setVideos] = useState<Video[] | null>(null);
   const [starting, setStarting] = useState(false);
   const [err, setErr] = useState("");
@@ -353,27 +433,50 @@ export function VideoLine({ sid, ready, ro }: { sid: string; ready: boolean; ro:
   return (
     <>
       {asked.map((v) => (
-        <div key={v.style} className="out-video">
-          <Icon name="collection-play" />
-          <span className="out-d num">
-            {videoName(v)}
-            {v.state === "waiting" && (v.waiting ? ` · ${v.waiting}` : " · starts when the deck is made")}
-            {v.state === "rendering" && " · being made…"}
-            {v.state === "ready" && (v.duration_ms ?? 0) > 0 && ` · ${Math.round((v.duration_ms ?? 0) / 1000)} s`}
-            {v.state === "ready" && (v.claims ?? 0) > 0 && ` · ${v.supported ?? 0}/${v.claims} claims checked`}
-          </span>
-          {v.state === "failed" && <span className="out-d bad">{v.failure}</span>}
-          {v.playable && <WatchLink sid={sid} style={v.style} />}
-          {v.state === "failed" && !ro && ready && (
-            <button className="link-btn" disabled={starting} onClick={start}>
-              <Icon name="arrow-clockwise" />
-              Try again
-            </button>
-          )}
-        </div>
+        <Fragment key={v.style}>
+          <div className="out-video">
+            <Icon name="collection-play" />
+            <span className="out-d num">
+              {videoName(v)}
+              {v.state === "waiting" &&
+                (v.waiting
+                  ? ` · ${v.waiting}`
+                  : " · starts when the deck is made")}
+              {v.state === "rendering" && " · being made…"}
+              {v.state === "ready" &&
+                (v.duration_ms ?? 0) > 0 &&
+                ` · ${Math.round((v.duration_ms ?? 0) / 1000)} s`}
+              {v.state === "ready" &&
+                (v.claims ?? 0) > 0 &&
+                ` · ${v.supported ?? 0}/${v.claims} claims checked`}
+            </span>
+            {v.state === "failed" && (
+              <span className="out-d bad">{v.failure}</span>
+            )}
+            {v.playable && <WatchLink sid={sid} style={v.style} />}
+            {v.state === "failed" && !ro && ready && (
+              <button className="link-btn" disabled={starting} onClick={start}>
+                <Icon name="arrow-clockwise" />
+                Try again
+              </button>
+            )}
+          </div>
+          <VideoLog v={v} />
+        </Fragment>
       ))}
       {err !== "" && <div className="out-video out-d bad">{err}</div>}
     </>
+  );
+}
+
+/** What a video's render says while it is made, under its line. */
+function VideoLog({ v }: { v: Video }) {
+  const lines = useJobLog(v.job_id, v.state === "rendering");
+  if (v.state !== "rendering" || lines.length === 0) return null;
+  return (
+    <div className="out-video-log">
+      <JobLog lines={lines} />
+    </div>
   );
 }
 
@@ -383,7 +486,11 @@ export function VideoLine({ sid, ready, ro }: { sid: string; ready: boolean; ro:
 function WatchLink({ sid, style }: { sid: string; style: VideoStyle }) {
   const view: View = { kind: "watch", sid, style, share: null };
   return (
-    <a className="link-btn" href={routeUrl(view)} onClick={(e) => follow(e, view)}>
+    <a
+      className="link-btn"
+      href={routeUrl(view)}
+      onClick={(e) => follow(e, view)}
+    >
       <Icon name="play-fill" />
       Watch
     </a>

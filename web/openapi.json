@@ -782,7 +782,7 @@
           "collections"
         ],
         "summary": "Collection Events",
-        "description": "Server-sent events while a collection is open: `collection` (its\nsummary, as the list has it), `outputs` (its decks and audio overviews),\n`progress` (`session_id`, `step`, `label` (the step as a person reads\nit), `steps_done`, `steps_total` of one being made), `sources` (its\nsources), `mindmaps` and `notes` (as their lists have them, those being\nmade included), each when the stream starts and again when it changes;\n`ended` (`job_id`, and `error`: why it was not made, or null) once a map\nor notes being made is done; and `gone` once it is deleted. A page\nfollows this rather than reading the collection again on a timer.",
+        "description": "Server-sent events while a collection is open: `collection` (its\nsummary, as the list has it), `outputs` (its decks and audio overviews),\n`progress` (`session_id`, `step`, `label` (the step as a person reads\nit), `steps_done`, `steps_total` and `log`, the lines its work has said,\nof one being made), `sources` (its\nsources), `mindmaps` and `notes` (as their lists have them, those being\nmade included), each when the stream starts and again when it changes;\n`ended` (`job_id`, and `error`: why it was not made, or null) once a map\nor notes being made is done; and `gone` once it is deleted. A page\nfollows this rather than reading the collection again on a timer.",
         "operationId": "collection_events",
         "parameters": [
           {
@@ -4058,7 +4058,8 @@
             "schema": {
               "enum": [
                 "slides",
-                "whiteboard"
+                "whiteboard",
+                "motion"
               ],
               "type": "string",
               "description": "The video's style",
@@ -4177,7 +4178,8 @@
             "schema": {
               "enum": [
                 "slides",
-                "whiteboard"
+                "whiteboard",
+                "motion"
               ],
               "type": "string",
               "description": "The video's style",
@@ -4243,7 +4245,8 @@
             "schema": {
               "enum": [
                 "slides",
-                "whiteboard"
+                "whiteboard",
+                "motion"
               ],
               "type": "string",
               "description": "The video's style",
@@ -4324,7 +4327,8 @@
             "schema": {
               "enum": [
                 "slides",
-                "whiteboard"
+                "whiteboard",
+                "motion"
               ],
               "type": "string",
               "description": "The video's style",
@@ -4380,7 +4384,8 @@
             "schema": {
               "enum": [
                 "slides",
-                "whiteboard"
+                "whiteboard",
+                "motion"
               ],
               "type": "string",
               "description": "The video's style",
@@ -4450,7 +4455,8 @@
             "schema": {
               "enum": [
                 "slides",
-                "whiteboard"
+                "whiteboard",
+                "motion"
               ],
               "type": "string",
               "description": "The video's style",
@@ -5325,7 +5331,8 @@
             "type": "string",
             "enum": [
               "slides",
-              "whiteboard"
+              "whiteboard",
+              "motion"
             ],
             "title": "Style"
           },
@@ -5714,7 +5721,8 @@
             "type": "string",
             "enum": [
               "slides",
-              "whiteboard"
+              "whiteboard",
+              "motion"
             ],
             "title": "Style",
             "default": "whiteboard"
@@ -5912,6 +5920,14 @@
             ],
             "title": "Waiting",
             "description": "Why queued work has not started, in a sentence: no worker is running. Null otherwise"
+          },
+          "log": {
+            "items": {
+              "$ref": "#/components/schemas/LogLine"
+            },
+            "type": "array",
+            "title": "Log",
+            "description": "What the work said while it ran, oldest first"
           }
         },
         "type": "object",
@@ -5991,6 +6007,39 @@
           "label"
         ],
         "title": "LengthChoice"
+      },
+      "LogLine": {
+        "properties": {
+          "at": {
+            "type": "integer",
+            "title": "At",
+            "description": "When, in milliseconds since the epoch"
+          },
+          "level": {
+            "type": "string",
+            "enum": [
+              "info",
+              "step",
+              "ok",
+              "warn",
+              "bad"
+            ],
+            "title": "Level",
+            "description": "`step`: a phase beginning; `ok`: something done; `warn`: something that did not go to plan but did not stop the work; `bad`: something that failed"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          }
+        },
+        "type": "object",
+        "required": [
+          "at",
+          "level",
+          "text"
+        ],
+        "title": "LogLine",
+        "description": "One thing a job's work said while it ran."
       },
       "MadeKey": {
         "properties": {
@@ -6760,7 +6809,8 @@
             "type": "string",
             "enum": [
               "slides",
-              "whiteboard"
+              "whiteboard",
+              "motion"
             ],
             "title": "Style",
             "default": "whiteboard"
@@ -9222,7 +9272,8 @@
             "type": "string",
             "enum": [
               "slides",
-              "whiteboard"
+              "whiteboard",
+              "motion"
             ],
             "title": "Style",
             "default": "slides"
@@ -9312,7 +9363,8 @@
             "type": "string",
             "enum": [
               "slides",
-              "whiteboard"
+              "whiteboard",
+              "motion"
             ],
             "title": "Style"
           },
