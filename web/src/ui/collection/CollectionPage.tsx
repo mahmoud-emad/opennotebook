@@ -102,7 +102,7 @@ export function CollectionPage(props: CollectionPageProps) {
         </div>
 
         {/* ── sources ── */}
-        <SourcesPanel S={S} A={A} onFold={() => setSrcOpen(false)} />
+        <SourcesPanel S={S} A={A} cid={cid} onFold={() => setSrcOpen(false)} onOpen={(name, passage) => setCited({ name, passage })} />
 
         {/* ── the Studio and Ask ── */}
         <section className="panel studio">

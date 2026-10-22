@@ -1832,6 +1832,40 @@ export type ScriptScene = {
 };
 
 /**
+ * SearchHit
+ */
+export type SearchHit = {
+    /**
+     * Name
+     *
+     * The source it is from; address the source by it
+     */
+    name: string;
+    /**
+     * Title
+     */
+    title: string;
+    /**
+     * Excerpt
+     *
+     * The passage, verbatim from the source's text
+     */
+    excerpt: string;
+    /**
+     * Start
+     *
+     * Where the passage starts in the source's text
+     */
+    start: number;
+    /**
+     * End
+     *
+     * Where the passage ends in the source's text
+     */
+    end: number;
+};
+
+/**
  * SearchReq
  */
 export type SearchReq = {
@@ -4787,6 +4821,49 @@ export type DeepResearchResponses = {
 };
 
 export type DeepResearchResponse = DeepResearchResponses[keyof DeepResearchResponses];
+
+export type SearchSourcesData = {
+    body?: never;
+    path: {
+        /**
+         * Cid
+         */
+        cid: string;
+    };
+    query: {
+        /**
+         * Q
+         *
+         * What to look for
+         */
+        q: string;
+        /**
+         * Limit
+         */
+        limit?: number;
+    };
+    url: '/api/collections/{cid}/search';
+};
+
+export type SearchSourcesErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type SearchSourcesError = SearchSourcesErrors[keyof SearchSourcesErrors];
+
+export type SearchSourcesResponses = {
+    /**
+     * Response Search Sources
+     *
+     * Successful Response
+     */
+    200: Array<SearchHit>;
+};
+
+export type SearchSourcesResponse = SearchSourcesResponses[keyof SearchSourcesResponses];
 
 export type AskSourcesData = {
     body: AskReq;

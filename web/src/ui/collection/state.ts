@@ -132,10 +132,11 @@ export function failedSrc(name: string, why: string): Src {
   return { icon: "", name, detail: why, ok: false, url: "", file: "" };
 }
 
-/** The sources a build would read: on the server, not being read, not failed. */
-export const staged = (srcs: Src[]) => srcs.filter((s) => s.ok && s.file !== "").map((s) => s.file);
+/** The sources a build would read: on the server, not being read, not failed,
+ * not switched off. */
+export const staged = (srcs: Src[]) => srcs.filter((s) => s.ok && s.file !== "" && s.active !== false).map((s) => s.file);
 
-/** How many sources a build would read. */
-export const stagedCount = (srcs: Src[]) => staged(srcs).length;
+/** How many sources the collection holds, switched off or not. */
+export const stagedCount = (srcs: Src[]) => srcs.filter((s) => s.ok && s.file !== "").length;
 
 export const sameOpen = (a: Open | null, b: Open | null) => JSON.stringify(a) === JSON.stringify(b);

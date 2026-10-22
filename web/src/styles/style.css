@@ -498,6 +498,11 @@ button.ghost.bad:hover:not(:disabled) { background: var(--bs-danger-bg-subtle); 
 .src-d { font-size: 11px; color: var(--bs-secondary-color); margin-top: 1px; overflow-wrap: anywhere; }
 .src-x { width: 26px; height: 26px; flex: 0 0 auto; opacity: 0; transition: opacity var(--st-dur-fast) var(--st-ease); }
 .src:hover .src-x, .src-x:focus-visible, .src.bad .src-x { opacity: 1; }
+.src-search { width: 100%; font-size: 13px; }
+.hit { display: block; text-align: left; width: 100%; padding: 8px 10px; border-radius: var(--bs-border-radius); background: var(--bs-secondary-bg); border: 1px solid var(--bs-border-color); }
+.hit:hover:not(:disabled) { border-color: var(--bs-primary); }
+.hit-n { display: block; font-size: 12px; font-weight: 600; color: var(--bs-emphasis-color); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hit-x { display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; margin-top: 2px; font-size: 12px; line-height: 1.45; color: var(--bs-secondary-color); font-weight: 400; }
 .src-use { flex: 0 0 auto; transform: scale(.8); transform-origin: right center; }
 .src.off .src-t, .src.off .src-i { opacity: .55; }
 @media (hover: none) { .src-x { opacity: 1; } }

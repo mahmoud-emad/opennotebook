@@ -2,7 +2,8 @@
 // research, and the collection's sources under it, each with where it came
 // from. Files dropped anywhere on the panel are uploaded.
 
-import { useState, type DragEvent } from "react";
+import { useEffect, useState, type DragEvent } from "react";
+import { errText, sourceSearch, type FoundPassage } from "../api";
 import { Icon } from "../Icon";
 import { SettingsLink } from "../settings";
 import { SrcRow, srcKey } from "../sources";
@@ -14,7 +15,20 @@ import { stagedCount, type PageState } from "./state";
  * dragged off the page. */
 const draggingFiles = (e: DragEvent) => e.dataTransfer.types.includes("Files");
 
-export function SourcesPanel({ S, A, onFold }: { S: PageState; A: PageActions; onFold: () => void }) {
+export function SourcesPanel({
+  S,
+  A,
+  cid,
+  onFold,
+  onOpen,
+}: {
+  S: PageState;
+  A: PageActions;
+  cid: string;
+  onFold: () => void;
+  /** Opens a source with a passage marked, as a citation does. */
+  onOpen: (name: string, passage: string) => void;
+}) {
   // A copy whose author did not allow edits takes nothing new.
   const ro = useStoreSel(S.summary, (s) => !!s?.read_only);
   const nSrc = useStoreSel(S.srcs, stagedCount);
@@ -68,7 +82,9 @@ export function SourcesPanel({ S, A, onFold }: { S: PageState; A: PageActions; o
         </button>
       </div>
       {!ro && <AddBox S={S} A={A} />}
-      <SourceList S={S} A={A} ro={ro} />
+      <SourceSearch S={S} cid={cid} onOpen={onOpen}>
+        <SourceList S={S} A={A} ro={ro} />
+      </SourceSearch>
     </aside>
   );
 }
@@ -230,5 +246,84 @@ function SourceList({ S, A, ro }: { S: PageState; A: PageActions; ro: boolean })
         ))
       )}
     </div>
+  );
+}
+
+/** How long typing pauses before the search is made. */
+const SEARCH_PAUSE_MS = 300;
+
+/** A search box over the sources. With nothing typed it shows its children,
+ * the source list; with a search typed it shows the passages found instead,
+ * each opening its source with the passage marked. Shown only once the
+ * collection has a source to search. */
+export function SourceSearch({
+  S,
+  cid,
+  onOpen,
+  children,
+}: {
+  S: PageState;
+  cid: string;
+  onOpen: (name: string, passage: string) => void;
+  children: React.ReactNode;
+}) {
+  const n = useStoreSel(S.srcs, stagedCount);
+  const [q, setQ] = useState("");
+  // What the last search found, for the words it was made with: words typed
+  // since have no answer yet.
+  const [res, setRes] = useState<{ q: string; found: FoundPassage[]; err: string } | null>(null);
+  const asked = q.trim();
+  const cur = res !== null && res.q === asked ? res : null;
+  useEffect(() => {
+    if (asked === "") return;
+    const ctl = new AbortController();
+    const t = setTimeout(() => {
+      sourceSearch(cid, asked, ctl.signal).then(
+        (found) => setRes({ q: asked, found, err: "" }),
+        (e) => {
+          if (!ctl.signal.aborted) setRes({ q: asked, found: [], err: errText(e) });
+        },
+      );
+    }, SEARCH_PAUSE_MS);
+    return () => {
+      clearTimeout(t);
+      ctl.abort();
+    };
+  }, [asked, cid]);
+  if (n === 0 && asked === "") return <>{children}</>;
+  return (
+    <>
+      <input
+        type="search"
+        className="src-search"
+        aria-label="Search the sources"
+        placeholder="Search the sources"
+        value={q}
+        onChange={(e) => setQ(e.target.value)}
+      />
+      {asked === "" ? (
+        children
+      ) : (
+        <div className="srclist" aria-live="polite">
+          {cur !== null && cur.err !== "" ? (
+            <div className="src-note bad" role="alert">{`The search failed. ${cur.err}`}</div>
+          ) : cur === null ? (
+            <div className="src-note">
+              <span className="mini-spin" />
+              Searching…
+            </div>
+          ) : cur.found.length === 0 ? (
+            <div className="src-note">{`Nothing in the sources matches “${asked}”. Switched-off sources are not searched.`}</div>
+          ) : (
+            cur.found.map((h, i) => (
+              <button key={`${h.name}-${h.start}-${i}`} className="hit" onClick={() => onOpen(h.name, h.excerpt)}>
+                <span className="hit-n">{h.title}</span>
+                <span className="hit-x">{h.excerpt}</span>
+              </button>
+            ))
+          )}
+        </div>
+      )}
+    </>
   );
 }

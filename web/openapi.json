@@ -1279,6 +1279,78 @@
         }
       }
     },
+    "/api/collections/{cid}/search": {
+      "get": {
+        "tags": [
+          "search"
+        ],
+        "summary": "Search Sources",
+        "description": "The passages of the collection's sources most about `q`, best first.\nSources switched off are left out. It matches the words, and the meaning\ntoo when the studio has an embedding model.",
+        "operationId": "search_sources",
+        "parameters": [
+          {
+            "name": "cid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Cid"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 500,
+              "description": "What to look for",
+              "title": "Q"
+            },
+            "description": "What to look for"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 25,
+              "minimum": 1,
+              "default": 8,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SearchHit"
+                  },
+                  "title": "Response Search Sources"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/collections/{cid}/ask": {
       "post": {
         "tags": [
@@ -7470,6 +7542,43 @@
           "end_ms"
         ],
         "title": "ScriptScene"
+      },
+      "SearchHit": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "description": "The source it is from; address the source by it"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "excerpt": {
+            "type": "string",
+            "title": "Excerpt",
+            "description": "The passage, verbatim from the source's text"
+          },
+          "start": {
+            "type": "integer",
+            "title": "Start",
+            "description": "Where the passage starts in the source's text"
+          },
+          "end": {
+            "type": "integer",
+            "title": "End",
+            "description": "Where the passage ends in the source's text"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "title",
+          "excerpt",
+          "start",
+          "end"
+        ],
+        "title": "SearchHit"
       },
       "SearchReq": {
         "properties": {

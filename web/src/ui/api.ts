@@ -634,6 +634,14 @@ export async function sourceRemove(cid: string, name: string): Promise<void> {
   await call("DELETE", `/collections/${enc(cid)}/sources/${enc(name)}`);
 }
 
+/** A passage that matched a search of a collection's sources. */
+export type FoundPassage = Rest.SearchHit;
+
+/** The passages of a collection's sources most about `q`, best first. */
+export async function sourceSearch(cid: string, q: string, signal?: AbortSignal): Promise<FoundPassage[]> {
+  return call("GET", `/collections/${enc(cid)}/search?q=${enc(q)}`, undefined, { signal });
+}
+
 /** Switch a source on or off: off, it stays in the collection but nothing
  * reads it. */
 export async function sourceUse(cid: string, name: string, active: boolean): Promise<void> {
