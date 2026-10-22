@@ -54,10 +54,11 @@ describe("the search over the sources", () => {
   });
 
   it("shows the passages found and opens a source with the passage", async () => {
-    const fetch = vi.fn((_url: string) =>
-      reply(200, [{ name: "a.md", title: "Reefs", excerpt: "Coral shelters fish.", start: 0, end: 20 }]),
-    );
-    vi.stubGlobal("fetch", fetch);
+    const urls: string[] = [];
+    vi.stubGlobal("fetch", (u: string) => {
+      urls.push(u);
+      return reply(200, [{ name: "a.md", title: "Reefs", excerpt: "Coral shelters fish.", start: 0, end: 20 }]);
+    });
     const S = pageState(props);
     S.srcs.set([src("a.md")]);
     const onOpen = vi.fn();
@@ -69,7 +70,7 @@ describe("the search over the sources", () => {
     fireEvent.change(screen.getByLabelText("Search the sources"), { target: { value: "coral" } });
     expect(screen.queryByText("the list")).toBeNull();
     const hit = await screen.findByText("Coral shelters fish.");
-    expect(String(fetch.mock.calls[0]![0])).toContain("/collections/c1/search?q=coral");
+    expect(urls[0]).toContain("/collections/c1/search?q=coral");
     fireEvent.click(hit);
     expect(onOpen).toHaveBeenCalledWith("a.md", "Coral shelters fish.");
   });
