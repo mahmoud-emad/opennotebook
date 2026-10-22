@@ -316,7 +316,7 @@ const INPUT_ID = "chat-input";
  * arrows move through it, Enter or a click picks. A command that takes
  * nothing is sent at once; one that takes a topic or a question is written
  * into the box to finish. */
-export function ChatInput({ onSend }: { onSend: (t: string) => void }) {
+export function ChatInput({ onSend, busy = false }: { onSend: (t: string) => void; busy?: boolean }) {
   const [text, setText] = useState("");
   const [sel, setSel] = useState(0);
   // Escape closed the menu for what is typed now; typing opens it again.
@@ -327,7 +327,8 @@ export function ChatInput({ onSend }: { onSend: (t: string) => void }) {
   const n = matches.length;
   const at = Math.min(sel, Math.max(n - 1, 0));
   const pick = (c: MenuCommand) => {
-    if (c.arg === "") {
+    // A turn is running: nothing is sent, and nothing typed is lost.
+    if (c.arg === "" && !busy) {
       onSend(`/${c.name}`);
       setText("");
     } else setText(`/${c.name} `);
@@ -335,7 +336,7 @@ export function ChatInput({ onSend }: { onSend: (t: string) => void }) {
     focusId(INPUT_ID);
   };
   const submit = () => {
-    if (text.trim() !== "") {
+    if (text.trim() !== "" && !busy) {
       onSend(text);
       setText("");
     }
@@ -398,7 +399,7 @@ export function ChatInput({ onSend }: { onSend: (t: string) => void }) {
           aria-controls="cmd-menu"
           aria-expanded={menuOpen}
           autoComplete="off"
-          placeholder="Tell me what you want to learn, or type / for commands…"
+          placeholder={busy ? "Working on it… you can type your next message" : "Tell me what you want to learn, or type / for commands…"}
           onChange={(e) => {
             setText(e.target.value);
             setSel(0);
@@ -406,8 +407,15 @@ export function ChatInput({ onSend }: { onSend: (t: string) => void }) {
           }}
           onKeyDown={onKey}
         />
-        <button className="primary" title="Send (Enter)" aria-label="Send" disabled={text.trim() === ""} onClick={submit}>
-          <Icon name="send-fill" />
+        <button
+          className="primary"
+          title={busy ? "Waiting for the answer…" : "Send (Enter)"}
+          aria-label="Send"
+          aria-busy={busy}
+          disabled={text.trim() === "" || busy}
+          onClick={submit}
+        >
+          {busy ? <span className="mini-spin" /> : <Icon name="send-fill" />}
         </button>
       </div>
     </>
@@ -629,7 +637,7 @@ export function AskTab({
         )}
       </div>
       <div className="composer">
-        <ChatInput onSend={onSend} />
+        <ChatInput onSend={onSend} busy={talking} />
         <p className="chat-foot">
           {note !== null && (
             <>
