@@ -588,3 +588,25 @@ async def test_web_search_returns_hits(
     r = await client.post("/api/search", json={"query": "reefs"})
     assert r.status_code == 402
     assert r.json()["detail"].startswith("The AI account is out of credit")
+
+
+async def test_transform_runs_a_transformation_and_says_what_it_cannot(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    model = install(monkeypatch)
+    cid = await _collection(client)
+    await add_note(client, cid, "Coral reefs shelter a quarter of marine species.", "Reefs")
+    evs = await _command(client, cid, "transform")
+    assert evs[0]["text"].startswith("Which transformation? Type its name after /transform.")
+    evs = await _command(client, cid, "transform", "poem")
+    assert evs[0]["text"].startswith("There is no transformation called “poem”.")
+
+    model.answers(says("Reefs shelter a quarter of species [1]."))
+    evs = await _command(client, cid, "transform", "key claims on coral")
+    assert kinds(evs) == ["step", "step_done", "reply"]
+    assert evs[1]["ok"]
+    assert evs[2]["text"] == "**Key claims** · on coral\n\nReefs shelter a quarter of species [1]."
+    assert [c["name"] for c in evs[2]["citations"]] == ["reefs.md"]
+    assert "Focus on: on coral" in model.said_to(0, "user")
+    # Shown, not kept as a source: the answer's own button does that.
+    assert len((await client.get(f"/api/collections/{cid}/sources")).json()) == 1

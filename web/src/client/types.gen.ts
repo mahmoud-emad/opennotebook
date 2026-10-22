@@ -3158,6 +3158,116 @@ export type ThemeOut = {
 };
 
 /**
+ * TransformOut
+ */
+export type TransformOut = {
+    /**
+     * Title
+     *
+     * The transformation's name, and its focus when given
+     */
+    title: string;
+    /**
+     * Text
+     *
+     * Markdown with [n] markers that match the citations
+     */
+    text: string;
+    /**
+     * Citations
+     *
+     * Only the passages cited, in order of first use
+     */
+    citations: Array<Citation>;
+    /**
+     * The note it was kept as; absent when not saved
+     */
+    source: SourceOut | null;
+};
+
+/**
+ * TransformReq
+ */
+export type TransformReq = {
+    /**
+     * Transformation
+     *
+     * A built-in key, an id, or a name
+     */
+    transformation: string;
+    /**
+     * Sources
+     *
+     * Source names; all that are on
+     */
+    sources?: Array<string> | null;
+    /**
+     * Focus
+     *
+     * What to concentrate on
+     */
+    focus?: string;
+    /**
+     * Save
+     *
+     * Keep the result as a note in the sources
+     */
+    save?: boolean;
+};
+
+/**
+ * TransformationIn
+ */
+export type TransformationIn = {
+    /**
+     * Name
+     *
+     * A short name, unique among yours
+     */
+    name: string;
+    /**
+     * Prompt
+     *
+     * What to do with the sources
+     */
+    prompt: string;
+};
+
+/**
+ * TransformationOut
+ */
+export type TransformationOut = {
+    /**
+     * Id
+     *
+     * What to run it by: a key for a built-in one, else an id
+     */
+    id: string;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Description
+     *
+     * One line on what it makes; empty for a person's own
+     */
+    description: string;
+    /**
+     * Prompt
+     *
+     * The instruction it carries out
+     */
+    prompt: string;
+    /**
+     * Builtin
+     *
+     * Built in: it cannot be changed or removed
+     */
+    builtin: boolean;
+};
+
+/**
  * Turn
  */
 export type Turn = {
@@ -3995,6 +4105,34 @@ export type SourceTextWritable = {
      * The source verbatim, as Markdown
      */
     text: string;
+};
+
+/**
+ * TransformOut
+ */
+export type TransformOutWritable = {
+    /**
+     * Title
+     *
+     * The transformation's name, and its focus when given
+     */
+    title: string;
+    /**
+     * Text
+     *
+     * Markdown with [n] markers that match the citations
+     */
+    text: string;
+    /**
+     * Citations
+     *
+     * Only the passages cited, in order of first use
+     */
+    citations: Array<Citation>;
+    /**
+     * The note it was kept as; absent when not saved
+     */
+    source: SourceOutWritable | null;
 };
 
 export type HealthData = {
@@ -6594,6 +6732,139 @@ export type ShareCollectionResponses = {
 };
 
 export type ShareCollectionResponse = ShareCollectionResponses[keyof ShareCollectionResponses];
+
+export type ListTransformationsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/transformations';
+};
+
+export type ListTransformationsResponses = {
+    /**
+     * Response List Transformations
+     *
+     * Successful Response
+     */
+    200: Array<TransformationOut>;
+};
+
+export type ListTransformationsResponse = ListTransformationsResponses[keyof ListTransformationsResponses];
+
+export type AddTransformationData = {
+    body: TransformationIn;
+    path?: never;
+    query?: never;
+    url: '/api/transformations';
+};
+
+export type AddTransformationErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type AddTransformationError = AddTransformationErrors[keyof AddTransformationErrors];
+
+export type AddTransformationResponses = {
+    /**
+     * Successful Response
+     */
+    201: TransformationOut;
+};
+
+export type AddTransformationResponse = AddTransformationResponses[keyof AddTransformationResponses];
+
+export type RemoveTransformationData = {
+    body?: never;
+    path: {
+        /**
+         * Tid
+         */
+        tid: string;
+    };
+    query?: never;
+    url: '/api/transformations/{tid}';
+};
+
+export type RemoveTransformationErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type RemoveTransformationError = RemoveTransformationErrors[keyof RemoveTransformationErrors];
+
+export type RemoveTransformationResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+
+export type RemoveTransformationResponse = RemoveTransformationResponses[keyof RemoveTransformationResponses];
+
+export type ChangeTransformationData = {
+    body: TransformationIn;
+    path: {
+        /**
+         * Tid
+         */
+        tid: string;
+    };
+    query?: never;
+    url: '/api/transformations/{tid}';
+};
+
+export type ChangeTransformationErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type ChangeTransformationError = ChangeTransformationErrors[keyof ChangeTransformationErrors];
+
+export type ChangeTransformationResponses = {
+    /**
+     * Successful Response
+     */
+    200: TransformationOut;
+};
+
+export type ChangeTransformationResponse = ChangeTransformationResponses[keyof ChangeTransformationResponses];
+
+export type RunTransformationData = {
+    body: TransformReq;
+    path: {
+        /**
+         * Cid
+         */
+        cid: string;
+    };
+    query?: never;
+    url: '/api/collections/{cid}/transform';
+};
+
+export type RunTransformationErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type RunTransformationError = RunTransformationErrors[keyof RunTransformationErrors];
+
+export type RunTransformationResponses = {
+    /**
+     * Successful Response
+     */
+    200: TransformOut;
+};
+
+export type RunTransformationResponse = RunTransformationResponses[keyof RunTransformationResponses];
 
 export type GetVideoData = {
     body?: never;

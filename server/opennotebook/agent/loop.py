@@ -66,8 +66,10 @@ from opennotebook.db.models import Collection, Source, User
 from opennotebook.db.session import sessionmaker, unit
 from opennotebook.domain import collections, reading, refresh, sources
 from opennotebook.domain import settings as st
+from opennotebook.domain import transformations as tf
 from opennotebook.errors import Problem
 from opennotebook.script import cite
+from opennotebook.script import transform as xform
 from opennotebook.script.errors import ScriptError
 
 log = logging.getLogger(__name__)
@@ -668,6 +670,56 @@ async def ask(
         ],
     )
     yield "the answer was shown to the person"
+
+
+async def transform(
+    t: Turn, ids: Ids, values: dict[str, str], ref: str, focus: str
+) -> AsyncIterator[Event | str]:
+    """A transformation run over the sources, with citations: its step, then
+    the reply, whole. Shown as it is and not kept: the answer's own button
+    keeps it as a note. Yields, last, a plain string: what the model is told."""
+    id = ids()
+    yield step(id, "read", "Reading your sources", ref)
+    try:
+        async with sessionmaker()() as s:
+            found = await tf.find(s, t.owner, ref)
+            docs = await reading.read_docs(s, t.owner, t.cid, None)
+        async with ledger.spending(t.owner, "transform", collection_id=t.cid):
+            a = await xform.run(
+                docs,
+                found.prompt,
+                focus,
+                model=values[st.CHAT_MODEL_KEY],
+                language_rule=st.language_rule(values[st.LANGUAGE_KEY]),
+            )
+    except Problem as e:
+        yield done(id, False, e.detail)
+        yield f"the transformation failed: {e.detail}"
+        return
+    except (AiError, ScriptError) as e:
+        yield done(id, False, e.sentence)
+        yield f"the transformation failed: {e.sentence}"
+        return
+    n = len(a.cited)
+    yield done(
+        id,
+        True,
+        "no passage cited" if n == 0 else "1 passage cited" if n == 1 else f"{n} passages cited",
+    )
+    yield reply(
+        f"**{found.name}**{f' · {focus}' if focus else ''}\n\n{a.text}",
+        [
+            {
+                "n": c.n,
+                "name": docs[c.doc].name,
+                "title": docs[c.doc].title,
+                "url": docs[c.doc].url,
+                "excerpt": c.excerpt,
+            }
+            for c in a.cited
+        ],
+    )
+    yield "the result was shown to the person"
 
 
 _MAKING = {

@@ -15,6 +15,7 @@ from opennotebook.agent import loop
 from opennotebook.agent.loop import Event, Ids, Turn
 from opennotebook.db.session import sessionmaker
 from opennotebook.domain import settings as st
+from opennotebook.domain import transformations as tf
 
 
 @dataclass(frozen=True)
@@ -37,6 +38,7 @@ COMMANDS: list[Command] = [
     Command("search", "<topic>", "Find sources on the web", "search"),
     Command("research", "<topic>", "Research a topic in depth", "stars"),
     Command("ask", "<question>", "Ask your sources, with citations", "chat-dots"),
+    Command("transform", "<name> [focus]", "Run a transformation on your sources", "list-ul"),
     Command("help", "", "What I can do", "info-circle"),
     Command("clear", "", "Clear the conversation", "trash"),
 ]
@@ -113,6 +115,29 @@ async def run(
         async with sessionmaker()() as s:
             values = await st.values(s, t.owner)
         async for e in loop.ask(t, Ids(), values, arg):
+            if not isinstance(e, str):
+                yield e
+        return
+    if c.name == "transform":
+        async with sessionmaker()() as s:
+            values = await st.values(s, t.owner)
+            every = await tf.listed(s, t.owner)
+        if not arg:
+            yield loop.reply(
+                "Which transformation? Type its name after /transform. The ones there are: "
+                + ", ".join(f.name for f in every)
+                + "."
+            )
+            return
+        found, focus = tf.split(every, arg)
+        if found is None:
+            yield loop.reply(
+                f"There is no transformation called “{arg}”. The ones there are: "
+                + ", ".join(f.name for f in every)
+                + "."
+            )
+            return
+        async for e in loop.transform(t, Ids(), values, found.id, focus):
             if not isinstance(e, str):
                 yield e
         return

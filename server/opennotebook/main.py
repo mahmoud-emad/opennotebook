@@ -25,6 +25,7 @@ from opennotebook.api import (
     settings,
     shares,
     sources,
+    transformations,
     video,
 )
 from opennotebook.config import settings as config
@@ -77,6 +78,7 @@ def create_app() -> FastAPI:
         chat,
         settings,
         shares,
+        transformations,
         video,
     ):
         app.include_router(module.router)

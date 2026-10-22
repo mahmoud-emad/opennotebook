@@ -4113,6 +4113,213 @@
         }
       }
     },
+    "/api/transformations": {
+      "get": {
+        "tags": [
+          "transformations"
+        ],
+        "summary": "List Transformations",
+        "description": "The built-in transformations, then your own.",
+        "operationId": "list_transformations",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/TransformationOut"
+                  },
+                  "type": "array",
+                  "title": "Response List Transformations"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "transformations"
+        ],
+        "summary": "Add Transformation",
+        "description": "Add a transformation of your own.",
+        "operationId": "add_transformation",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TransformationIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransformationOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/transformations/{tid}": {
+      "put": {
+        "tags": [
+          "transformations"
+        ],
+        "summary": "Change Transformation",
+        "description": "Change a transformation of your own.",
+        "operationId": "change_transformation",
+        "parameters": [
+          {
+            "name": "tid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Tid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TransformationIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransformationOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "transformations"
+        ],
+        "summary": "Remove Transformation",
+        "description": "Remove a transformation of your own.",
+        "operationId": "remove_transformation",
+        "parameters": [
+          {
+            "name": "tid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Tid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/collections/{cid}/transform": {
+      "post": {
+        "tags": [
+          "transformations"
+        ],
+        "summary": "Run Transformation",
+        "description": "Run a transformation over the collection's sources (or only the named\nones) and, unless told not to, keep the result as a note. Takes a few\nseconds.",
+        "operationId": "run_transformation",
+        "parameters": [
+          {
+            "name": "cid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Cid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TransformReq"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransformOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/sessions/{sid}/video": {
       "post": {
         "tags": [
@@ -9323,6 +9530,146 @@
           "family"
         ],
         "title": "ThemeOut"
+      },
+      "TransformOut": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "title": "Title",
+            "description": "The transformation's name, and its focus when given"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text",
+            "description": "Markdown with [n] markers that match the citations"
+          },
+          "citations": {
+            "items": {
+              "$ref": "#/components/schemas/Citation"
+            },
+            "type": "array",
+            "title": "Citations",
+            "description": "Only the passages cited, in order of first use"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SourceOut"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The note it was kept as; absent when not saved"
+          }
+        },
+        "type": "object",
+        "required": [
+          "title",
+          "text",
+          "citations",
+          "source"
+        ],
+        "title": "TransformOut"
+      },
+      "TransformReq": {
+        "properties": {
+          "transformation": {
+            "type": "string",
+            "title": "Transformation",
+            "description": "A built-in key, an id, or a name"
+          },
+          "sources": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sources",
+            "description": "Source names; all that are on"
+          },
+          "focus": {
+            "type": "string",
+            "maxLength": 1000,
+            "title": "Focus",
+            "description": "What to concentrate on",
+            "default": ""
+          },
+          "save": {
+            "type": "boolean",
+            "title": "Save",
+            "description": "Keep the result as a note in the sources",
+            "default": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "transformation"
+        ],
+        "title": "TransformReq"
+      },
+      "TransformationIn": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "description": "A short name, unique among yours"
+          },
+          "prompt": {
+            "type": "string",
+            "title": "Prompt",
+            "description": "What to do with the sources"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "prompt"
+        ],
+        "title": "TransformationIn"
+      },
+      "TransformationOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id",
+            "description": "What to run it by: a key for a built-in one, else an id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description",
+            "description": "One line on what it makes; empty for a person's own"
+          },
+          "prompt": {
+            "type": "string",
+            "title": "Prompt",
+            "description": "The instruction it carries out"
+          },
+          "builtin": {
+            "type": "boolean",
+            "title": "Builtin",
+            "description": "Built in: it cannot be changed or removed"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "description",
+          "prompt",
+          "builtin"
+        ],
+        "title": "TransformationOut"
       },
       "Turn": {
         "properties": {

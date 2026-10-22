@@ -323,6 +323,20 @@ class Session(Base):
     updated_at: Mapped[datetime] = _now()
 
 
+class Transformation(Base):
+    """A person's own transformation: an instruction to run over a
+    collection's sources. The built-in ones are in code."""
+
+    __tablename__ = "transformations"
+    __table_args__ = (UniqueConstraint("owner_id", "name"),)
+
+    id: Mapped[uuid.UUID] = _id()
+    owner_id: Mapped[uuid.UUID] = _owner()
+    name: Mapped[str] = mapped_column(Text)
+    prompt: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = _now()
+
+
 class Playback(Base):
     """Where a session's playback is. Kept in memory before, and lost on a
     restart; a row now."""
