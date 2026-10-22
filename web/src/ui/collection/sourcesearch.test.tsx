@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { SourceSearch } from "./SourcesPanel";
 import { pageState, staged, stagedCount } from "./state";
@@ -106,5 +106,37 @@ describe("the search over the sources", () => {
     fireEvent.change(box, { target: { value: "x1" } });
     fireEvent.change(box, { target: { value: "" } });
     expect(screen.getByText("the list")).toBeTruthy();
+  });
+
+  it("searches again when a source is switched off or added", async () => {
+    const urls: string[] = [];
+    vi.stubGlobal("fetch", (u: string) => {
+      urls.push(u);
+      return reply(200, []);
+    });
+    const S = pageState(props);
+    S.srcs.set([src("a.md")]);
+    render(
+      <SourceSearch S={S} cid="c1" onOpen={() => {}}>
+        <p>the list</p>
+      </SourceSearch>,
+    );
+    fireEvent.change(screen.getByLabelText("Search the sources"), { target: { value: "otters" } });
+    await waitFor(() => expect(urls).toHaveLength(1));
+    // Switched off: the same words are searched again.
+    act(() => S.srcs.set([src("a.md", { active: false })]));
+    await waitFor(() => expect(urls).toHaveLength(2));
+    // One more added.
+    act(() => S.srcs.set([src("a.md", { active: false }), src("b.md")]));
+    await waitFor(() => expect(urls).toHaveLength(3));
+    // A switch finishing: what it did is now on the server, so search again.
+    act(() => S.rowBusy.set({ "src:a.md": "Switching…" }));
+    await waitFor(() => expect(urls).toHaveLength(4));
+    act(() => S.rowBusy.set({}));
+    await waitFor(() => expect(urls).toHaveLength(5));
+    // A change that is not one of those leaves the search alone.
+    act(() => S.srcs.set([src("a.md", { active: false, detail: "x" }), src("b.md")]));
+    await new Promise((r) => setTimeout(r, 450));
+    expect(urls).toHaveLength(5);
   });
 });

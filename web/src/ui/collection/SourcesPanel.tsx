@@ -270,6 +270,18 @@ export function SourceSearch({
   children: React.ReactNode;
 }) {
   const n = useStoreSel(S.srcs, stagedCount);
+  // Which sources are there and on: a search made before one was added, or
+  // before one was switched off, is made again.
+  const held = useStoreSel(S.srcs, (v) => v.map((s) => `${s.file}:${s.active !== false}`).join("|"));
+  // And which are still being switched: the server learns of a switch a
+  // moment after the row shows it, and a search made in between is made
+  // again when the switch has landed.
+  const switching = useStoreSel(S.rowBusy, (m) =>
+    Object.keys(m)
+      .filter((k) => k.startsWith("src:"))
+      .sort()
+      .join("|"),
+  );
   const [q, setQ] = useState("");
   // What the last search found, for the words it was made with: words typed
   // since have no answer yet.
@@ -291,7 +303,7 @@ export function SourceSearch({
       clearTimeout(t);
       ctl.abort();
     };
-  }, [asked, cid]);
+  }, [asked, cid, held, switching]);
   if (n === 0 && asked === "") return <>{children}</>;
   return (
     <>
