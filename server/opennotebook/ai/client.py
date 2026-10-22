@@ -213,6 +213,7 @@ class Ai:
         *,
         http: httpx2.AsyncClient | None = None,
         retries: int = 2,
+        rate_retries: int = 4,
         timeout: float = 300.0,
         backoff: float = 0.75,
         preset: Preset | None = None,
@@ -234,6 +235,7 @@ class Ai:
             default_headers={self.preset.key_header: api_key} if self.preset.key_header else None,
         )
         self._retries = retries
+        self._rate_retries = rate_retries
         self._timeout = timeout
         self._backoff = backoff
         self.catalogue = Catalogue(base_url, api_key, http, kind=self.preset.kind)
@@ -503,7 +505,13 @@ class Ai:
         return done.text.strip()
 
     async def _tries(self, call: Callable[[], Awaitable[Any]]) -> Any:
-        """`call` with the retries a busy or unreachable provider is worth."""
+        """`call` with the retries a busy or unreachable provider is worth.
+
+        A provider that is rate limiting is waited for longer than one that
+        dropped a connection: its limit is a moment's burst, as a shared key
+        meets when a question and the studio's own naming and cover calls land
+        together, and gives way within seconds. Its pauses are twice as long
+        and it is tried twice as often, about 20 seconds in all by default."""
         attempt = 0
         while True:
             try:
@@ -512,10 +520,11 @@ class Ai:
                 err = AiError.from_status(e.status_code, e.response.text)
             except (openai.APIConnectionError, openai.APITimeoutError) as e:
                 err = AiError(Kind.UNAVAILABLE, str(e) or type(e).__name__)
-            if not err.retryable or attempt >= self._retries:
+            limited = err.kind == Kind.RATE_LIMITED
+            if not err.retryable or attempt >= (self._rate_retries if limited else self._retries):
                 raise err
             attempt += 1
-            await asyncio.sleep(self._backoff * 2 ** (attempt - 1))
+            await asyncio.sleep(self._backoff * (2 if limited else 1) * 2 ** (attempt - 1))
 
     async def aclose(self) -> None:
         """Close the connections the client keeps open, at shutdown."""

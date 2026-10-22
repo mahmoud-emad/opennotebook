@@ -141,6 +141,52 @@ async def test_an_unavailable_upstream_is_retried(owner: uuid.UUID) -> None:
     assert len(mock.bodies) == 2
 
 
+async def test_a_rate_limit_is_waited_out_longer_than_other_outages(owner: uuid.UUID) -> None:
+    limited = status(429, {"error": {"message": "Rate limited", "type": "rate_limit_error"}})
+    # Four refusals and then the answer: more than the two an outage gets.
+    mock = Mock(limited, limited, limited, limited, ok(ANSWER))
+    async with ledger.spending(owner, "chat"):
+        assert (await mock.ai().complete("m/priced", [])).text == "Reefs."
+    assert len(mock.bodies) == 5
+
+    # And it ends: the fifth refusal is the answer, in words.
+    mock = Mock(limited, limited, limited, limited, limited, ok(ANSWER))
+    with pytest.raises(AiError) as e:
+        async with ledger.spending(owner, "chat"):
+            await mock.ai().complete("m/priced", [])
+    assert e.value.kind == Kind.RATE_LIMITED and len(mock.bodies) == 5
+    assert e.value.sentence.startswith("The AI provider is busy right now")
+
+
+async def test_the_pauses_between_tries_grow_and_a_rate_limit_waits_twice_as_long(
+    owner: uuid.UUID, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    slept: list[float] = []
+
+    async def record(s: float) -> None:
+        slept.append(s)
+
+    monkeypatch.setattr("opennotebook.ai.client.asyncio.sleep", record)
+    http = httpx2.AsyncClient(
+        transport=httpx2.MockTransport(
+            Mock(*[status(429, {"error": {"message": "Rate limited"}})] * 5)
+        )
+    )
+    with pytest.raises(AiError):
+        async with ledger.spending(owner, "chat"):
+            await Ai("http://ai.test/v1", "k", http=http, backoff=1).complete("m/priced", [])
+    assert slept == [2, 4, 8, 16]
+
+    slept.clear()
+    http = httpx2.AsyncClient(
+        transport=httpx2.MockTransport(Mock(*[status(503, {"error": {"message": "down"}})] * 3))
+    )
+    with pytest.raises(AiError):
+        async with ledger.spending(owner, "chat"):
+            await Ai("http://ai.test/v1", "k", http=http, backoff=1).complete("m/priced", [])
+    assert slept == [1, 2]
+
+
 async def test_an_error_inside_a_200_is_an_error(owner: uuid.UUID) -> None:
     mock = Mock(ok({"error": {"message": "insufficient_quota", "code": "insufficient_quota"}}))
     with pytest.raises(AiError) as e:
