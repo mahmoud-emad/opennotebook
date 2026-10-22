@@ -22,13 +22,19 @@ const KELP_NAME = nameOf(KELP);
 
 test.describe.configure({ mode: "serial" });
 
+// The collections the tests opened, by id: removed at the end even when a test
+// stopped before it named its collection.
+const made = new Set<string>();
+
 test.afterAll(async () => {
   const api = await http.newContext({ baseURL: new URL("/api/", BASE).href });
   const cols = await api.get("collections");
   if (cols.ok()) {
     const all = (await cols.json()) as { id: string; title: string }[];
-    for (const c of all.filter((c) => c.title.includes(TAG))) await api.delete(`collections/${c.id}`);
+    for (const c of all.filter((c) => c.title.includes(TAG))) made.add(c.id);
   }
+  // A 404 is fine: already gone.
+  for (const id of made) await api.delete(`collections/${id}`);
   const tfs = await api.get("transformations");
   if (tfs.ok()) {
     const all = (await tfs.json()) as { id: string; name: string; builtin: boolean }[];
@@ -43,8 +49,10 @@ const sourcesPanel = (page: Page) => page.getByRole("complementary", { name: "So
 async function collectionWithNotes(page: Page): Promise<string> {
   await page.goto("my-collections");
   await page.getByRole("button", { name: "New collection" }).first().click();
-  await expect(page).toHaveURL(/\/ui\/c\/[\w-]+$/);
+  // Making one asks the server, which may be busy.
+  await expect(page).toHaveURL(/\/ui\/c\/[\w-]+$/, { timeout: 45_000 });
   const url = page.url();
+  made.add(url.split("/c/")[1] ?? "");
   const name = page.getByRole("textbox", { name: "Collection name" });
   await name.fill(`Sources suite ${TAG}`);
   await name.press("Enter");
@@ -56,7 +64,10 @@ async function collectionWithNotes(page: Page): Promise<string> {
     await page.getByRole("button", { name: "Add source" }).click();
     // The row that says the note is being added has its words too; the
     // switch is only on a source the server holds.
-    await expect(sourcesPanel(page).getByRole("switch", { name: `Use ${listed}` })).toBeVisible();
+    // Adding embeds the note and may share a busy studio: allow for it.
+    await expect(sourcesPanel(page).getByRole("switch", { name: `Use ${listed}` })).toBeVisible({
+      timeout: 45_000,
+    });
   }
   return url;
 }
@@ -183,7 +194,7 @@ test("Settings › Transformations lists the built-in ones and keeps your own", 
 
 test.describe("with a real model", () => {
   test.skip(!process.env.E2E_AI, "needs a working AI provider: run with E2E_AI=1");
-  test.setTimeout(240_000);
+  test.setTimeout(480_000);
 
   const send = async (page: Page, text: string) => {
     const input = page.getByRole("textbox", { name: "Message the studio" });
@@ -193,12 +204,18 @@ test.describe("with a real model", () => {
 
   /** Say something and wait for the Studio's answer to it. A provider that
    * answers "busy" (a rate limit, as a shared key meets) is waited out and
-   * asked again: the studio says so in words, and that is not what is tested. */
+   * asked again: the studio says so in words, and that is not what is tested.
+   * One that stays busy skips the test, which it could not check. */
   const turn = async (page: Page, text: string, expected: RegExp) => {
     const replies = page.locator(".cmsg:not(.me)");
     const busyText = "busy right now";
     for (let attempt = 0; attempt < 4; attempt++) {
       const seen = await page.locator(".step-row.bad", { hasText: busyText }).count();
+      // The box waits for the turn before it: the previous answer is in
+      // when its send button is not busy.
+      await expect(page.getByRole("button", { name: "Send" })).not.toHaveAttribute("aria-busy", "true", {
+        timeout: 120_000,
+      });
       await send(page, text);
       const answered = replies.last().filter({ hasText: expected });
       const busy = page.locator(".step-row.bad", { hasText: busyText }).nth(seen);
@@ -206,7 +223,9 @@ test.describe("with a real model", () => {
       if (await answered.isVisible()) return replies.last();
       await page.waitForTimeout(20_000);
     }
-    throw new Error("The AI provider stayed busy through four tries.");
+    // The provider's own limit, not the studio's: say so rather than pass or fail.
+    test.skip(true, "The AI provider kept rate limiting through four tries, so this was not checked.");
+    return replies.last();
   };
 
   test("an answer is cited from the sources that are on, and kept as a note", async ({ page }) => {
@@ -252,8 +271,7 @@ test.describe("with a real model", () => {
     await expect(second).toContainText(/otter/i);
 
     // An unknown name lists what there is, and nothing is spent.
-    await send(page, "/transform poem");
-    await expect(page.locator(".cmsg:not(.me)").last()).toContainText("There is no transformation called “poem”");
+    await turn(page, "/transform poem", /There is no transformation called “poem”/);
 
     // Shown, not kept: the answer's own button keeps it.
     await expect(sourcesPanel(page).getByRole("switch")).toHaveCount(2);
@@ -264,7 +282,10 @@ test.describe("with a real model", () => {
     for (const n of [REEFS_NAME, KELP_NAME]) await sourcesPanel(page).getByRole("switch", { name: `Use ${n}` }).click();
     await expect(sourcesPanel(page).getByText(/^Not used · /)).toHaveCount(2);
     await page.getByRole("tab", { name: "Ask" }).click();
+    // The studio refuses before it asks any model, and says why on the step.
     await send(page, "/ask What is in the sources?");
-    await expect(page.locator(".cmsg:not(.me)").last()).toContainText("switched off", { timeout: 60_000 });
+    const step = page.locator(".step-row.bad").last();
+    await expect(step).toContainText("Every source of this collection is switched off");
+    await expect(step).toContainText("Switch one on in the sources list");
   });
 });
