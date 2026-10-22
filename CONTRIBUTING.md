@@ -2,6 +2,10 @@
 
 Thanks for wanting to help. Bug reports, ideas and pull requests are all welcome.
 
+## Code of conduct
+
+By taking part you agree to follow our [Code of Conduct](CODE_OF_CONDUCT.md).
+
 ## Before you start
 
 For anything bigger than a small fix, please open an issue first so we can agree on the approach. It saves you from writing code that won't fit.
