@@ -191,6 +191,24 @@ test.describe("with a real model", () => {
     await input.press("Enter");
   };
 
+  /** Say something and wait for the Studio's answer to it. A provider that
+   * answers "busy" (a rate limit, as a shared key meets) is waited out and
+   * asked again: the studio says so in words, and that is not what is tested. */
+  const turn = async (page: Page, text: string, expected: RegExp) => {
+    const replies = page.locator(".cmsg:not(.me)");
+    const busyText = "busy right now";
+    for (let attempt = 0; attempt < 4; attempt++) {
+      const seen = await page.locator(".step-row.bad", { hasText: busyText }).count();
+      await send(page, text);
+      const answered = replies.last().filter({ hasText: expected });
+      const busy = page.locator(".step-row.bad", { hasText: busyText }).nth(seen);
+      await expect(answered.or(busy)).toBeVisible({ timeout: 120_000 });
+      if (await answered.isVisible()) return replies.last();
+      await page.waitForTimeout(20_000);
+    }
+    throw new Error("The AI provider stayed busy through four tries.");
+  };
+
   test("an answer is cited from the sources that are on, and kept as a note", async ({ page }) => {
     await collectionWithNotes(page);
     await page.getByRole("tab", { name: "Ask" }).click();
@@ -201,9 +219,8 @@ test.describe("with a real model", () => {
       "false",
     );
 
-    await send(page, "/ask What lives in kelp forests?");
-    const answer = page.locator(".cmsg:not(.me)").last();
-    await expect(answer.locator(".cite").first()).toBeVisible({ timeout: 120_000 });
+    const answer = await turn(page, "/ask What lives in kelp forests?", /otters|fish|urchins/i);
+    await expect(answer.locator(".cite").first()).toBeVisible();
     await expect(answer).toContainText(/otters|fish|urchins/i);
     // Cited to the note that is on, never the one that is off.
     await expect(answer.locator(".cites")).toContainText("Kelp forests grow");
@@ -228,14 +245,10 @@ test.describe("with a real model", () => {
     await api.dispose();
 
     await page.getByRole("tab", { name: "Ask" }).click();
-    await send(page, "/transform summary");
-    const first = page.locator(".cmsg:not(.me)").last();
-    await expect(first).toContainText("Summary", { timeout: 120_000 });
-    await expect(first.locator(".cite").first()).toBeVisible({ timeout: 120_000 });
+    const first = await turn(page, "/transform summary", /Summary/);
+    await expect(first.locator(".cite").first()).toBeVisible();
 
-    await send(page, `/transform ${mine} only the sea mammals`);
-    const second = page.locator(".cmsg:not(.me)").last();
-    await expect(second).toContainText(mine, { timeout: 120_000 });
+    const second = await turn(page, `/transform ${mine} only the sea mammals`, new RegExp(mine));
     await expect(second).toContainText(/otter/i);
 
     // An unknown name lists what there is, and nothing is spent.
