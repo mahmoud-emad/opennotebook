@@ -1,6 +1,6 @@
 # Plan: study with your sources (search, context, notes, transformations)
 
-Status: planned 2026-10-22.
+Status: all four phases built 2026-10-22.
 Read first: [design.md](../design.md) for the look, [phase1-spec.md](../phase1-spec.md) for sources and Ask.
 
 ## 1. What and why

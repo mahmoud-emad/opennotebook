@@ -14,6 +14,8 @@ Put your sources into a collection: PDFs, Office files, web links, YouTube video
 - **Audio overviews.** One host or two, talking it through.
 - **Mind maps and study notes.**
 
+And you can work with the sources themselves: search them, switch any source off so nothing reads it, ask them questions and keep an answer as a note, or run a transformation (a summary, key claims, flashcards, a timeline, or an instruction of your own) with `/transform`.
+
 Every claim links back to the passage it came from, so you can check it. When a collection is good, share it on Discover. Others can read it as it is, or copy it, make it their own, and share it again.
 
 ## Try it
