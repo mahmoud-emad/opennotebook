@@ -479,10 +479,10 @@ async def search(
         return []
     rows = await s.execute(
         text(
-            """SELECT id FROM qa_pairs
-               WHERE owner_id = :owner AND collection_id = :cid
-                 AND tsv @@ to_tsquery('english', :q)
-               ORDER BY ts_rank_cd(tsv, to_tsquery('english', :q)) DESC, id
+            """SELECT p.id FROM qa_pairs p JOIN sources src ON src.id = p.source_id
+               WHERE p.owner_id = :owner AND p.collection_id = :cid AND src.active
+                 AND p.tsv @@ to_tsquery('english', :q)
+               ORDER BY ts_rank_cd(p.tsv, to_tsquery('english', :q)) DESC, p.id
                LIMIT :n"""
         ),
         {"owner": owner, "cid": cid, "q": q, "n": max(top_k, 1) * 4},

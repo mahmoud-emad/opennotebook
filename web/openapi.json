@@ -1073,6 +1073,67 @@
           }
         }
       },
+      "patch": {
+        "tags": [
+          "sources"
+        ],
+        "summary": "Use Source",
+        "description": "Switch a source on or off. Off, it stays in the collection but Ask,\nsearch and every maker leave it out.",
+        "operationId": "use_source",
+        "parameters": [
+          {
+            "name": "cid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Cid"
+            }
+          },
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SourceUse"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SourceOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
       "delete": {
         "tags": [
           "sources"
@@ -8823,6 +8884,11 @@
             "title": "Chars",
             "description": "Length of the readable text"
           },
+          "active": {
+            "type": "boolean",
+            "title": "Active",
+            "description": "Whether anything reads it. A source switched off stays in the collection, but Ask, search and every maker leave it out"
+          },
           "created_at": {
             "type": "string",
             "format": "date-time",
@@ -8854,6 +8920,7 @@
           "title",
           "url",
           "chars",
+          "active",
           "created_at",
           "words",
           "detail",
@@ -8892,6 +8959,11 @@
             "title": "Chars",
             "description": "Length of the readable text"
           },
+          "active": {
+            "type": "boolean",
+            "title": "Active",
+            "description": "Whether anything reads it. A source switched off stays in the collection, but Ask, search and every maker leave it out"
+          },
           "created_at": {
             "type": "string",
             "format": "date-time",
@@ -8928,6 +9000,7 @@
           "title",
           "url",
           "chars",
+          "active",
           "created_at",
           "text",
           "words",
@@ -8935,6 +9008,20 @@
           "icon"
         ],
         "title": "SourceText"
+      },
+      "SourceUse": {
+        "properties": {
+          "active": {
+            "type": "boolean",
+            "title": "Active",
+            "description": "True to read the source, false to leave it out"
+          }
+        },
+        "type": "object",
+        "required": [
+          "active"
+        ],
+        "title": "SourceUse"
       },
       "SpeakerChoice": {
         "properties": {

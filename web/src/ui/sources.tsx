@@ -22,6 +22,9 @@ export type Src = {
   /** Its stored file name on the server, what a remove takes. Empty for a
    * row that is not on the server: one being read, or one that failed. */
   file: string;
+  /** Whether anything reads it. Absent is on: only a source the server listed
+   * can be off. */
+  active?: boolean;
   /** What a row not on the server is known by while it is shown, since it has
    * no stored name. Unset for a row the server listed. */
   key?: string;
@@ -54,7 +57,15 @@ export function shortHost(url: string): string {
 /** A source the server holds, as the row the sources panel shows: the line
  * under its name and its icon as the server words them. */
 export function srcOfServer(s: ServerSource): Src {
-  return { detail: s.detail, name: s.title || s.name, file: s.name, ok: true, url: s.url, icon: s.icon };
+  return {
+    detail: s.detail,
+    name: s.title || s.name,
+    file: s.name,
+    ok: true,
+    url: s.url,
+    icon: s.icon,
+    active: s.active,
+  };
 }
 
 /** What the server holds as a collection's sources, as the rows the sources
@@ -105,12 +116,15 @@ export function srcFrom(g: Record<string, unknown>): Src {
 export function SrcRow({
   s,
   onRemove,
+  onUse,
   busy = false,
   err = "",
   onDismissErr,
 }: {
   s: Src;
   onRemove?: (s: Src) => void;
+  /** Switches the source on or off; without it the row shows no switch. */
+  onUse?: (s: Src, active: boolean) => void;
   /** Being removed: the row says so and offers nothing until it is gone. */
   busy?: boolean;
   /** Why the last removal failed, said under the row; empty when none did. */
@@ -124,16 +138,31 @@ export function SrcRow({
   // A row that never reached the server is only dismissed, like any other
   // error row; one that did is removed from the collection.
   const verb = s.file === "" ? "Dismiss" : "Remove";
+  const on = s.active !== false;
+  const usable = onUse !== undefined && s.ok && s.file !== "" && !reading && !busy;
+  const cls = busy ? "src run" : !s.ok ? "src bad" : on ? "src" : "src off";
   return (
     <>
-      <div className={busy ? "src run" : s.ok ? "src" : "src bad"}>
+      <div className={cls}>
         {busy ? <span className="src-i spin" title="Removing…" /> : <SrcIcon s={s} />}
         <div className="src-t">
           <div className="src-n" title={s.name}>
             {s.name}
           </div>
-          <div className="src-d">{busy ? "Removing…" : s.detail}</div>
+          <div className="src-d">{busy ? "Removing…" : on ? s.detail : `Not used · ${s.detail}`}</div>
         </div>
+        {usable && (
+          <button
+            className={on ? "switch on src-use" : "switch src-use"}
+            role="switch"
+            aria-checked={on}
+            title={on ? "Used in answers and everything you make. Click to leave it out" : "Left out. Click to use it again"}
+            aria-label={`Use ${s.name}`}
+            onClick={() => onUse?.(s, !on)}
+          >
+            <span className="knob" />
+          </button>
+        )}
         {removable && (
           <button className="icon-btn src-x" title={verb} aria-label={`${verb} ${s.name}`} onClick={() => onRemove?.(s)}>
             <Icon name="x-lg" />

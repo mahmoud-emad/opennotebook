@@ -35,6 +35,10 @@ class SourceOut(BaseModel):
     title: str
     url: str = Field(description="Where it was read from; empty for a note, a file or a report")
     chars: int = Field(description="Length of the readable text")
+    active: bool = Field(
+        description="Whether anything reads it. A source switched off stays in the "
+        "collection, but Ask, search and every maker leave it out"
+    )
     created_at: datetime
 
     @computed_field(description="About how many words it holds")
@@ -238,6 +242,28 @@ async def read_source(cid: uuid.UUID, name: str, s: Db, me: Me) -> SourceText:
     if src is None:
         raise not_found("That source")
     return SourceText.model_validate(src, from_attributes=True)
+
+
+class SourceUse(BaseModel):
+    active: bool = Field(description="True to read the source, false to leave it out")
+
+
+@router.patch("/collections/{cid}/sources/{name}")
+async def use_source(cid: uuid.UUID, name: str, body: SourceUse, s: Db, me: Me) -> SourceOut:
+    """Switch a source on or off. Off, it stays in the collection but Ask,
+    search and every maker leave it out."""
+    await collections.refuse_read_only(s, await collections.lock(s, me.id, cid))
+    src = await s.scalar(
+        select(Source)
+        .options(defer(Source.text, raiseload=True))
+        .where(Source.collection_id == cid, Source.owner_id == me.id, Source.name == name)
+    )
+    if src is None:
+        raise not_found("That source")
+    src.active = body.active
+    await collections.touch(s, cid)
+    await s.flush()
+    return SourceOut.of(src)
 
 
 @router.delete("/collections/{cid}/sources/{name}", status_code=204)

@@ -16,6 +16,7 @@ import {
   sourceAddText,
   sourceAddUrls,
   sourceRemove,
+  sourceUse,
   type CollectionSummary,
   type SessionSummary,
 } from "../api";
@@ -316,6 +317,21 @@ export function pageActions(cid: string, S: PageState, chat: ChatState) {
       await loadSources();
       S.removing.set((v) => v.filter((f) => f !== s.file));
       await load();
+    })();
+  };
+
+  // A source switched on or off. Its row waits on the server's word, so the
+  // switch never shows a state the server does not hold.
+  const useSource = (s: Src, active: boolean) => {
+    if (s.file === "") return;
+    void (async () => {
+      try {
+        await sourceUse(cid, s.file, active);
+        setRowErr(`src:${s.file}`, "");
+      } catch (e) {
+        setRowErr(`src:${s.file}`, `It could not be switched ${active ? "on" : "off"}. ${errText(e)}`);
+      }
+      await loadSources();
     })();
   };
 
@@ -621,6 +637,7 @@ export function pageActions(cid: string, S: PageState, chat: ChatState) {
     addSource,
     research,
     removeSource,
+    useSource,
     setRowErr,
     uploadFiles,
     rename,

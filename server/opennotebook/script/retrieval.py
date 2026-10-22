@@ -73,7 +73,11 @@ async def retrieve(scope: Scope, query: str, top_k: int) -> Grounding:
             rows = await s.scalars(
                 select(Chunk.text)
                 .join(Source, Source.id == Chunk.source_id)
-                .where(Chunk.owner_id == scope.owner, Chunk.collection_id == scope.cid)
+                .where(
+                    Chunk.owner_id == scope.owner,
+                    Chunk.collection_id == scope.cid,
+                    Source.active,
+                )
                 .order_by(Source.created_at, Chunk.ord)
                 .limit(k)
             )

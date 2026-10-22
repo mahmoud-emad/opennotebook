@@ -498,6 +498,8 @@ button.ghost.bad:hover:not(:disabled) { background: var(--bs-danger-bg-subtle); 
 .src-d { font-size: 11px; color: var(--bs-secondary-color); margin-top: 1px; overflow-wrap: anywhere; }
 .src-x { width: 26px; height: 26px; flex: 0 0 auto; opacity: 0; transition: opacity var(--st-dur-fast) var(--st-ease); }
 .src:hover .src-x, .src-x:focus-visible, .src.bad .src-x { opacity: 1; }
+.src-use { flex: 0 0 auto; transform: scale(.8); transform-origin: right center; }
+.src.off .src-t, .src.off .src-i { opacity: .55; }
 @media (hover: none) { .src-x { opacity: 1; } }
 /* The source's own icon, on a light tile so dark icons stay visible. */
 .src-i { width: 24px; height: 24px; flex: 0 0 auto; border-radius: var(--bs-border-radius); padding: 3px; background: #fff;

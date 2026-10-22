@@ -522,6 +522,9 @@ export type ServerSource = {
   chars: number;
   detail: string;
   icon: string;
+  /** Whether anything reads it: Ask, search and the makers leave out a source
+   * that is off. */
+  active: boolean;
 };
 
 const serverSourceOf = (s: Rest.SourceOut): ServerSource => ({
@@ -531,6 +534,7 @@ const serverSourceOf = (s: Rest.SourceOut): ServerSource => ({
   chars: s.chars,
   detail: s.detail,
   icon: s.icon,
+  active: s.active,
 });
 
 export async function sourceList(
@@ -628,6 +632,12 @@ export async function sourceAddFile(cid: string, file: File): Promise<Fetched> {
 
 export async function sourceRemove(cid: string, name: string): Promise<void> {
   await call("DELETE", `/collections/${enc(cid)}/sources/${enc(name)}`);
+}
+
+/** Switch a source on or off: off, it stays in the collection but nothing
+ * reads it. */
+export async function sourceUse(cid: string, name: string, active: boolean): Promise<void> {
+  await call("PATCH", `/collections/${enc(cid)}/sources/${enc(name)}`, { active });
 }
 
 export async function sourceRead(

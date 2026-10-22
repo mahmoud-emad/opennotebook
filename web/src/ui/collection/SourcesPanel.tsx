@@ -222,6 +222,7 @@ function SourceList({ S, A, ro }: { S: PageState; A: PageActions; ro: boolean })
             key={srcKey(s)}
             s={s}
             onRemove={ro ? undefined : A.removeSource}
+            onUse={ro ? undefined : A.useSource}
             busy={s.file !== "" && removing.includes(s.file)}
             err={rowErr[`src:${s.file}`] ?? ""}
             onDismissErr={() => A.setRowErr(`src:${s.file}`, "")}

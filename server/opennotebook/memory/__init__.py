@@ -152,7 +152,7 @@ async def search(
     sources (or only the named ones)."""
     model = embed_model() if model is None else model
     n = max(top_k, 1) * CANDIDATES_PER_HIT
-    scope = "c.owner_id = :owner AND c.collection_id = :cid"
+    scope = "c.owner_id = :owner AND c.collection_id = :cid AND src.active"
     params: dict[str, object] = {"owner": owner, "cid": cid, "n": n}
     if sources is not None:
         scope += " AND src.name = ANY(:names)"

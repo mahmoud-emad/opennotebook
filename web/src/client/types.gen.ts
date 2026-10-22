@@ -2874,6 +2874,12 @@ export type SourceOut = {
      */
     chars: number;
     /**
+     * Active
+     *
+     * Whether anything reads it. A source switched off stays in the collection, but Ask, search and every maker leave it out
+     */
+    active: boolean;
+    /**
      * Created At
      */
     created_at: string;
@@ -2928,6 +2934,12 @@ export type SourceText = {
      */
     chars: number;
     /**
+     * Active
+     *
+     * Whether anything reads it. A source switched off stays in the collection, but Ask, search and every maker leave it out
+     */
+    active: boolean;
+    /**
      * Created At
      */
     created_at: string;
@@ -2955,6 +2967,18 @@ export type SourceText = {
      * The picture to lead its row with: its site's icon, loaded from the site itself; empty for a note, a file or a report
      */
     readonly icon: string;
+};
+
+/**
+ * SourceUse
+ */
+export type SourceUse = {
+    /**
+     * Active
+     *
+     * True to read the source, false to leave it out
+     */
+    active: boolean;
 };
 
 /**
@@ -3880,6 +3904,12 @@ export type SourceOutWritable = {
      */
     chars: number;
     /**
+     * Active
+     *
+     * Whether anything reads it. A source switched off stays in the collection, but Ask, search and every maker leave it out
+     */
+    active: boolean;
+    /**
      * Created At
      */
     created_at: string;
@@ -3915,6 +3945,12 @@ export type SourceTextWritable = {
      * Length of the readable text
      */
     chars: number;
+    /**
+     * Active
+     *
+     * Whether anything reads it. A source switched off stays in the collection, but Ask, search and every maker leave it out
+     */
+    active: boolean;
     /**
      * Created At
      */
@@ -4660,6 +4696,40 @@ export type ReadSourceResponses = {
 };
 
 export type ReadSourceResponse = ReadSourceResponses[keyof ReadSourceResponses];
+
+export type UseSourceData = {
+    body: SourceUse;
+    path: {
+        /**
+         * Cid
+         */
+        cid: string;
+        /**
+         * Name
+         */
+        name: string;
+    };
+    query?: never;
+    url: '/api/collections/{cid}/sources/{name}';
+};
+
+export type UseSourceErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type UseSourceError = UseSourceErrors[keyof UseSourceErrors];
+
+export type UseSourceResponses = {
+    /**
+     * Successful Response
+     */
+    200: SourceOut;
+};
+
+export type UseSourceResponse = UseSourceResponses[keyof UseSourceResponses];
 
 export type WebSearchData = {
     body: SearchReq;

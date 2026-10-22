@@ -563,7 +563,7 @@ async def source_names(t: Turn) -> list[str]:
         return list(
             await s.scalars(
                 select(Source.name)
-                .where(Source.collection_id == t.cid, Source.owner_id == t.owner)
+                .where(Source.collection_id == t.cid, Source.owner_id == t.owner, Source.active)
                 .order_by(Source.created_at, Source.name)
             )
         )
@@ -574,7 +574,7 @@ async def source_count(t: Turn) -> int:
         n = await s.scalar(
             select(func.count())
             .select_from(Source)
-            .where(Source.collection_id == t.cid, Source.owner_id == t.owner)
+            .where(Source.collection_id == t.cid, Source.owner_id == t.owner, Source.active)
         )
     return n or 0
 

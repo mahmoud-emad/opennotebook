@@ -24,14 +24,13 @@ async def read_docs(
     first. A name that is not one of its sources is refused rather than
     skipped, because an agent passing a stale name should hear about it."""
     q = (
-        select(Source.name, Source.title, Source.text, Source.url)
+        select(Source.name, Source.title, Source.text, Source.url, Source.active)
         .where(Source.collection_id == cid, Source.owner_id == owner)
         .order_by(Source.created_at, Source.name)
     )
     # Only the sources named are read: one source of a big collection is one
     # source's text, not all of them.
-    if names:
-        q = q.where(Source.name.in_(names))
+    q = q.where(Source.name.in_(names)) if names else q.where(Source.active)
     rows = list(await s.execute(q))
     if names:
         by_name = {r.name: r for r in rows}
@@ -41,8 +40,22 @@ async def read_docs(
                 f"“{missing}” is not a source of this collection. "
                 "List the collection's sources to see their names, then try again.",
             )
+        if off := next((n for n in names if not by_name[n].active), None):
+            raise Problem(
+                422,
+                f"“{off}” is switched off, so nothing reads it. "
+                "Switch it on in the sources list, then try again.",
+            )
         rows = [by_name[n] for n in dict.fromkeys(names)]
     if not rows:
+        if not names and await s.scalar(
+            select(Source.id).where(Source.collection_id == cid, Source.owner_id == owner).limit(1)
+        ):
+            raise Problem(
+                409,
+                "Every source of this collection is switched off, so there is nothing to read. "
+                "Switch one on in the sources list, then try again.",
+            )
         raise Problem(409, readable("no sources"))
     docs = [
         NamedDoc(name=r.name, title=r.title.strip() or r.name, text=r.text, url=r.url)

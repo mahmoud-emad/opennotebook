@@ -267,6 +267,9 @@ class Source(Base):
     text: Mapped[str] = mapped_column(Text)
     chars: Mapped[int] = _count()
     file_path: Mapped[str | None] = mapped_column(Text)
+    # Whether anything reads it. Ask, search and every maker leave out a source
+    # that is switched off; it stays in the collection until it is removed.
+    active: Mapped[bool] = _flag(True)
     created_at: Mapped[datetime] = _now()
 
 
