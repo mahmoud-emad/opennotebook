@@ -1146,3 +1146,8 @@ select.set-input { padding-right: 6px; }
 @keyframes jl-blink { 50% { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .joblog.live > summary::after, .jl-caret { animation: none; } }
 .out-video-log { flex-basis: 100%; margin: -2px 0 8px 18px; }
+
+.tf-acts { flex-direction: row; gap: 6px; align-items: center; flex-shrink: 0; }
+.tf-prompt { white-space: pre-wrap; overflow-wrap: anywhere; }
+.tf-none { padding: 8px 0; }
+.tf-text { height: 96px; padding-top: 8px; resize: vertical; }

@@ -14,6 +14,7 @@ import {
   SETTINGS,
   TAB_LABELS,
   THEME,
+  TRANSFORMATIONS,
   applyTheme,
   effective,
   keys,
@@ -26,6 +27,7 @@ import {
   type ThemePref,
 } from "./settings";
 import { ProvidersPanel } from "./providers";
+import { TransformationsPanel } from "./transformations";
 import { focusId } from "./shell";
 import { useStore } from "./store";
 import { assetUrl, styleList, type StyleChoice } from "./api-studio";
@@ -281,6 +283,8 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
           )}
           {current === PROVIDERS ? (
             <ProvidersPanel />
+          ) : current === TRANSFORMATIONS ? (
+            <TransformationsPanel />
           ) : !loaded && d.items.length === 0 ? (
             <div className="set-note">
               <span className="mini-spin" /> Loading settings…
@@ -313,7 +317,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
               );
             })
           )}
-          {current !== PROVIDERS && (
+          {current !== PROVIDERS && current !== TRANSFORMATIONS && (
             <p className="set-foot">
               Saved as soon as you change it, for the next thing you make or open.
               {current === GENERAL && " The theme is kept in this browser."}

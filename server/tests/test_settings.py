@@ -90,13 +90,14 @@ def test_the_tabs_are_in_the_plans_order_and_each_has_its_info() -> None:
         "Voices",
         "Live conversation",
         "Costs & limits",
+        "Transformations",
         "AI providers",
         "Models",
     )
     assert tuple(t.label for t in st.TAB_INFO) == st.TABS
     for t in st.TABS:
-        # AI providers is drawn from its own route, not from settings.
-        if t != st.TAB_PROVIDERS:
+        # These are drawn from their own routes, not from settings.
+        if t not in (st.TAB_PROVIDERS, st.TAB_TRANSFORMATIONS):
             assert any(d.tab == t for d in st.CATALOGUE), f"{t} is empty"
 
 

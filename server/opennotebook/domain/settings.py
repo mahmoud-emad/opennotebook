@@ -269,6 +269,7 @@ TAB_CONVERSATION = "Live conversation"
 TAB_COSTS = "Costs & limits"
 TAB_MODELS = "Models"
 TAB_PROVIDERS = "AI providers"
+TAB_TRANSFORMATIONS = "Transformations"
 
 
 @dataclass(frozen=True)
@@ -291,6 +292,13 @@ TAB_INFO: tuple[Tab, ...] = (
     Tab("voices", TAB_VOICES),
     Tab("conversation", TAB_CONVERSATION),
     Tab("costs", TAB_COSTS),
+    # Drawn by the page itself from `/api/transformations`: it holds no settings.
+    Tab(
+        "transformations",
+        TAB_TRANSFORMATIONS,
+        "Instructions to run over your sources with /transform in Ask. Add your own to the "
+        "built-in ones.",
+    ),
     # Drawn by the page itself from `/api/ai/providers`: it holds no settings.
     Tab(
         "providers",
