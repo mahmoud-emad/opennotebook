@@ -3,3 +3,6 @@ contact_links:
   - name: Security issue
     url: https://github.com/mahmoud-emad/opennotebook/security/advisories/new
     about: Please report vulnerabilities privately, not as an issue.
+  - name: Question or idea
+    url: https://github.com/mahmoud-emad/opennotebook/discussions
+    about: Ask how something works, or suggest an idea, in Discussions.

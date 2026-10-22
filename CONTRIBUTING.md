@@ -6,6 +6,10 @@ Thanks for wanting to help. Bug reports, ideas and pull requests are all welcome
 
 By taking part you agree to follow our [Code of Conduct](CODE_OF_CONDUCT.md).
 
+## Questions and ideas
+
+How-to questions, ideas and show-and-tell go in [Discussions](https://github.com/mahmoud-emad/opennotebook/discussions). Bugs go in [issues](https://github.com/mahmoud-emad/opennotebook/issues).
+
 ## Before you start
 
 For anything bigger than a small fix, please open an issue first so we can agree on the approach. It saves you from writing code that won't fit.
