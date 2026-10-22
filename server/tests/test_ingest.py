@@ -255,3 +255,15 @@ async def test_a_linked_pdf_is_read_whatever_its_address(monkeypatch: pytest.Mon
     async with sources.http_client() as http:
         page = await sources.read_page(http, "https://arxiv.example/pdf/1706.03762")
     assert len(page.text.split()) > 20
+
+
+def test_pages_are_asked_for_the_way_a_browser_asks() -> None:
+    """Sites that screen out scripts (Medium, behind Cloudflare) answer a
+    challenge page to Title-Case header names and the article to lowercase
+    ones, and to a request with no browser metadata at all."""
+    from opennotebook.domain import sources
+
+    h = sources.PAGE_HEADERS
+    assert all(k == k.lower() for k in h)
+    assert h["sec-fetch-mode"] == "navigate" and h["accept-language"]
+    assert h["user-agent"].startswith("Mozilla/5.0")

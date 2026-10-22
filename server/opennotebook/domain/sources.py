@@ -488,6 +488,22 @@ class OutsideOnly(httpx.AsyncBaseTransport):
         await self._inner.aclose()
 
 
+# What a browser sends when it opens a page. The names are lowercase on
+# purpose: header names are case-insensitive, but Cloudflare's bot screen
+# (Medium and many others sit behind it) answers a challenge page to the
+# same request with its names in Title-Case, and the page to one without.
+PAGE_HEADERS = {
+    "user-agent": USER_AGENT,
+    "accept": "text/html,application/xhtml+xml,application/pdf;q=0.9,*/*;q=0.8",
+    "accept-language": "en-US,en;q=0.9",
+    "sec-fetch-dest": "document",
+    "sec-fetch-mode": "navigate",
+    "sec-fetch-site": "none",
+    "sec-fetch-user": "?1",
+    "upgrade-insecure-requests": "1",
+}
+
+
 def http_client() -> httpx.AsyncClient:
     """The client pages are read with. Proxies set in the environment are
     ignored: a proxy would make its own connection, to an address nobody
@@ -495,10 +511,7 @@ def http_client() -> httpx.AsyncClient:
     return httpx.AsyncClient(
         transport=OutsideOnly(),
         trust_env=False,
-        headers={
-            "User-Agent": USER_AGENT,
-            "Accept": "text/html,application/xhtml+xml,application/pdf;q=0.9,*/*;q=0.8",
-        },
+        headers=PAGE_HEADERS,
         follow_redirects=True,
         max_redirects=10,
         timeout=httpx.Timeout(45, connect=15),
