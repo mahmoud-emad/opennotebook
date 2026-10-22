@@ -16,6 +16,8 @@ describe("switching a source", () => {
     S.srcs.set([src]);
     pageActions("c1", S, {} as ChatState).useSource(src, false);
     expect(S.srcs.get()[0]?.active).toBe(false);
+    // And says it is waiting, so the row can show it.
+    expect(S.rowBusy.get()["src:reefs.md"]).toBe("Switching…");
   });
 
   it("puts it back, saying why, when the server refuses", async () => {
@@ -33,6 +35,7 @@ describe("switching a source", () => {
     await vi.waitFor(() => expect(S.rowErr.get()["src:reefs.md"]).toContain("It could not be switched off."));
     expect(S.rowErr.get()["src:reefs.md"]).toContain("This is a read-only copy.");
     expect(S.srcs.get()[0]?.active).toBe(true);
+    expect(S.rowBusy.get()).toEqual({});
   });
 
   it("keeps it changed when the server agrees", async () => {
@@ -49,6 +52,7 @@ describe("switching a source", () => {
     S.srcs.set([src]);
     pageActions("c1", S, {} as ChatState).useSource(src, false);
     await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+    await vi.waitFor(() => expect(S.rowBusy.get()).toEqual({}));
     expect(S.srcs.get()[0]?.active).toBe(false);
     expect(S.rowErr.get()).toEqual({});
   });

@@ -1151,3 +1151,10 @@ select.set-input { padding-right: 6px; }
 .tf-prompt { white-space: pre-wrap; overflow-wrap: anywhere; }
 .tf-none { padding: 8px 0; }
 .tf-text { height: 96px; padding-top: 8px; resize: vertical; }
+
+.activity { position: fixed; top: 0; left: 0; right: 0; height: 3px; z-index: 1000; overflow: hidden; pointer-events: none; background: var(--st-pressed-bg); }
+.activity-run { display: block; height: 100%; width: 35%; background: var(--bs-primary); animation: pslide 1.2s var(--st-ease) infinite; }
+@media (prefers-reduced-motion: reduce) { .activity-run { animation: none; width: 100%; opacity: .5; } }
+.switch.busy { opacity: .6; cursor: progress; }
+.switch.busy .knob { animation: knob-wait .9s ease-in-out infinite alternate; }
+@keyframes knob-wait { to { transform: scale(.7); } }

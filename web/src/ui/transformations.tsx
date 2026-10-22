@@ -26,6 +26,8 @@ export function TransformationsPanel() {
   const [said, setSaid] = useState("");
   // The one asked "Remove it?", so a click is never the end of one.
   const [asked, setAsked] = useState<string | null>(null);
+  // The one being removed: its buttons wait for the answer.
+  const [removing, setRemoving] = useState<string | null>(null);
 
   const load = useCallback(() => {
     transformationsLoad().then(
@@ -59,14 +61,20 @@ export function TransformationsPanel() {
   };
 
   const remove = (t: Transformation) => {
-    setAsked(null);
     setSaid("");
+    setRemoving(t.id);
     transformationRemove(t.id).then(
       () => {
         if (draft.id === t.id) setDraft(BLANK);
+        setRemoving(null);
+        setAsked(null);
         load();
       },
-      (e: unknown) => setSaid(`“${t.name}” could not be removed. ${errText(e)}`),
+      (e: unknown) => {
+        setRemoving(null);
+        setAsked(null);
+        setSaid(`“${t.name}” could not be removed. ${errText(e)}`);
+      },
     );
   };
 
@@ -117,7 +125,11 @@ export function TransformationsPanel() {
               <button className="ghost" onClick={() => setDraft({ id: t.id, name: t.name, prompt: t.prompt })}>
                 Change
               </button>
-              {asked === t.id ? (
+              {removing === t.id ? (
+                <span className="dim small" role="status">
+                  <span className="mini-spin" /> Removing…
+                </span>
+              ) : asked === t.id ? (
                 <>
                   <button className="primary" onClick={() => remove(t)}>
                     Remove it

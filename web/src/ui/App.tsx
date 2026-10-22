@@ -23,6 +23,7 @@ import { follow, routeFromLocation, routeUrl, sameView, setNav, setRoute, type O
 import { GENERAL, SETTINGS, openSettings, reloadSettings } from "./settings";
 import { FLASH, NOTICE, SNACK, SNACK_MS, snack, type Output } from "./shell";
 import { useStore } from "./store";
+import { ActivityBar } from "./activity";
 
 // The collection page, the map and the notes load when a collection is first
 // opened, so the first screen stays small.
@@ -286,6 +287,7 @@ export function App() {
 
   return (
     <>
+      <ActivityBar />
       <header>
         {/* The logo is the way to the root, Discover, as on every site. */}
         <button

@@ -117,6 +117,7 @@ export function SrcRow({
   s,
   onRemove,
   onUse,
+  using = false,
   busy = false,
   err = "",
   onDismissErr,
@@ -125,6 +126,8 @@ export function SrcRow({
   onRemove?: (s: Src) => void;
   /** Switches the source on or off; without it the row shows no switch. */
   onUse?: (s: Src, active: boolean) => void;
+  /** Being switched on or off: the switch says so and waits for the answer. */
+  using?: boolean;
   /** Being removed: the row says so and offers nothing until it is gone. */
   busy?: boolean;
   /** Why the last removal failed, said under the row; empty when none did. */
@@ -153,9 +156,11 @@ export function SrcRow({
         </div>
         {usable && (
           <button
-            className={on ? "switch on src-use" : "switch src-use"}
+            className={`switch src-use${on ? " on" : ""}${using ? " busy" : ""}`}
             role="switch"
             aria-checked={on}
+            aria-busy={using}
+            disabled={using}
             title={on ? "Used in answers and everything you make. Click to leave it out" : "Left out. Click to use it again"}
             aria-label={`Use ${s.name}`}
             onClick={() => onUse?.(s, !on)}

@@ -334,15 +334,19 @@ export function pageActions(cid: string, S: PageState, chat: ChatState) {
   const useSource = (s: Src, active: boolean) => {
     if (s.file === "") return;
     const show = (on: boolean) => S.srcs.set((v) => v.map((x) => (x.file === s.file ? { ...x, active: on } : x)));
+    const key = `src:${s.file}`;
+    if (S.rowBusy.get()[key]) return;
     show(active);
+    setRowBusy(key, "Switching…");
     void (async () => {
       try {
         await sourceUse(cid, s.file, active);
-        setRowErr(`src:${s.file}`, "");
+        setRowErr(key, "");
       } catch (e) {
         show(!active);
-        setRowErr(`src:${s.file}`, `It could not be switched ${active ? "on" : "off"}. ${errText(e)}`);
+        setRowErr(key, `It could not be switched ${active ? "on" : "off"}. ${errText(e)}`);
       }
+      setRowBusy(key, "");
     })();
   };
 

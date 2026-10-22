@@ -176,6 +176,7 @@ function SourceList({ S, A, ro }: { S: PageState; A: PageActions; ro: boolean })
   const addingNote = useStore(S.addingNote);
   const removing = useStore(S.removing);
   const rowErr = useStore(S.rowErr);
+  const rowBusy = useStore(S.rowBusy);
   const takes = useStoreSel(S.opts, (o) => o?.research.takes ?? "");
   return (
     <div className="srclist" aria-live="polite">
@@ -239,6 +240,7 @@ function SourceList({ S, A, ro }: { S: PageState; A: PageActions; ro: boolean })
             s={s}
             onRemove={ro ? undefined : A.removeSource}
             onUse={ro ? undefined : A.useSource}
+            using={s.file !== "" && !!rowBusy[`src:${s.file}`]}
             busy={s.file !== "" && removing.includes(s.file)}
             err={rowErr[`src:${s.file}`] ?? ""}
             onDismissErr={() => A.setRowErr(`src:${s.file}`, "")}

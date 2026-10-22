@@ -13,6 +13,12 @@ import { UNKNOWN, UNREACHABLE, unworded } from "./errors";
 import { fromWireKind, ms } from "./helpers";
 import type { LogLine } from "./joblog";
 import { sseFrames } from "./sse";
+import { store } from "./store";
+
+/** How many requests are waiting on the server right now, for the activity
+ * bar. A request that has not been answered is counted from the moment it is
+ * sent to the moment it is, however it ends. */
+export const PENDING = store(0);
 
 /** The service root this bundle was served under, with no trailing slash:
  * whatever precedes `/ui` in the address. */
@@ -63,6 +69,20 @@ export async function call<T>(
 
 /** `call`, with the headers the answer came with. */
 async function send<T>(
+  method: string,
+  path: string,
+  body?: unknown,
+  init: RequestInit = {},
+): Promise<{ data: T; headers: Headers }> {
+  PENDING.set((n) => n + 1);
+  try {
+    return await sendOne<T>(method, path, body, init);
+  } finally {
+    PENDING.set((n) => n - 1);
+  }
+}
+
+async function sendOne<T>(
   method: string,
   path: string,
   body?: unknown,

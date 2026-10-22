@@ -150,7 +150,7 @@ export function WatchPage({ sid, style, share }: { sid: string; style: VideoStyl
           <Icon name="chevron-left" />
         </button>
         <div className="w-titles">
-          <div className="w-title">{script?.title ?? ""}</div>
+          <div className="w-title">{script?.title ?? (loadErr === "" ? "Opening the video…" : "")}</div>
           <div className="w-sub">
             {videoName({ style, theme: script?.theme })}
             {duration > 0 && ` · ${clock(duration)}`}

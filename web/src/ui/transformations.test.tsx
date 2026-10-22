@@ -95,6 +95,7 @@ describe("Settings › Transformations", () => {
     expect(screen.getByRole("button", { name: "Remove" })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Remove" }));
     fireEvent.click(screen.getByRole("button", { name: "Remove it" }));
+    expect(screen.getByRole("status").textContent).toContain("Removing…");
     await waitFor(() => expect(calls.some((c) => c[0] === "DELETE" && c[1].endsWith("/transformations/u1"))).toBe(true));
   });
 

@@ -42,4 +42,15 @@ describe("a source's switch", () => {
     fireEvent.click(sw);
     expect(onUse).toHaveBeenCalledWith(expect.anything(), true);
   });
+
+  it("waits for the answer: the switch says so and cannot be pressed again", () => {
+    const onUse = vi.fn();
+    const { container } = render(<SrcRow s={src()} onUse={onUse} using />);
+    const sw = container.querySelector(".src-use") as HTMLButtonElement;
+    expect(sw.getAttribute("aria-busy")).toBe("true");
+    expect(sw.disabled).toBe(true);
+    expect(sw.className).toContain("busy");
+    fireEvent.click(sw);
+    expect(onUse).not.toHaveBeenCalled();
+  });
 });
