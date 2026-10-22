@@ -9,11 +9,11 @@ dependencies = [
     # Microsoft's free neural voices (speech/microsoft.py). LGPLv3, used
     # unmodified as a dependency.
     "edge-tts==7.3.1",
-    "fastapi==0.143.5",
+    "fastapi==0.149.0",
     "fonttools==4.67.0",
     "httpx==0.28.1",
     # The openai SDK's own fork of httpx; the AI client uses it directly.
-    "httpx2==2.13.1",
+    "httpx2==2.14.0",
     "lxml==6.1.3",
     # Decodes Edge's MP3 to WAV without ffmpeg. MIT.
     "mcp==2.3.0",
