@@ -4,7 +4,7 @@
 #   docker build -f deploy/web.Dockerfile .
 
 # ── build: web/dist, the same build CI runs, size budget included ────────────
-FROM node:24.21.0-trixie-slim AS build
+FROM node:24.22.0-trixie-slim AS build
 RUN npm install --global pnpm@12.9.1
 WORKDIR /web
 COPY web/package.json web/pnpm-lock.yaml web/pnpm-workspace.yaml ./
