@@ -5,15 +5,15 @@ description = "OpenNotebook server: collections, sources, studio outputs and the
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
-    "alembic==1.20.0",
+    "alembic==1.20.1",
     # Microsoft's free neural voices (speech/microsoft.py). LGPLv3, used
     # unmodified as a dependency.
     "edge-tts==7.3.1",
-    "fastapi==0.143.5",
+    "fastapi==0.162.0",
     "fonttools==4.67.0",
     "httpx==0.28.1",
     # The openai SDK's own fork of httpx; the AI client uses it directly.
-    "httpx2==2.13.1",
+    "httpx2==2.16.0",
     "lxml==6.1.3",
     # Decodes Edge's MP3 to WAV without ffmpeg. MIT.
     "mcp==2.3.0",
@@ -22,21 +22,21 @@ dependencies = [
     # onnxruntime (MIT), the same runtime version the page uses.
     "numpy==2.5.4",
     "onnxruntime==1.31.0",
-    "openai==3.35.1",
+    "openai==3.38.0",
     "openpyxl==3.1.5",
     "pdfplumber==0.11.10",
     "pgvector==0.5.1",
-    "playwright==1.64.0",
+    "playwright==1.64.1",
     "procrastinate==3.10.0",
     "psycopg[binary,pool]==3.3.6",
     "pydantic==2.14.1",
-    "pydantic-settings==2.16.0",
+    "pydantic-settings==2.16.1",
     "pypdfium2==5.14.0",
     "python-multipart>=0.0.20",
     "python-pptx==1.0.2",
-    "semantic-text-splitter==0.33.0",
-    "skia-python==144.0.post2",
-    "sqlalchemy[asyncio]==2.1.5",
+    "semantic-text-splitter==0.33.1",
+    "skia-python==144.1",
+    "sqlalchemy[asyncio]==2.1.6",
     "trafilatura==2.3.1",
     "uvicorn[standard]==0.54.0",
     # YouTube captions for a video link (youtube.py). MIT.
@@ -48,7 +48,7 @@ dev = [
     "pyright==1.1.414",
     "pytest==9.1.1",
     "pytest-asyncio>=1.2",
-    "ruff==0.17.1",
+    "ruff==0.17.2",
 ]
 
 [project.scripts]
