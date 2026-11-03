@@ -6,7 +6,7 @@
 FROM ghcr.io/astral-sh/uv:0.13.6 AS uv
 
 # ── build: resolve the locked dependencies into /app/.venv ───────────────────
-FROM python:3.15.0-slim-trixie AS build
+FROM python:3.14.8-slim-trixie AS build
 COPY --from=uv /uv /usr/local/bin/uv
 ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
@@ -27,7 +27,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev
 
 # ── run: the slim image, the code and its venv, a user that is not root ──────
-FROM python:3.15.0-slim-trixie
+FROM python:3.14.8-slim-trixie
 # Videos (docs/video-overview-spec.md): ffmpeg encodes them, as a program of
 # its own and never linked in (its x264 is GPL); skia draws a whiteboard's
 # frames on the CPU but loads libEGL and libGL all the same.

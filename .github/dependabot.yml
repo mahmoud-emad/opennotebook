@@ -34,6 +34,9 @@ updates:
       # Node moves with CI and the README, LTS releases only, by hand.
       - dependency-name: node
         update-types: ["version-update:semver-major"]
+      # Python stays on 3.14 until the server's dependencies (onnxruntime) ship wheels for the next one.
+      - dependency-name: python
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
     groups:
       images:
         patterns: ["*"]
