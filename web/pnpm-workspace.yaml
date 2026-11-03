@@ -8,3 +8,7 @@ allowBuilds:
 overrides:
   # @hey-api's ref parser pins 4.2.0, which has CPU-exhaustion advisories.
   js-yaml: 4.3.2
+  # eslint 10 pins minimatch 10.x, which has a denial-of-service advisory.
+  minimatch: 11.0.1
+  # eslint-plugin-react-hooks pulls zod 4.6.5, which has an advisory fixed in 4.6.6.
+  zod: 4.6.6
