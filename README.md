@@ -72,6 +72,10 @@ If you change the API, run `make api-client` to regenerate the web app's client.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) before you open a pull request. The design and the reasoning behind each feature are in [docs/](docs/).
 
+## Listed on the XERJ Corpus Hub
+
+OpenNotebook is part of the [XERJ Corpus Hub](https://hub.xerj.org/contributors/mahmoud-emad), a public index of open-source projects that help make AI work better and more predictable.
+
 ## License
 
 MIT. See [LICENSE](LICENSE).
