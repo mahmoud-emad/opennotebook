@@ -9,6 +9,7 @@ Turn PDFs, web pages, YouTube videos and recordings into narrated slide decks, v
 [![Release](https://img.shields.io/github/v/release/mahmoud-emad/opennotebook)](https://github.com/mahmoud-emad/opennotebook/releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Docker](https://img.shields.io/badge/run%20with-docker%20compose-2496ED?logo=docker&logoColor=white)](#try-it)
+[![Sponsor](https://img.shields.io/badge/sponsor-%E2%99%A5-ea4aaa?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/mahmoud-emad)
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 [![XERJ Corpus Hub](https://hub.xerj.org/contributors/mahmoud-emad/badge.svg)](https://hub.xerj.org/contributors/mahmoud-emad)
 
@@ -117,6 +118,7 @@ If OpenNotebook is useful to you, a ⭐ helps other people find it.
 
 - **Try it and tell us what broke or felt rough.** [Open an issue](https://github.com/mahmoud-emad/opennotebook/issues/new/choose).
 - **Ask or show off** in [Discussions](https://github.com/mahmoud-emad/opennotebook/discussions).
+- **Sponsor the work.** OpenNotebook is free and MIT licensed. [Sponsoring](https://github.com/sponsors/mahmoud-emad) pays for the time to keep it maintained and growing.
 - **Send a fix.** Start with an issue labelled [good first issue](https://github.com/mahmoud-emad/opennotebook/labels/good%20first%20issue) and read [CONTRIBUTING.md](CONTRIBUTING.md).
 
 [![Star History Chart](https://api.star-history.com/svg?repos=mahmoud-emad/opennotebook&type=Date)](https://star-history.com/#mahmoud-emad/opennotebook&Date)
