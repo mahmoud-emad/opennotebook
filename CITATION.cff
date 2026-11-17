@@ -1,0 +1,11 @@
+cff-version: 1.2.0
+message: "If you use OpenNotebook in your work, please cite it like this."
+title: "OpenNotebook"
+abstract: "An open-source, self-hosted study studio in the spirit of NotebookLM."
+type: software
+license: MIT
+version: 0.2.0
+date-released: 2026-10-12
+repository-code: "https://github.com/mahmoud-emad/opennotebook"
+authors:
+  - name: "OpenNotebook contributors"
