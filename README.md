@@ -1,23 +1,48 @@
+<div align="center">
+
 # OpenNotebook
 
+**The open-source, self-hosted NotebookLM alternative.**<br>
+Turn PDFs, web pages, YouTube videos and recordings into narrated slide decks, video and audio overviews, mind maps and study notes. Every claim links back to its source.
+
 [![CI](https://github.com/mahmoud-emad/opennotebook/actions/workflows/ci.yml/badge.svg)](https://github.com/mahmoud-emad/opennotebook/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/mahmoud-emad/opennotebook)](https://github.com/mahmoud-emad/opennotebook/releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Docker](https://img.shields.io/badge/run%20with-docker%20compose-2496ED?logo=docker&logoColor=white)](#try-it)
+[![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 [![XERJ Corpus Hub](https://hub.xerj.org/contributors/mahmoud-emad/badge.svg)](https://hub.xerj.org/contributors/mahmoud-emad)
 
-OpenNotebook is an open-source study studio, in the spirit of NotebookLM, that you can run yourself.
+[Try it](#try-it) · [What it makes](#what-it-makes) · [Why it exists](#why-opennotebook) · [Roadmap](#roadmap) · [Contributing](CONTRIBUTING.md) · [Discussions](https://github.com/mahmoud-emad/opennotebook/discussions)
 
 <img width="1706" height="931" alt="A collection in OpenNotebook, with its sources and what was made from them" src="https://github.com/user-attachments/assets/35eaeaa8-2068-4aa9-991e-88c50d6ce76c" />
 
+</div>
+
+## What it makes
+
 Put your sources into a collection: PDFs, Office files, web links, YouTube videos, audio and video recordings (transcribed for you), pasted notes, or a research report it writes for you. Then turn them into something you can learn from:
 
-- **Narrated slide decks.** You can stop them at any point and ask a question out loud.
-- **Video overviews.** Slides or a hand-drawn whiteboard, with chapters and captions that follow along word by word.
-- **Audio overviews.** One host or two, talking it through.
-- **Mind maps and study notes.**
+| | |
+| --- | --- |
+| **Narrated slide decks** | Stop at any point and ask a question out loud. |
+| **Video overviews** | Slides or a hand-drawn whiteboard in ten looks, with chapters and captions that follow along word by word. |
+| **Audio overviews** | One host or two, talking it through. |
+| **Mind maps and study notes** | The shape of a topic at a glance, and notes to revise from. |
+| **Chat with citations** | Ask your sources questions and keep an answer as a note. |
+| **Transformations** | `/transform` a summary, key claims, flashcards, a timeline, or an instruction of your own. |
 
-And you can work with the sources themselves: search them, switch any source off so nothing reads it, ask them questions and keep an answer as a note, or run a transformation (a summary, key claims, flashcards, a timeline, or an instruction of your own) with `/transform`.
+You stay in control of what is read: search the sources, or switch any one off so nothing uses it. Every claim links back to the passage it came from, so you can check it.
 
-Every claim links back to the passage it came from, so you can check it. When a collection is good, share it on Discover. Others can read it as it is, or copy it, make it their own, and share it again.
+When a collection is good, share it on **Discover**. Others can read it as it is, or copy it, make it their own, and share it again, with the author's say on whether copies can be edited.
+
+## Why OpenNotebook
+
+- **Yours.** It runs on your machine or server with Docker Compose. Your sources stay in your own Postgres.
+- **Any model.** Bring your own key for OpenRouter, OpenAI, Anthropic, Gemini, Azure OpenAI, Mistral, Groq, DeepSeek and more, or run a local Ollama or LM Studio. Mix providers per task.
+- **Free voices.** Narration works out of the box with no key. Switch to Azure Speech or any OpenAI-compatible speech server when you want more.
+- **Social by design.** Discover, share, and reuse turn a private notebook into something a community can learn from.
+- **Agent-ready.** It is an [MCP](#agents-mcp) server, so your own agents can read collections and ask cited questions.
+- **MIT licensed.** No open-core split, no telemetry.
 
 ## Try it
 
@@ -72,6 +97,29 @@ make check   # formatting, lint, types and tests, for both server and web
 If you change the API, run `make api-client` to regenerate the web app's client.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) before you open a pull request. The design and the reasoning behind each feature are in [docs/](docs/).
+
+## Roadmap
+
+Shipped: setup tour and key checks, every major AI provider, audio and video sources, YouTube, the MCP server, Discover, share and reuse.
+
+Next, roughly in this order. Open an issue or a discussion to say what matters to you:
+
+- More ways to share and find collections on Discover.
+- Better support for long recordings and large source sets.
+- More video looks and more voices and languages.
+- A hosted option, for people who would rather not run it.
+
+Releases and what changed in each are in the [changelog](CHANGELOG.md).
+
+## Get involved
+
+If OpenNotebook is useful to you, a ⭐ helps other people find it.
+
+- **Try it and tell us what broke or felt rough.** [Open an issue](https://github.com/mahmoud-emad/opennotebook/issues/new/choose).
+- **Ask or show off** in [Discussions](https://github.com/mahmoud-emad/opennotebook/discussions).
+- **Send a fix.** Start with an issue labelled [good first issue](https://github.com/mahmoud-emad/opennotebook/labels/good%20first%20issue) and read [CONTRIBUTING.md](CONTRIBUTING.md).
+
+[![Star History Chart](https://api.star-history.com/svg?repos=mahmoud-emad/opennotebook&type=Date)](https://star-history.com/#mahmoud-emad/opennotebook&Date)
 
 ## License
 
