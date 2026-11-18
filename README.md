@@ -15,7 +15,7 @@ Turn PDFs, web pages, YouTube videos and recordings into narrated slide decks, v
 
 [Website](https://mahmoud-emad.github.io/opennotebook/) · [Try it](#try-it) · [What it makes](#what-it-makes) · [Why it exists](#why-opennotebook) · [Roadmap](#roadmap) · [Contributing](CONTRIBUTING.md) · [Discussions](https://github.com/mahmoud-emad/opennotebook/discussions)
 
-<img width="1706" height="931" alt="A collection in OpenNotebook, with its sources and what was made from them" src="https://github.com/user-attachments/assets/35eaeaa8-2068-4aa9-991e-88c50d6ce76c" />
+<img src="docs/img/demo.gif" alt="Adding two links to a collection, making an audio overview and a mind map, then asking a question and getting a cited answer" width="1100">
 
 </div>
 
