@@ -1,4 +1,5 @@
-# The project site (site/), published to GitHub Pages. It checks that every
+# The project site (site/), published to GitHub Pages. It borrows the studio's
+# tokens (web/src/styles/theme.css) so the two look alike, checks that every
 # local file the page points at exists, on pull requests too, and deploys only
 # from main.
 
@@ -7,9 +8,9 @@ name: Pages
 on:
   push:
     branches: [main]
-    paths: ["site/**", ".github/workflows/pages.yml"]
+    paths: ["site/**", "web/src/styles/theme.css", ".github/workflows/pages.yml"]
   pull_request:
-    paths: ["site/**", ".github/workflows/pages.yml"]
+    paths: ["site/**", "web/src/styles/theme.css", ".github/workflows/pages.yml"]
   workflow_dispatch:
 
 concurrency:
@@ -24,6 +25,8 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Use the studio's own tokens
+        run: cp web/src/styles/theme.css site/theme.css
       - name: Check the page's local links
         run: |
           python3 - <<'PY'
