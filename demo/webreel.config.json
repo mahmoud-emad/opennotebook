@@ -1,0 +1,63 @@
+// The README and site demo, recorded with webreel (https://webreel.dev).
+// It needs a running studio with a provider connected and the collection
+// that demo/README.md describes. `make demo` records the three clips and
+// joins them (demo/build.sh).
+//
+// Three limits of webreel 0.1.4 shape this file. It cannot type into a field,
+// so the question comes from a mind map topic, which asks the chat about
+// itself. A recording stops at the first full page load, so each page is its
+// own clip. And the page's CSS zoom makes capture too slow to keep real time,
+// so the window is small (the app's text is then large in the frame) and
+// nothing is zoomed.
+{
+  "$schema": "https://webreel.dev/schema/v1.json",
+  "outDir": "./out",
+  "baseUrl": "$DEMO_URL",
+  "viewport": { "width": 1152, "height": 648 },
+  "defaultDelay": 600,
+  "clickDwell": 140,
+  "videos": {
+    // A collection: its sources, what it can make, and the cost before any spend.
+    "1-collection": {
+      "fps": 30,
+      "quality": 90,
+      "url": "/ui/c/$DEMO_COLLECTION",
+      "waitFor": { "text": "Editorial slides" },
+      "steps": [
+        { "action": "pause", "ms": 2400 },
+        { "action": "click", "text": "A conversation about your sources" },
+        { "action": "wait", "text": "within your" },
+        { "action": "pause", "ms": 2600 }
+      ]
+    },
+
+    // A narrated deck, played.
+    "2-slides": {
+      "fps": 30,
+      "quality": 90,
+      "url": "/ui/play/$DEMO_SLIDES",
+      "waitFor": { "selector": "#start" },
+      "steps": [
+        { "action": "pause", "ms": 1200 },
+        { "action": "click", "selector": "#start" },
+        { "action": "pause", "ms": 8000 }
+      ]
+    },
+
+    // The mind map: a click on a topic asks the chat, and the answer cites its sources.
+    "3-map": {
+      "fps": 30,
+      "quality": 90,
+      "url": "/ui/c/$DEMO_COLLECTION",
+      "waitFor": { "text": "Coral reefs and kelp forests" },
+      "steps": [
+        { "action": "pause", "ms": 800 },
+        { "action": "click", "text": "Coral reefs and kelp forests" },
+        { "action": "pause", "ms": 2200 },
+        { "action": "click", "text": "Kelp forests" },
+        { "action": "wait", "text": "Save as note", "timeout": 90000 },
+        { "action": "pause", "ms": 5500 }
+      ]
+    }
+  }
+}
