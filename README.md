@@ -15,7 +15,9 @@ Turn PDFs, web pages, YouTube videos and recordings into narrated slide decks, v
 
 [Website](https://mahmoud-emad.github.io/opennotebook/) · [Try it](#try-it) · [What it makes](#what-it-makes) · [Why it exists](#why-opennotebook) · [Roadmap](#roadmap) · [Contributing](CONTRIBUTING.md) · [Discussions](https://github.com/mahmoud-emad/opennotebook/discussions)
 
-<img width="1706" height="931" alt="A collection in OpenNotebook, with its sources and what was made from them" src="https://github.com/user-attachments/assets/35eaeaa8-2068-4aa9-991e-88c50d6ce76c" />
+<a href="https://mahmoud-emad.github.io/opennotebook/"><img src="docs/img/demo.gif" alt="A collection with its sources and outputs, a narrated deck playing, and a mind map topic asked and answered with citations" width="1000"></a>
+
+<sub>A collection, a narrated deck, and a cited answer. The <a href="https://mahmoud-emad.github.io/opennotebook/">full-quality video</a> is on the website.</sub>
 
 </div>
 
@@ -58,7 +60,7 @@ make up
 
 Then open <http://localhost/ui/>. On first run, a short setup tour asks for a provider and its key. It tests the key, checks that the account has credit, and suggests a model for each kind of work. To skip the tour, put the key in `deploy/.env` instead (`OPENROUTER_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, …).
 
-`make up` builds the images on your machine. To use the published ones instead:
+`make up` builds the images on your machine. To use the published ones instead (they run on Intel and ARM, including Apple Silicon):
 
 ```sh
 docker compose -f deploy/compose.yaml pull

@@ -74,6 +74,7 @@ nav a:hover { background: var(--st-hover-bg); color: var(--bs-body-color); }
   border: 1px solid var(--bs-border-color); border-radius: var(--bs-border-radius-xxl);
   box-shadow: var(--bs-box-shadow-lg);
 }
+.shot video { display: block; width: 100%; height: auto; }
 
 /* ── sections ─────────────────────────────────────────────────────────────── */
 section { padding: 56px 0; }

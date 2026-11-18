@@ -4,8 +4,8 @@ title: "OpenNotebook"
 abstract: "An open-source, self-hosted study studio in the spirit of NotebookLM."
 type: software
 license: MIT
-version: 0.2.0
-date-released: 2026-10-12
+version: 0.3.0
+date-released: 2026-11-18
 repository-code: "https://github.com/mahmoud-emad/opennotebook"
 authors:
   - name: "OpenNotebook contributors"

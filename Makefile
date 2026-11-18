@@ -1,4 +1,4 @@
-.PHONY: dev migrate api-client check check-server check-web fmt up down e2e
+.PHONY: dev migrate api-client check check-server check-web fmt up down e2e demo
 
 # FastAPI in server/, the React app in web/. Database settings come from
 # DATABASE_URL and TEST_DATABASE_URL, read from this file when it exists.
@@ -62,3 +62,10 @@ down:
 ## e2e: the Playwright suite against a running studio (make dev); E2E_URL picks another
 e2e:
 	cd web && $(PNPM) e2e
+
+## demo: record the README and site demo from a running studio (see demo/README.md)
+demo:
+	@test -n "$(DEMO_COLLECTION)" -a -n "$(DEMO_SLIDES)" || { echo "set DEMO_COLLECTION and DEMO_SLIDES: see demo/README.md"; exit 1; }
+	cd demo && DEMO_URL=$${DEMO_URL:-http://localhost:5173} DEMO_COLLECTION=$(DEMO_COLLECTION) DEMO_SLIDES=$(DEMO_SLIDES) \
+		npx --yes webreel@0.1.4 record --config webreel.config.json
+	demo/build.sh
