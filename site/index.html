@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OpenNotebook: the open-source, self-hosted NotebookLM alternative</title>
+  <meta name="description" content="Turn PDFs, web pages, YouTube videos and recordings into narrated slide decks, video and audio overviews, mind maps and study notes. Every claim links to its source. Run it yourself, with any AI provider.">
+  <link rel="canonical" href="https://mahmoud-emad.github.io/opennotebook/">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="OpenNotebook">
+  <meta property="og:description" content="The open-source, self-hosted NotebookLM alternative.">
+  <meta property="og:url" content="https://mahmoud-emad.github.io/opennotebook/">
+  <meta property="og:image" content="https://mahmoud-emad.github.io/opennotebook/img/social.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="top">
+    <div class="wrap">
+      <a class="brand" href="#"><img src="favicon.svg" alt="" width="28" height="28">OpenNotebook</a>
+      <nav>
+        <a href="#makes">What it makes</a>
+        <a href="#start">Run it</a>
+        <a class="keep" href="https://github.com/mahmoud-emad/opennotebook">GitHub</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <div class="hero wrap">
+      <h1>Your sources, turned into something you can learn from.</h1>
+      <p class="lead">OpenNotebook is the open-source, self-hosted NotebookLM alternative. Put in PDFs, web pages, YouTube videos and recordings, and get narrated decks, video and audio overviews, mind maps and notes. Every claim links back to its source.</p>
+      <div class="buttons">
+        <a class="btn primary" href="#start">Run it yourself</a>
+        <a class="btn" href="https://github.com/mahmoud-emad/opennotebook">Star on GitHub</a>
+      </div>
+      <div class="shot">
+        <img src="img/collection.jpg" alt="A collection in OpenNotebook, with its sources and what was made from them" width="1800" height="982">
+      </div>
+    </div>
+
+    <section id="makes">
+      <div class="wrap">
+        <h2>What it makes</h2>
+        <p class="sub">Put your sources into a collection, then turn them into something to learn from.</p>
+        <div class="grid">
+          <div class="card"><h3>Narrated slide decks</h3><p>Stop at any point and ask a question out loud.</p></div>
+          <div class="card"><h3>Video overviews</h3><p>Slides or a hand-drawn whiteboard in ten looks, with chapters and captions that follow along word by word.</p></div>
+          <div class="card"><h3>Audio overviews</h3><p>One host or two, talking it through.</p></div>
+          <div class="card"><h3>Mind maps and study notes</h3><p>The shape of a topic at a glance, and notes to revise from.</p></div>
+          <div class="card"><h3>Chat with citations</h3><p>Ask your sources questions and keep an answer as a note. Every claim links to its passage.</p></div>
+          <div class="card"><h3>Transformations</h3><p>A summary, key claims, flashcards, a timeline, or an instruction of your own.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="soft">
+      <div class="wrap">
+        <h2>Ten looks for video overviews</h2>
+        <p class="sub">Pick a look that fits the material, from a clean whiteboard to watercolor.</p>
+        <div class="looks">
+        <figure class="look"><img src="img/themes/whiteboard.jpg" alt="The whiteboard look for video overviews" loading="lazy" width="300" height="170"><figcaption>whiteboard</figcaption></figure>
+        <figure class="look"><img src="img/themes/chalkboard.jpg" alt="The chalkboard look for video overviews" loading="lazy" width="300" height="170"><figcaption>chalkboard</figcaption></figure>
+        <figure class="look"><img src="img/themes/notebook.jpg" alt="The notebook look for video overviews" loading="lazy" width="300" height="170"><figcaption>notebook</figcaption></figure>
+        <figure class="look"><img src="img/themes/blueprint.jpg" alt="The blueprint look for video overviews" loading="lazy" width="300" height="170"><figcaption>blueprint</figcaption></figure>
+        <figure class="look"><img src="img/themes/watercolor.jpg" alt="The watercolor look for video overviews" loading="lazy" width="300" height="170"><figcaption>watercolor</figcaption></figure>
+        <figure class="look"><img src="img/themes/papercraft.jpg" alt="The papercraft look for video overviews" loading="lazy" width="300" height="170"><figcaption>papercraft</figcaption></figure>
+        <figure class="look"><img src="img/themes/retro.jpg" alt="The retro look for video overviews" loading="lazy" width="300" height="170"><figcaption>retro</figcaption></figure>
+        <figure class="look"><img src="img/themes/heritage.jpg" alt="The heritage look for video overviews" loading="lazy" width="300" height="170"><figcaption>heritage</figcaption></figure>
+        <figure class="look"><img src="img/themes/kawaii.jpg" alt="The kawaii look for video overviews" loading="lazy" width="300" height="170"><figcaption>kawaii</figcaption></figure>
+        <figure class="look"><img src="img/themes/anime.jpg" alt="The anime look for video overviews" loading="lazy" width="300" height="170"><figcaption>anime</figcaption></figure>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="wrap">
+        <h2>How it works</h2>
+        <div class="steps">
+          <div class="step"><h3>Collect</h3><p>Add PDFs, Office files, links, YouTube videos, recordings or notes.</p></div>
+          <div class="step"><h3>Make</h3><p>Choose a deck, video, audio overview, mind map or notes.</p></div>
+          <div class="step"><h3>Check and share</h3><p>Follow any claim back to its source, then share the collection on Discover so others can read or reuse it.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="soft">
+      <div class="wrap">
+        <h2>Yours to run, with any model</h2>
+        <p class="sub">It runs on your machine or server, and your sources stay in your own Postgres. There is no telemetry, and it is MIT licensed.</p>
+        <div class="chips">
+          <span>OpenRouter</span><span>OpenAI</span><span>Anthropic</span><span>Google Gemini</span><span>Azure OpenAI</span><span>Mistral</span><span>Groq</span><span>DeepSeek</span><span>Cohere</span><span>Qwen</span><span>Fireworks</span><span>Cerebras</span><span>Together</span><span>xAI</span><span>Ollama</span><span>LM Studio</span><span>Any OpenAI-compatible server</span>
+        </div>
+        <p class="sub" style="margin-top:20px">It is also an MCP server, so your own agents can read collections and ask questions with citations.</p>
+      </div>
+    </section>
+
+    <section id="start">
+      <div class="wrap">
+        <h2>Run it</h2>
+        <p class="sub">You need Docker and an AI provider. A short setup tour on first run tests your key and suggests a model for each kind of work.</p>
+<pre><code>git clone https://github.com/mahmoud-emad/opennotebook.git
+cd opennotebook
+cp deploy/.env.example deploy/.env   # set POSTGRES_PASSWORD
+make up</code></pre>
+        <p>Then open <code>http://localhost/ui/</code>. The full guide is in the <a href="https://github.com/mahmoud-emad/opennotebook#try-it">README</a>.</p>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="wrap">
+      <span>MIT licensed. Made in the open.</span>
+      <span>
+        <a href="https://github.com/mahmoud-emad/opennotebook">GitHub</a> ·
+        <a href="https://github.com/mahmoud-emad/opennotebook/discussions">Discussions</a> ·
+        <a href="https://github.com/mahmoud-emad/opennotebook/blob/main/CHANGELOG.md">Changelog</a> ·
+        <a href="https://github.com/sponsors/mahmoud-emad">Sponsor</a>
+      </span>
+    </div>
+  </footer>
+</body>
+</html>

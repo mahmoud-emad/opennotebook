@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://mahmoud-emad.github.io/opennotebook/sitemap.xml

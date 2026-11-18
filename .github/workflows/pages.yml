@@ -1,0 +1,60 @@
+# The project site (site/), published to GitHub Pages. It checks that every
+# local file the page points at exists, on pull requests too, and deploys only
+# from main.
+
+name: Pages
+
+on:
+  push:
+    branches: [main]
+    paths: ["site/**", ".github/workflows/pages.yml"]
+  pull_request:
+    paths: ["site/**", ".github/workflows/pages.yml"]
+  workflow_dispatch:
+
+concurrency:
+  group: pages-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Check the page's local links
+        run: |
+          python3 - <<'PY'
+          import re, sys, pathlib
+          root = pathlib.Path("site")
+          html = (root / "index.html").read_text()
+          missing = []
+          for ref in re.findall(r'(?:src|href)="([^"#:]+)"', html):
+              if not (root / ref).exists():
+                  missing.append(ref)
+          if missing:
+              sys.exit("Missing files: " + ", ".join(sorted(set(missing))))
+          print("All local links resolve.")
+          PY
+      - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
+        if: github.event_name != 'pull_request'
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        if: github.event_name != 'pull_request'
+        with:
+          path: site
+
+  deploy:
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
