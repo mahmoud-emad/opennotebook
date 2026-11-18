@@ -60,7 +60,7 @@ make up
 
 Then open <http://localhost/ui/>. On first run, a short setup tour asks for a provider and its key. It tests the key, checks that the account has credit, and suggests a model for each kind of work. To skip the tour, put the key in `deploy/.env` instead (`OPENROUTER_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, …).
 
-`make up` builds the images on your machine. To use the published ones instead:
+`make up` builds the images on your machine. To use the published ones instead (they run on Intel and ARM, including Apple Silicon):
 
 ```sh
 docker compose -f deploy/compose.yaml pull
