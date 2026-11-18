@@ -13,7 +13,7 @@ Turn PDFs, web pages, YouTube videos and recordings into narrated slide decks, v
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 [![XERJ Corpus Hub](https://hub.xerj.org/contributors/mahmoud-emad/badge.svg)](https://hub.xerj.org/contributors/mahmoud-emad)
 
-[Try it](#try-it) · [What it makes](#what-it-makes) · [Why it exists](#why-opennotebook) · [Roadmap](#roadmap) · [Contributing](CONTRIBUTING.md) · [Discussions](https://github.com/mahmoud-emad/opennotebook/discussions)
+[Website](https://mahmoud-emad.github.io/opennotebook/) · [Try it](#try-it) · [What it makes](#what-it-makes) · [Why it exists](#why-opennotebook) · [Roadmap](#roadmap) · [Contributing](CONTRIBUTING.md) · [Discussions](https://github.com/mahmoud-emad/opennotebook/discussions)
 
 <img width="1706" height="931" alt="A collection in OpenNotebook, with its sources and what was made from them" src="https://github.com/user-attachments/assets/35eaeaa8-2068-4aa9-991e-88c50d6ce76c" />
 
