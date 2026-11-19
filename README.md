@@ -69,6 +69,8 @@ docker compose -f deploy/compose.yaml up -d --no-build
 
 To serve it on your own domain with HTTPS, set `DOMAIN` and `PUBLIC_URL` in `deploy/.env`. Every setting is explained in [deploy/.env.example](deploy/.env.example).
 
+If you get stuck during setup, see [first-run troubleshooting](docs/troubleshooting.md).
+
 ## Models and voices
 
 - **Models.** Connect one or more providers, in the setup tour, in Settings › AI providers, or with environment variables. Each kind of work uses a model your providers offer, and you can change it in Settings › Models. OpenRouter covers every feature with one key. Direct providers cover most of them; the tour shows which features have no model yet.
