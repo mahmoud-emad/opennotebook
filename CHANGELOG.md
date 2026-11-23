@@ -6,6 +6,7 @@ All notable changes to Notabit. The format follows [Keep a Changelog](https://ke
 
 ### Added
 
+- A guide to running fully offline with Ollama and a local speech server: [docs/offline-ollama.md](docs/offline-ollama.md). It is written from the code and not yet verified end to end, and says so.
 - `notabit mcp`: the agent tools over stdio, for MCP clients that start a command (Claude Desktop and similar) as well as the existing HTTP endpoint. It signs in with `NOTABIT_API_KEY` when the studio uses keys.
 
 ### Changed
