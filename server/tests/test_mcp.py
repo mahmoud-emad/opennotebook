@@ -1,6 +1,9 @@
 """The MCP tools at /api/mcp: each one a REST call made as its caller."""
 
 import asyncio
+import json
+import os
+import sys
 from collections.abc import AsyncIterator
 from typing import Any
 
@@ -105,3 +108,47 @@ async def test_an_agent_sees_only_its_keys_collections(
     # Without a key, in keys mode, nothing is answered.
     got = await tool(studio, "list_collections")
     assert got["isError"] is True
+
+
+async def test_stdio_lists_the_tools_with_nothing_else_running() -> None:
+    """`notabit mcp` answers a client that starts it as a command: it needs no
+    database to say what its tools are."""
+    env = os.environ | {"DATABASE_URL": "postgresql://nobody@127.0.0.1:1/none"}
+    proc = await asyncio.create_subprocess_exec(
+        sys.executable,
+        "-c",
+        "from notabit.cli import main; main()",
+        "mcp",
+        stdin=asyncio.subprocess.PIPE,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.DEVNULL,
+        env=env,
+    )
+    assert proc.stdin is not None and proc.stdout is not None
+
+    async def ask(message: dict[str, Any]) -> dict[str, Any]:
+        proc.stdin.write((json.dumps(message) + "\n").encode())  # type: ignore[union-attr]
+        await proc.stdin.drain()  # type: ignore[union-attr]
+        line = await asyncio.wait_for(proc.stdout.readline(), 60)  # type: ignore[union-attr]
+        return json.loads(line)
+
+    try:
+        hello = await ask(
+            {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "initialize",
+                "params": {
+                    "protocolVersion": "2025-03-26",
+                    "capabilities": {},
+                    "clientInfo": {"name": "test", "version": "0"},
+                },
+            }
+        )
+        assert hello["result"]["serverInfo"]["name"] == "Notabit"
+        listed = await ask({"jsonrpc": "2.0", "id": 2, "method": "tools/list"})
+        names = {t["name"] for t in listed["result"]["tools"]}
+        assert {"list_collections", "ask", "add_links"} <= names
+    finally:
+        proc.terminate()
+        await proc.wait()
