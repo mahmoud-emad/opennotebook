@@ -74,6 +74,7 @@ If you get stuck during setup, see [first-run troubleshooting](docs/troubleshoot
 ## Models and voices
 
 - **Models.** Connect one or more providers, in the setup tour, in Settings › AI providers, or with environment variables. Each kind of work uses a model your providers offer, and you can change it in Settings › Models. OpenRouter covers every feature with one key. Direct providers cover most of them; the tour shows which features have no model yet.
+- **Fully offline.** [Running with Ollama](docs/offline-ollama.md) walks through a setup where nothing leaves your machine, voices included.
 - **Voices.** By default it uses Microsoft's neural voices through Edge's free Read Aloud service, so you don't need a key. For heavier use, switch to Azure Speech (`NOTABIT_TTS_PROVIDER=azure`), or to an OpenAI-compatible speech server such as [Speaches](https://speaches.ai) (`openai`). Spoken questions are transcribed by that same server.
 
 Everything else (styles, voices, language, a spending limit) can be changed in the app's Settings.
