@@ -1,4 +1,5 @@
-"""`notabit`: run the api or the worker, or write the OpenAPI document."""
+"""`notabit`: run the api or the worker, serve the agent tools over stdio, or write the
+OpenAPI document."""
 
 import argparse
 import copy
@@ -65,6 +66,11 @@ def main() -> None:
     worker.add_argument(
         "--concurrency", type=int, default=4, help="jobs at once; builds still run one at a time"
     )
+    sub.add_parser(
+        "mcp",
+        help="serve the agent tools over stdio, for an MCP client that starts a command "
+        "(NOTABIT_API_KEY is the key it signs in with, when the studio uses keys)",
+    )
     sub.add_parser("openapi", help="print the OpenAPI document")
     args = p.parse_args()
 
@@ -94,6 +100,19 @@ def main() -> None:
 
         logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
         asyncio.run(job_worker.run(args.concurrency))
+    elif args.cmd == "mcp":
+        import logging
+        import os
+
+        from notabit.api import mcp as agent_tools
+        from notabit.main import create_app
+
+        # Stdout carries the protocol, so every log line goes to stderr.
+        logging.basicConfig(level=logging.INFO, format=LOG_FORMAT, stream=sys.stderr)
+        tools = agent_tools.make(
+            create_app(), api_key=os.environ.get("NOTABIT_API_KEY") or None, route=False
+        )
+        tools.run("stdio")
     elif args.cmd == "openapi":
         from notabit.main import app
 

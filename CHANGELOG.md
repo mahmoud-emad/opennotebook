@@ -4,6 +4,10 @@ All notable changes to Notabit. The format follows [Keep a Changelog](https://ke
 
 ## [Unreleased]
 
+### Added
+
+- `notabit mcp`: the agent tools over stdio, for MCP clients that start a command (Claude Desktop and similar) as well as the existing HTTP endpoint. It signs in with `NOTABIT_API_KEY` when the studio uses keys.
+
 ### Changed
 
 - The project is now called Notabit. The Python package, the `notabit` command, the images (`notabit-*`) and the repository links use the new name. Environment variables start with `NOTABIT_` instead of `OPENNOTEBOOK_`, and the default database name and user are `notabit`, so rename them in your `.env` and database when you upgrade.

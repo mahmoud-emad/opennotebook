@@ -82,6 +82,8 @@ Everything else (styles, voices, language, a spending limit) can be changed in t
 
 The studio is also an [MCP](https://modelcontextprotocol.io) server at `/api/mcp` (streamable HTTP). An agent can list collections, create one, add links, YouTube videos or notes, read sources, and ask questions answered with citations. It signs in with an API key, sent as `Authorization: Bearer <key>`, and sees only its owner's collections. Make a key with `POST /api/keys` (`{"name": "my agent"}`); in `local` mode an agent on the same machine needs none. Every model call it causes is charged to that owner.
 
+A client that starts a command instead of connecting to a URL (Claude Desktop, for example) can run `notabit mcp` from `server/` (`uv run notabit mcp`). It serves the same tools over stdio, reads the same `DATABASE_URL`, and signs in with the key in `NOTABIT_API_KEY` when the studio uses keys.
+
 ## Working on it
 
 The code is split into three folders:

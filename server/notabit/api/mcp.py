@@ -25,11 +25,16 @@ INSTRUCTIONS = (
 )
 
 
-def make(app: FastAPI) -> MCPServer:
+def make(app: FastAPI, *, api_key: str | None = None, route: bool = True) -> MCPServer:
     """The tools, calling `app`, and their route `/api/mcp` added to it,
     where the proxy in front already sends the API. Hosts
     are not checked here: who may call is decided by the API key, as for
-    the REST API. The app's lifespan runs `server.session_manager`."""
+    the REST API. The app's lifespan runs `server.session_manager`.
+
+    Over stdio (`notabit mcp`) there are no request headers, so the caller is
+    the one `api_key` names, or the local owner without one. Over HTTP it is
+    never given a key: a missing header must be refused, not answered as the
+    server's own key. `route=False` leaves the HTTP route out."""
     server = MCPServer(name="Notabit", instructions=INSTRUCTIONS)
 
     async def call(ctx: Context, method: str, path: str, body: Any = None) -> Any:
@@ -38,6 +43,8 @@ def make(app: FastAPI) -> MCPServer:
         headers = {}
         if (auth := (ctx.headers or {}).get("authorization")) is not None:
             headers["Authorization"] = auth
+        elif api_key:
+            headers["Authorization"] = f"Bearer {api_key}"
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(
             transport=transport, base_url="http://studio", timeout=300
@@ -120,6 +127,8 @@ def make(app: FastAPI) -> MCPServer:
         )
         return {"ok": r["ok"], "title": (r.get("source") or {}).get("title", "")}
 
+    if not route:
+        return server
     asgi = server.streamable_http_app(
         streamable_http_path="/api/mcp",
         stateless_http=True,
