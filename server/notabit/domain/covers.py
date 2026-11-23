@@ -240,6 +240,11 @@ def _problem(e: AiError | NotACover | TimeoutError) -> Problem:
     )
 
 
+def _one_line(text: str) -> str:
+    """`text` without line breaks, safe to put in a log entry."""
+    return text.replace("\r\n", "").replace("\n", "").replace("\r", "")
+
+
 async def redraw(owner: uuid.UUID, cid: uuid.UUID, *, force: bool) -> None:
     """Design a collection's cover from what it holds, unless nothing changed
     since the last design (`force` designs it anyway).
@@ -278,9 +283,11 @@ async def redraw(owner: uuid.UUID, cid: uuid.UUID, *, force: bool) -> None:
         ):
             designed = await design(cid, digest, model, language)
     except (AiError, NotACover, TimeoutError) as e:
-        # The reason can quote the model's reply, so only the kind of failure
-        # is logged; a forced redesign raises the full reason to the caller.
-        log.info("collection %s: cover kept: %s", cid, type(e).__name__)
+        # The reason can quote the model's reply and the id comes from a
+        # request: line breaks are removed from both, so neither can forge
+        # log entries.
+        why = _one_line(str(e))
+        log.info("collection %s: cover kept: %s", _one_line(str(cid)), why)
         failure = e
     async with sessionmaker()() as s, s.begin():
         c = await s.scalar(
