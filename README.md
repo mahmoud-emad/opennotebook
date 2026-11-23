@@ -11,6 +11,8 @@ Turn PDFs, web pages, YouTube videos and recordings into narrated slide decks, v
 [![Docker](https://img.shields.io/badge/run%20with-docker%20compose-2496ED?logo=docker&logoColor=white)](#try-it)
 [![Sponsor](https://img.shields.io/badge/sponsor-GitHub-ea4aaa?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/mahmoud-emad)
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
+[![AlternativeTo](https://img.shields.io/badge/AlternativeTo-listed-1e88e5)](https://alternativeto.net/software/notabit/)
+[![Glama MCP server](https://glama.ai/mcp/servers/mahmoud-emad/notabit/badges/score.svg)](https://glama.ai/mcp/servers/mahmoud-emad/notabit)
 [![XERJ Corpus Hub](https://hub.xerj.org/contributors/mahmoud-emad/badge.svg)](https://hub.xerj.org/contributors/mahmoud-emad)
 
 [Website](https://mahmoud-emad.github.io/notabit/) · [Try it](#try-it) · [What it makes](#what-it-makes) · [Why it exists](#why-notabit) · [Roadmap](#roadmap) · [Contributing](CONTRIBUTING.md) · [Discussions](https://github.com/mahmoud-emad/notabit/discussions)
