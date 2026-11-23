@@ -3,7 +3,7 @@
   "info": {
     "title": "Notabit",
     "description": "Collections of sources, and the decks, audio overviews, mind maps and notes made from them. Everything the web app does goes through this API.",
-    "version": "0.3.0"
+    "version": "0.4.0"
   },
   "paths": {
     "/api/health": {

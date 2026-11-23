@@ -4,6 +4,8 @@ All notable changes to Notabit. The format follows [Keep a Changelog](https://ke
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-23
+
 ### Added
 
 - A guide to running fully offline with Ollama and a local speech server: [docs/offline-ollama.md](docs/offline-ollama.md). It is written from the code and not yet verified end to end, and says so.
@@ -12,6 +14,10 @@ All notable changes to Notabit. The format follows [Keep a Changelog](https://ke
 ### Changed
 
 - The project is now called Notabit. The Python package, the `notabit` command, the images (`notabit-*`) and the repository links use the new name. Environment variables start with `NOTABIT_` instead of `OPENNOTEBOOK_`, and the default database name and user are `notabit`, so rename them in your `.env` and database when you upgrade.
+
+### Fixed
+
+- A failed cover design no longer writes the model's text, or a request's collection id, into a log entry with its line breaks intact, so neither can forge log lines.
 
 ## [0.3.0] - 2026-11-18
 
@@ -50,7 +56,8 @@ All notable changes to Notabit. The format follows [Keep a Changelog](https://ke
 
 The first public release: narrated slide decks, video overviews, audio overviews, mind maps and study notes, with every claim linked to its source.
 
-[Unreleased]: https://github.com/mahmoud-emad/notabit/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/mahmoud-emad/notabit/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/mahmoud-emad/notabit/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/mahmoud-emad/notabit/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/mahmoud-emad/notabit/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/mahmoud-emad/notabit/releases/tag/v0.1.0
