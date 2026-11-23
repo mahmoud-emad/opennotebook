@@ -6,7 +6,7 @@ import json
 from httpx import AsyncClient
 from sqlalchemy import text
 
-from opennotebook.db.session import engine
+from notabit.db.session import engine
 
 
 async def _setup(client: AsyncClient) -> tuple[str, str]:

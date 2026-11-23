@@ -12,12 +12,12 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy import text
 
-from opennotebook import cover
-from opennotebook.cover import CoverSpec, NotACover, Theme, draw, motifs
-from opennotebook.db.models import Collection, MindMap, Session, StudyNotes
-from opennotebook.db.session import engine, sessionmaker
-from opennotebook.domain import collections, covers, naming, refresh
-from opennotebook.domain import settings as st
+from notabit import cover
+from notabit.cover import CoverSpec, NotACover, Theme, draw, motifs
+from notabit.db.models import Collection, MindMap, Session, StudyNotes
+from notabit.db.session import engine, sessionmaker
+from notabit.domain import collections, covers, naming, refresh
+from notabit.domain import settings as st
 from tests.conftest import other_person
 from tests.fake_ai import FakeModel
 

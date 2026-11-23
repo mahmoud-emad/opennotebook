@@ -15,7 +15,7 @@ const e: Estimate = {
       step: "Draw the mind map",
       detail: "Reads every source whole in one call.",
       model: "google/gemini-2.5-flash-lite",
-      via: "opennotebook · OpenRouter",
+      via: "notabit · OpenRouter",
       calls_low: 1,
       calls_typical: 1,
       calls_high: 2,

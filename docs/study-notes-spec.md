@@ -1,4 +1,4 @@
-# OpenNotebook, study notes specification
+# Notabit, study notes specification
 
 Study notes of a collection's sources, on its collection page. The person adds sources, picks the Study notes tile, presses Generate, and gets a written study guide: an overview, the key ideas, a short-answer quiz with its answers, essay questions and a glossary. Every claim carries a numbered chip that shows the passage it rests on.
 
@@ -26,7 +26,7 @@ Google has published no prompt or design for NotebookLM's reports. What follows 
 | What is checked | A number naming no passage is removed. A citation whose claim shares fewer than two words with its passage is removed. Both are counted and shown. | Decided, and a departure: NotebookLM shows nothing about this. |
 | Numbering | Renumbered in reading order, so the reader meets `[1]` first | Decided, the same as `source_ask`. |
 | Format | Markdown under fixed headings, read into sections on the server | Decided. A heading the model renames ("Key concepts", "Short-answer questions") is still found. |
-| Model | `OPENNOTEBOOK_NOTES_MODEL`, default `google/gemini-2.5-flash-lite` | Decided. The script model's window is too small for a whole collection. |
+| Model | `NOTABIT_NOTES_MODEL`, default `google/gemini-2.5-flash-lite` | Decided. The script model's window is too small for a whole collection. |
 | One call or several | One call; a second only when the first has fewer than 2 ideas | Decided. Above 600,000 characters the sources are cut to excerpts, and the notes say so. |
 | Storage | `<data dir>/notes/<cid>/<id>.json` | Forced, as for maps: the build ingests everything in staging. |
 | Quiz answers | Hidden until asked for, one at a time or all | Decided. A study guide is for testing yourself. |
@@ -34,13 +34,13 @@ Google has published no prompt or design for NotebookLM's reports. What follows 
 
 ## 3. Where it lives
 
-- `server/opennotebook/script/notes.py`: the prompt, the citation check (`check_citations`), the section reader (`parse_sections`) and the Markdown export (`StudyNotes.to_markdown`). Their tests are `server/tests/test_notes.py`.
-- `server/opennotebook/script/grounding.py`: `passages()`, every prose passage of every source with its source index.
-- `server/opennotebook/api/rpc_methods.py`: the `notes` domain at `/api/notes/rpc`: `notes_create`, `notes_estimate`, `notes_list`, `notes_list_all`, `notes_get`, `notes_delete`.
-- `server/opennotebook/api/notes.py`: the REST routes under `/api/collections/{cid}/notes` and the store, the `study_notes` table (`StudyNotes` in `server/opennotebook/db/models.py`).
+- `server/notabit/script/notes.py`: the prompt, the citation check (`check_citations`), the section reader (`parse_sections`) and the Markdown export (`StudyNotes.to_markdown`). Their tests are `server/tests/test_notes.py`.
+- `server/notabit/script/grounding.py`: `passages()`, every prose passage of every source with its source index.
+- `server/notabit/api/rpc_methods.py`: the `notes` domain at `/api/notes/rpc`: `notes_create`, `notes_estimate`, `notes_list`, `notes_list_all`, `notes_get`, `notes_delete`.
+- `server/notabit/api/notes.py`: the REST routes under `/api/collections/{cid}/notes` and the store, the `study_notes` table (`StudyNotes` in `server/notabit/db/models.py`).
 - `web/src/ui/notes.tsx`: the notes' state and the viewer, `NotesView`. Citation chips are the chat's own (`withChips` in `web/src/ui/markdown.ts`).
 - `web/src/ui/collection/Studio.tsx` and `web/src/ui/collection/OutputsList.tsx`: Study Notes as an output and its row. `web/src/ui/routes.ts` gives notes their address, `/ui/c/<cid>/study-notes/<id>`, and still reads the old `/ui/new-study-notes` and `/ui/study-notes/<sid>/<id>`. The home card counts them (`web/src/ui/home.tsx`).
-- `server/opennotebook/agent/loop.py`: the agent's `start_build` can make study notes, as one of its four kinds.
+- `server/notabit/agent/loop.py`: the agent's `start_build` can make study notes, as one of its four kinds.
 
 ## 4. Measured
 

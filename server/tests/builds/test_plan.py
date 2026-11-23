@@ -1,12 +1,12 @@
 """What a build makes, what it is called, and how a dead build's row is
-settled. Ported from `opennotebook_server/src/session_impl.rs`,
-`opennotebook_sdk/src/voices.rs` and the playback events of `events.rs`."""
+settled. Ported from `notabit_server/src/session_impl.rs`,
+`notabit_sdk/src/voices.rs` and the playback events of `events.rs`."""
 
 import pytest
 
-from opennotebook.domain import sessions as d
-from opennotebook.domain import styles
-from opennotebook.domain.sessions import (
+from notabit.domain import sessions as d
+from notabit.domain import styles
+from notabit.domain.sessions import (
     Ask,
     BuildDefaults,
     PlanError,
@@ -18,7 +18,7 @@ from opennotebook.domain.sessions import (
     settle,
     shape,
 )
-from opennotebook.domain.sessions_events import Head, Lookup, playback_events
+from notabit.domain.sessions_events import Head, Lookup, playback_events
 
 
 def spec(fmt: str, length: str = "") -> d.AudioSpec | None:

@@ -9,11 +9,11 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy import text
 
-from opennotebook.api.settings import Setting
-from opennotebook.config import settings as config
-from opennotebook.db.session import engine, sessionmaker
-from opennotebook.domain import settings as st
-from opennotebook.domain.styles import DEFAULT_STYLE, STYLES, style
+from notabit.api.settings import Setting
+from notabit.config import settings as config
+from notabit.db.session import engine, sessionmaker
+from notabit.domain import settings as st
+from notabit.domain.styles import DEFAULT_STYLE, STYLES, style
 from tests.conftest import other_person
 
 
@@ -51,7 +51,7 @@ async def test_every_default_is_valid_for_its_own_setting() -> None:
 def test_keys_are_unique_and_namespaced() -> None:
     seen: set[str] = set()
     for d in st.CATALOGUE:
-        assert d.key.startswith("OPENNOTEBOOK_"), d.key
+        assert d.key.startswith("NOTABIT_"), d.key
         assert d.key not in seen, f"{d.key} twice"
         seen.add(d.key)
 
@@ -61,7 +61,7 @@ def test_there_are_34_settings_and_no_secret_among_them() -> None:
     # The AI key comes from the environment only, never from a settings row.
     for d in st.CATALOGUE:
         assert "KEY" not in d.key and "SECRET" not in d.key, d.key
-    assert st.find("OPENNOTEBOOK_AI_KEY") is None
+    assert st.find("NOTABIT_AI_KEY") is None
 
 
 def test_the_models_are_the_instances_and_the_rest_each_persons() -> None:
@@ -208,8 +208,8 @@ async def test_a_tested_model_and_bad_values_are_judged_without_the_catalogue() 
 
 
 async def test_a_model_must_be_one_its_provider_offers(monkeypatch: pytest.MonkeyPatch) -> None:
-    from opennotebook.ai import connections
-    from opennotebook.ai.prices import Catalogue
+    from notabit.ai import connections
+    from notabit.ai.prices import Catalogue
 
     async def listed(_: Catalogue) -> set[str]:
         return {"vendor/new-model", "gpt-5.4"}
@@ -338,11 +338,10 @@ async def test_a_bad_value_is_refused_in_a_sentence(client: AsyncClient) -> None
 
 
 async def test_an_unknown_setting_is_a_404_sentence(client: AsyncClient) -> None:
-    r = await client.patch("/api/settings/OPENNOTEBOOK_AI_KEY", json={"value": "sk-x"})
+    r = await client.patch("/api/settings/NOTABIT_AI_KEY", json={"value": "sk-x"})
     assert r.status_code == 404
     assert r.json()["detail"] == (
-        "There is no setting called OPENNOTEBOOK_AI_KEY. "
-        "Reload the page to see the settings there are."
+        "There is no setting called NOTABIT_AI_KEY. Reload the page to see the settings there are."
     )
 
 
@@ -545,7 +544,7 @@ async def test_options_are_only_for_ones_own_collection(client: AsyncClient) -> 
 
 
 def test_voices_that_keep_their_accent_are_said_beside_the_language() -> None:
-    from opennotebook.api.settings import studio_options
+    from notabit.api.settings import studio_options
 
     v = {d.key: d.default for d in st.CATALOGUE}
     v[st.LANGUAGE_KEY] = "German"

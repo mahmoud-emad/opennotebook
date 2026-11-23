@@ -11,15 +11,15 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy import text
 
-from opennotebook.ai import connections, secrets
-from opennotebook.ai.check import Check, check
-from opennotebook.ai.client import Ai, Router
-from opennotebook.ai.connections import Connection
-from opennotebook.ai.errors import AiError, Kind
-from opennotebook.ai.providers import BY_KIND, kind_of_url
-from opennotebook.config import settings as config
-from opennotebook.db.session import engine
-from opennotebook.domain import settings as st
+from notabit.ai import connections, secrets
+from notabit.ai.check import Check, check
+from notabit.ai.client import Ai, Router
+from notabit.ai.connections import Connection
+from notabit.ai.errors import AiError, Kind
+from notabit.ai.providers import BY_KIND, kind_of_url
+from notabit.config import settings as config
+from notabit.db.session import engine
+from notabit.domain import settings as st
 from tests.conftest import other_person
 
 Handler = Callable[[httpx2.Request], httpx2.Response]
@@ -51,7 +51,7 @@ def reply(text_: str = "OK") -> httpx2.Response:
 
 
 def test_the_studios_own_key_connects_openrouter_unless_the_address_says_otherwise() -> None:
-    [c] = connections.from_env({"OPENNOTEBOOK_AI_KEY": "or-key"})
+    [c] = connections.from_env({"NOTABIT_AI_KEY": "or-key"})
     assert (c.id, c.kind, c.base_url, c.source) == (
         "openrouter",
         "openrouter",
@@ -59,11 +59,11 @@ def test_the_studios_own_key_connects_openrouter_unless_the_address_says_otherwi
         "env",
     )
     [c] = connections.from_env(
-        {"OPENNOTEBOOK_AI_KEY": "k", "OPENNOTEBOOK_AI_BASE_URL": "https://api.openai.com/v1/"}
+        {"NOTABIT_AI_KEY": "k", "NOTABIT_AI_BASE_URL": "https://api.openai.com/v1/"}
     )
     assert (c.kind, c.base_url) == ("openai", "https://api.openai.com/v1")
     [c] = connections.from_env(
-        {"OPENNOTEBOOK_AI_KEY": "k", "OPENNOTEBOOK_AI_BASE_URL": "http://gpu.lan:8000/v1"}
+        {"NOTABIT_AI_KEY": "k", "NOTABIT_AI_BASE_URL": "http://gpu.lan:8000/v1"}
     )
     assert c.kind == "custom"
 
@@ -83,7 +83,7 @@ def test_each_providers_own_variable_connects_it() -> None:
 
 
 def test_nothing_set_is_nothing_connected() -> None:
-    assert connections.from_env({"OPENNOTEBOOK_AI_BASE_URL": "http://ai.invalid/v1"}) == []
+    assert connections.from_env({"NOTABIT_AI_BASE_URL": "http://ai.invalid/v1"}) == []
 
 
 def test_a_connection_never_shows_its_key() -> None:
@@ -402,7 +402,7 @@ async def test_with_nothing_connected_the_studio_is_not_ready(client: AsyncClien
 async def test_a_working_key_is_kept_encrypted_and_the_studio_is_ready(
     client: AsyncClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from opennotebook.api import providers
+    from notabit.api import providers
 
     monkeypatch.setattr(providers, "check", passing("$5.00 left"))
     r = await client.post("/api/ai/providers", json={"kind": "openai", "key": "sk-abcdefgh1234"})
@@ -420,7 +420,7 @@ async def test_a_working_key_is_kept_encrypted_and_the_studio_is_ready(
 async def test_a_failing_key_is_refused_with_its_reason(
     client: AsyncClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from opennotebook.api import providers
+    from notabit.api import providers
 
     async def failing(c: Connection, **_: Any) -> Check:
         return Check("bad_key", "OpenAI refused this key.", checked_at="t")
@@ -435,7 +435,7 @@ async def test_a_failing_key_is_refused_with_its_reason(
 async def test_a_key_can_be_tested_without_being_kept(
     client: AsyncClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from opennotebook.api import providers
+    from notabit.api import providers
 
     monkeypatch.setattr(providers, "check", passing())
     r = await client.post("/api/ai/providers/check", json={"kind": "gemini", "key": "g-key"})
@@ -453,7 +453,7 @@ async def test_an_unknown_provider_or_address_is_refused(client: AsyncClient) ->
 async def test_a_connected_provider_can_be_removed(
     client: AsyncClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from opennotebook.api import providers
+    from notabit.api import providers
 
     monkeypatch.setattr(providers, "check", passing())
     await client.post("/api/ai/providers", json={"kind": "mistral", "key": "m-key"})
@@ -600,7 +600,7 @@ def test_the_tests_clear_every_variable_a_provider_reads() -> None:
     import re
     from pathlib import Path
 
-    from opennotebook.ai.providers import PRESETS
+    from notabit.ai.providers import PRESETS
 
     names = {n for p in PRESETS for n in (*p.key_env, *p.url_env)}
     conftest = (Path(__file__).parent.parent / "conftest.py").read_text()
@@ -621,7 +621,7 @@ async def test_a_key_endpoint_that_answers_oddly_is_not_a_crash() -> None:
 async def test_a_provider_whose_key_was_lost_is_replaced_not_duplicated(
     client: AsyncClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from opennotebook.api import providers
+    from notabit.api import providers
 
     async with engine().begin() as c:
         await c.execute(

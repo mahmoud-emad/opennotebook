@@ -3,9 +3,9 @@
 import pytest
 from httpx import AsyncClient
 
-from opennotebook.domain import transformations as tf
-from opennotebook.script import transform
-from opennotebook.script.mindmap import NamedDoc
+from notabit.domain import transformations as tf
+from notabit.script import transform
+from notabit.script.mindmap import NamedDoc
 from tests.conftest import other_person
 from tests.model import add_note, fails, install, says, spent
 

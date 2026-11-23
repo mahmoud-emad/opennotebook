@@ -2,7 +2,7 @@
 
 import pytest
 
-from opennotebook.errors import readable, tidy, validation_sentence
+from notabit.errors import readable, tidy, validation_sentence
 
 
 def test_out_of_credit_is_said_in_words_with_what_to_do() -> None:
@@ -22,13 +22,13 @@ def test_out_of_credit_is_said_in_words_with_what_to_do() -> None:
 def test_out_of_credit_names_openrouter_only_when_it_is_the_provider(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from opennotebook.ai import connections
+    from notabit.ai import connections
 
-    monkeypatch.setenv("OPENNOTEBOOK_AI_KEY", "k")
-    monkeypatch.setenv("OPENNOTEBOOK_AI_BASE_URL", "https://openrouter.ai/api/v1")
+    monkeypatch.setenv("NOTABIT_AI_KEY", "k")
+    monkeypatch.setenv("NOTABIT_AI_BASE_URL", "https://openrouter.ai/api/v1")
     connections.forget()
     assert "openrouter.ai/settings/credits" in readable("insufficient_quota")
-    monkeypatch.setenv("OPENNOTEBOOK_AI_BASE_URL", "https://api.openai.com/v1")
+    monkeypatch.setenv("NOTABIT_AI_BASE_URL", "https://api.openai.com/v1")
     connections.forget()
     assert "Add credit to the OpenAI account" in readable("insufficient_quota")
 

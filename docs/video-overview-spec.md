@@ -1,4 +1,4 @@
-# OpenNotebook, video overview specification
+# Notabit, video overview specification
 
 A video overview of a collection's sources: the session's narration over a whiteboard that draws itself. Each idea is sketched at the moment the voice names it, and every label on the board is checked against the sources. It downloads as one MP4 that plays anywhere. This is a plan. Nothing here is built yet.
 
@@ -353,7 +353,7 @@ The set runs on every change to a prompt, the compiler or a model setting, as th
 
 ## 9. Where it lives
 
-All under `server/opennotebook/`, from the code map of 2026-10-05.
+All under `server/notabit/`, from the code map of 2026-10-05.
 
 - `speech/__init__.py`: a `synthesize_timed(text, voice) -> (wav, words)` that calls `/dev/captioned_speech`, falling back to `synthesize` plus transcription. `build/narrate.py`'s `synthesise_line` fills `Line.cues`. Audio overviews and decks gain word timings too.
 - `build/timeline.py` (new): line and word times from `wav.episode_plan`. `api/media.py` has its own copy of the gap and join code (`:39-45`, `:178-230`), which this replaces, so there is one timeline.
@@ -427,12 +427,12 @@ Research the same day changed six things:
 
 | Piece | Where |
 |---|---|
-| Word timings | `speech.Speech.synthesize_timed`, through Kokoro-FastAPI's captioned route, falling back on servers without it; stored in `Line.cues`; setting `OPENNOTEBOOK_TTS_TIMESTAMPS` |
+| Word timings | `speech.Speech.synthesize_timed`, through Kokoro-FastAPI's captioned route, falling back on servers without it; stored in `Line.cues`; setting `NOTABIT_TTS_TIMESTAMPS` |
 | One timeline | `build/timeline.py`, now behind the episode download too; `api/media.py`'s copy of the join is gone |
 | Renderer | `build/video.py` runs a render; `build/stills.py` draws slides and title cards (for audio overviews and missing slides) in a browser; `build/encode.py` runs ffmpeg as a subprocess, then checks streams, length, chapters and black frames |
 | Queue | `render` |
 | Routes | `api/video.py`: make, list states, play or download with ranges, WebVTT captions, share routes |
-| Storage and settings | Migration `0007` (`Session.video`); settings `OPENNOTEBOOK_FFMPEG`, `OPENNOTEBOOK_FFPROBE`, `OPENNOTEBOOK_BROWSER_CHANNEL` |
+| Storage and settings | Migration `0007` (`Session.video`); settings `NOTABIT_FFMPEG`, `NOTABIT_FFPROBE`, `NOTABIT_BROWSER_CHANNEL` |
 
 **Measured** in an end-to-end test against a real API and worker, with 4 parts and 8 lines of macOS speech:
 
@@ -478,7 +478,7 @@ The suite runs 25 video tests, two of them real renders.
 
 ### 2026-10-06, phase 2 built: the whiteboard video
 
-**Built** (`server/opennotebook/build/whiteboard/`):
+**Built** (`server/notabit/build/whiteboard/`):
 
 | Piece | What it does |
 |---|---|
@@ -492,7 +492,7 @@ The suite runs 25 video tests, two of them real renders.
 
 **Also changed:**
 - **`video.py`:** the `whiteboard` style, rendered by `whiteboard/render.py`. Each scene is drawn as soon as it is written.
-- **Model setting:** a `OPENNOTEBOOK_VIDEO_MODEL` setting, Sonnet 5.5 by default.
+- **Model setting:** a `NOTABIT_VIDEO_MODEL` setting, Sonnet 5.5 by default.
 - **Spending:** recorded in the ledger as `video`.
 
 **Measured:**
@@ -542,14 +542,14 @@ The suite runs 25 video tests, two of them real renders.
 
 ### 2026-10-06, phase 3 built: accuracy and the repair ladder
 
-**Built** (`server/opennotebook/build/whiteboard/`):
+**Built** (`server/notabit/build/whiteboard/`):
 
 | Piece | What it does |
 |---|---|
 | `ground.py` | Every label and figure on a board must come from the scene's narration or its source passages: words with their plurals, numbers by value ("75 percent" is "75%"). Free and deterministic. Titles are headings and are exempt: a real run had two scenes drawn plain over "Making Sugar" alone. |
-| `check.py` | One call per scene to an image-reading model (Haiku 4.5 by default, `OPENNOTEBOOK_VIDEO_CHECK_MODEL`). It gets the finished board drawn at 960×540, the scene's claims, its arrows written out as sentences ("leaf releases oxygen"), the things it draws, the narration and the passages. Its answer is in two parts, described below. A checker that is down does not stop the video; the scene is counted as unchecked. |
+| `check.py` | One call per scene to an image-reading model (Haiku 4.5 by default, `NOTABIT_VIDEO_CHECK_MODEL`). It gets the finished board drawn at 960×540, the scene's claims, its arrows written out as sentences ("leaf releases oxygen"), the things it draws, the narration and the passages. Its answer is in two parts, described below. A checker that is down does not stop the video; the scene is counted as unchecked. |
 | Passages | Each scene gets up to 8 passages and 4 question-and-answer facts, from the script's own `retrieve` on the scene's title, brief and narration. The prompt shows them with ids, and the scene cites them in `claims`. |
-| The ladder | Two repairs with the exact faults named, then one try by `OPENNOTEBOOK_VIDEO_ESCALATE_MODEL` (Opus 5.5 by default), then the plain fallback, whose words are grounded too. |
+| The ladder | Two repairs with the exact faults named, then one try by `NOTABIT_VIDEO_ESCALATE_MODEL` (Opus 5.5 by default), then the plain fallback, whose words are grounded too. |
 | Recorded on the video | Pieces of text and how many are grounded; claims and how many are supported; scenes repaired, escalated, plain and unchecked. |
 
 The check's answer is split:
@@ -664,7 +664,7 @@ The line asks again every 3 s while a video is on its way.
 
 **The script**, kept at render as `video/<sid>/<style>.script.json` and named in the video state as `script`: title, duration, chapters, the narration line by line with times, and a whiteboard's scenes with their labels and claims. `GET /api/sessions/{sid}/video/script` (and its share twin) serves it. A video made before scripts were kept is served from its captions, joined into sentences (or 40 words of a long one): lines, no chapters or scenes.
 
-**The tutor**, `POST /api/sessions/{sid}/video/explain` with `{style, t_ms, mode, question, history}`, owner only (`server/opennotebook/script/explain.py`):
+**The tutor**, `POST /api/sessions/{sid}/video/explain` with `{style, t_ms, mode, question, history}`, owner only (`server/notabit/script/explain.py`):
 - **Told the moment:** the chapter and scene on at `t_ms`, the board's labels and claims, the last 1,800 characters heard and the next 500 not yet heard, the chapter list with times, and the last six turns, and a timeline of the narration (each line's time and first ten words, at most 60 lines) so it can point to any moment, not only a chapter.
 - **Grounded as the chat is:** six passages from the collection's sources, picked by the question together with the scene and the narration around the moment, so "what does this mean?" finds passages about *this*. `cite.renumber` removes a citation that names no passage; a moment past the video's end is removed too.
 - **On the script model** (Haiku 4.5), charged to the ledger as `explain`. Measured: 600 to 1,900 tokens in and 30 to 220 out, $0.0014 to $0.0021 a question.
@@ -721,7 +721,7 @@ A whiteboard video can now be made in a theme, as [plans/video-themes.md](plans/
 
 Phase 4 of [plans/video-themes.md](plans/video-themes.md): **Watercolor, Anime, Heritage and Kawaii**. Each written scene gets a picture from an image model; the scene itself (plan, writing, grounding, claims check) is a drawn scene's, and only how it is shown changes.
 
-- **The picture** (`build/whiteboard/illustrate.py`): asked for by the theme's style, the scene's brief and its concepts, never its labels, with every kind of lettering forbidden and the bottom third kept calm. Through OpenRouter's chat completions with `modalities: ["image","text"]` and `image_config.aspect_ratio: "16:9"`; the AI client returns the pictures as `Completion.images`. The model is the setting `OPENNOTEBOOK_VIDEO_IMAGE_MODEL` (default Gemini 3.1 Flash Image; 2.5 Flash Image and 3 Pro Image offered).
+- **The picture** (`build/whiteboard/illustrate.py`): asked for by the theme's style, the scene's brief and its concepts, never its labels, with every kind of lettering forbidden and the bottom third kept calm. Through OpenRouter's chat completions with `modalities: ["image","text"]` and `image_config.aspect_ratio: "16:9"`; the AI client returns the pictures as `Completion.images`. The model is the setting `NOTABIT_VIDEO_IMAGE_MODEL` (default Gemini 3.1 Flash Image; 2.5 Flash Image and 3 Pro Image offered).
 - **Checked** by the scene check model, given the picture: lettering of any kind, or anything the brief contradicts. A fault means one more try with the fault named; a second fault, or no picture, and the scene is drawn in the theme's drawn twin (Watercolor → Notebook, Anime → Whiteboard, Heritage → Retro Print, Kawaii → Paper-craft). The video state counts `illustrated` and `fallback` scenes.
 - **Shown** (`draw._illustrated_frames`): the picture fills the frame with a slow push-in (6 % over the scene, toward a point of its own), fading in from the paper; the scene's own words are set on paper cards in the calm band at its foot, each laid down on the word that names it, an arrow as the relation it asserts ("kernel runs processor"); the title on a card at the top. Nothing is drawn over the picture.
 - **Not yet seen with a real image model:** the studio's OpenRouter balance was below the $1 OpenRouter asks for before any image output. The code is tested end to end against the test model, which paints and checks pictures. The picker's thumbnails for these themes are stand-ins (a wash of the theme's inks under its cards) until real sample pictures are made.

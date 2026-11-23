@@ -1,5 +1,5 @@
 """What a build costs before it runs, ported from
-`opennotebook_server/src/estimate.rs` and `estimate_live.rs`. Plan §9: the
+`notabit_server/src/estimate.rs` and `estimate_live.rs`. Plan §9: the
 estimates match the measured builds."""
 
 import math
@@ -7,9 +7,9 @@ from dataclasses import replace
 
 import pytest
 
-from opennotebook.ai.prices import Price
-from opennotebook.domain import sessions_estimate as e
-from opennotebook.domain.sessions_estimate import (
+from notabit.ai.prices import Price
+from notabit.domain import sessions_estimate as e
+from notabit.domain.sessions_estimate import (
     CHARS_PER_TOKEN,
     GROUP_RESEARCH,
     GROUP_SLIDES,
@@ -24,8 +24,8 @@ from opennotebook.domain.sessions_estimate import (
     slide_design,
     tokens,
 )
-from opennotebook.memory.qa import MAX_WINDOWS_PER_DOC
-from opennotebook.script.budget import slide_narration
+from notabit.memory.qa import MAX_WINDOWS_PER_DOC
+from notabit.script.budget import slide_narration
 
 
 def prices() -> dict[str, Price]:

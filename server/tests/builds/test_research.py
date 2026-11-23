@@ -2,7 +2,7 @@
 """Web search and deep research, ported from `research.rs` and the search in
 `agent.rs`."""
 
-from opennotebook import research
+from notabit import research
 
 
 def test_sonar_citations_become_hits_with_the_answer_as_context() -> None:

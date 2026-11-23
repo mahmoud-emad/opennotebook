@@ -15,15 +15,15 @@ from typing import Any
 import pytest
 from httpx import AsyncClient
 
-from opennotebook.ai import client as ai_client
-from opennotebook.ai.client import Ai
-from opennotebook.build import encode, stills, video
-from opennotebook.build import timeline as tl
-from opennotebook.build.motion import check, lint, page, write
-from opennotebook.build.motion import scene as sc
-from opennotebook.build.whiteboard.scene import Plan, PlannedScene
-from opennotebook.domain import sessions_estimate as est
-from opennotebook.domain.sessions import Line, Part
+from notabit.ai import client as ai_client
+from notabit.ai.client import Ai
+from notabit.build import encode, stills, video
+from notabit.build import timeline as tl
+from notabit.build.motion import check, lint, page, write
+from notabit.build.motion import scene as sc
+from notabit.build.whiteboard.scene import Plan, PlannedScene
+from notabit.domain import sessions_estimate as est
+from notabit.domain.sessions import Line, Part
 from tests.builds.conftest import drain
 from tests.builds.fake import install, tools_found
 from tests.model import add_note
@@ -232,7 +232,7 @@ def test_every_word_a_page_writes_must_have_been_said() -> None:
 
 
 def sc_ground() -> Any:
-    from opennotebook.build.motion import ground
+    from notabit.build.motion import ground
 
     parts = _parts()
     return ground.Said.of([ln.text for p in parts for ln in p.lines] + ["a passage says disks"])
@@ -329,13 +329,13 @@ def test_a_thing_on_screen_before_its_word_or_never_is_a_timing_fault() -> None:
 
 
 def lint_timing(appeared: dict[str, int], beats: dict[str, int]) -> list[str]:
-    from opennotebook.build.motion.render import timing_problems
+    from notabit.build.motion.render import timing_problems
 
     return timing_problems(appeared, beats)
 
 
 def test_the_beats_are_the_words_of_the_manifest() -> None:
-    from opennotebook.build.motion.render import beats_of
+    from notabit.build.motion.render import beats_of
 
     timing = _timing()
     manifest = [

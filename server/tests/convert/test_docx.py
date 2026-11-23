@@ -7,8 +7,8 @@ from collections.abc import Sequence
 
 import pytest
 
-from opennotebook.convert import ConvertError, InputKind, to_markdown
-from opennotebook.convert.docx import hyperlink_target
+from notabit.convert import ConvertError, InputKind, to_markdown
+from notabit.convert.docx import hyperlink_target
 
 from .common import package, rels
 

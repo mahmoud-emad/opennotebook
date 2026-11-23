@@ -8,7 +8,7 @@ By taking part you agree to follow our [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## Questions and ideas
 
-How-to questions, ideas and show-and-tell go in [Discussions](https://github.com/mahmoud-emad/opennotebook/discussions). Bugs go in [issues](https://github.com/mahmoud-emad/opennotebook/issues).
+How-to questions, ideas and show-and-tell go in [Discussions](https://github.com/mahmoud-emad/notabit/discussions). Bugs go in [issues](https://github.com/mahmoud-emad/notabit/issues).
 
 ## Before you start
 

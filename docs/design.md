@@ -1,4 +1,4 @@
-# OpenNotebook design
+# Notabit design
 
 How the studio looks, and why. The tokens are `web/src/styles/theme.css`, the icons are `web/src/ui/icons.ts`, the app's rules are `web/src/styles/style.css`, and the player's are `web/src/styles/player.css`. This file is the reasoning those files follow.
 
@@ -7,7 +7,7 @@ How the studio looks, and why. The tokens are `web/src/styles/theme.css`, the ic
 The usual rule for an admin UI is the constrained world: Bootstrap through a shared component library, no app CSS. The studio is an end-user creative product, not an admin pane, and the owner decided on 2026-10-03 that it keeps its own look under the rules that matter:
 
 - **Bootstrap's names and mechanism.** Tokens are Bootstrap 5.3's own (`--bs-body-bg`, `--bs-secondary-bg`, `--bs-primary`, `--bs-border-radius-lg`). The theme switch is Bootstrap's `data-bs-theme` on `<html>`. Moving to a Bootstrap component library later would be close to a no-op.
-- **Studio-only extras are marked as such.** What Bootstrap has no token for carries an `--st-` prefix and is marked `KEEP product:opennotebook`: a backdrop under media, a hover and a pressed layer, a colour per voice, the mind map's depth colours, motion.
+- **Studio-only extras are marked as such.** What Bootstrap has no token for carries an `--st-` prefix and is marked `KEEP product:notabit`: a backdrop under media, a hover and a pressed layer, a colour per voice, the mind map's depth colours, motion.
 - **Offline first.** Icons are Bootstrap Icons 1.11.3, vendored as inline SVG. Nothing is fetched at runtime; the player used to load the icon font from a CDN and drew blank controls without internet.
 - **The accessibility floor.** Every text-on-surface pair is tested to WCAG AA in both themes, focus is always visible, and motion stops under `prefers-reduced-motion`.
 

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from opennotebook.convert.ooxml import resolve
+from notabit.convert.ooxml import resolve
 
 
 def test_targets_resolve_against_the_part_directory() -> None:

@@ -10,8 +10,8 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy import text
 
-from opennotebook.config import settings
-from opennotebook.db.session import engine
+from notabit.config import settings
+from notabit.db.session import engine
 from tests.conftest import other_person
 
 T0 = datetime(2026, 9, 1, tzinfo=UTC)

@@ -1,7 +1,7 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "OpenNotebook",
+    "title": "Notabit",
     "description": "Collections of sources, and the decks, audio overviews, mind maps and notes made from them. Everything the web app does goes through this API.",
     "version": "0.3.0"
   },

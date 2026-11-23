@@ -1,4 +1,4 @@
-"""Mind maps: ported from opennotebook_script/src/mindmap.rs and the
+"""Mind maps: ported from notabit_script/src/mindmap.rs and the
 Rust server's mindmap_impl.rs, and the routes against a mocked model."""
 
 import uuid
@@ -6,8 +6,8 @@ import uuid
 import pytest
 from httpx import AsyncClient
 
-from opennotebook.api.mindmaps import map_title, shape, tokens_for
-from opennotebook.script.mindmap import (
+from notabit.api.mindmaps import map_title, shape, tokens_for
+from notabit.script.mindmap import (
     LABEL_CHARS,
     MAX_CHILDREN,
     MAX_DEPTH,
@@ -318,7 +318,7 @@ async def test_a_map_in_another_language_is_not_checked(
     model = install(monkeypatch)
     cid = await _collection(client)
     await add_note(client, cid, REEFS)
-    await client.patch("/api/settings/OPENNOTEBOOK_LANGUAGE", json={"value": "French"})
+    await client.patch("/api/settings/NOTABIT_LANGUAGE", json={"value": "French"})
     model.answers(says(OUTLINE))
     _, m = await made(client, f"/api/collections/{cid}/mindmaps")
     assert m is not None and m["unchecked"] and m["dropped"] == 0 and m["node_count"] == 15
@@ -410,7 +410,7 @@ async def test_the_spending_limit_is_checked_before_any_model_call(
     cid = await _collection(client)
     await add_note(client, cid, REEFS)
     # Every tool is checked against the limit, not only builds.
-    monkeypatch.setenv("OPENNOTEBOOK_MAX_BUILD_USD", "0.0000001")
+    monkeypatch.setenv("NOTABIT_MAX_BUILD_USD", "0.0000001")
     e = (await client.get(f"/api/collections/{cid}/mindmaps/estimate")).json()
     assert e["limit_usd"] == pytest.approx(0.0000001) and e["over_limit"]
     assert e["limit_note"].endswith(
@@ -420,7 +420,7 @@ async def test_the_spending_limit_is_checked_before_any_model_call(
     assert r.status_code == 422
     assert r.json()["detail"].startswith("A mind map of these sources could cost up to $")
     assert "Settings › Costs & limits" in r.json()["detail"]
-    monkeypatch.setenv("OPENNOTEBOOK_MAX_BUILD_USD", "5")
+    monkeypatch.setenv("NOTABIT_MAX_BUILD_USD", "5")
     e = (await client.get(f"/api/collections/{cid}/mindmaps/estimate")).json()
     assert e["limit_usd"] == 5 and not e["over_limit"] and e["limit_note"] is None
 
@@ -431,7 +431,7 @@ async def test_a_model_with_no_price_is_estimated_and_marked_unpriced(
     install(monkeypatch)
     cid = await _collection(client)
     await add_note(client, cid, REEFS)
-    monkeypatch.setenv("OPENNOTEBOOK_MINDMAP_MODEL", "acme/unlisted-1")
+    monkeypatch.setenv("NOTABIT_MINDMAP_MODEL", "acme/unlisted-1")
     e = (await client.get(f"/api/collections/{cid}/mindmaps/estimate")).json()
     [line] = e["lines"]
     assert line["unpriced"] and line["price_in_per_million"] is None

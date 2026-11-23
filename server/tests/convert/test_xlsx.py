@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from openpyxl.utils.datetime import from_excel
 
-from opennotebook.convert import InputKind, to_markdown
-from opennotebook.convert.xlsx import MAX_ROWS, number, render, sheet_table
+from notabit.convert import InputKind, to_markdown
+from notabit.convert.xlsx import MAX_ROWS, number, render, sheet_table
 
 from .common import package, rels
 

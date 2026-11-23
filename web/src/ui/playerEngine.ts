@@ -101,11 +101,11 @@ export type PlayerView = {
   reveal: { id: string; n: number } | null;
 };
 
-const SPEED_KEY = "opennotebook_speed";
-const CC_KEY = "opennotebook_cc";
-const INTERRUPT_KEY = "OPENNOTEBOOK_INTERRUPT";
-const PATIENCE_KEY = "OPENNOTEBOOK_TURN_PATIENCE";
-const LANGUAGE_KEY = "OPENNOTEBOOK_LANGUAGE";
+const SPEED_KEY = "notabit_speed";
+const CC_KEY = "notabit_cc";
+const INTERRUPT_KEY = "NOTABIT_INTERRUPT";
+const PATIENCE_KEY = "NOTABIT_TURN_PATIENCE";
+const LANGUAGE_KEY = "NOTABIT_LANGUAGE";
 /** Input level that counts as the listener, after echo cancellation. */
 const BARGE_PEAK = 0.08;
 /** Meter polls (60 ms each) of it, about 300 ms, before cutting in. */
@@ -272,7 +272,7 @@ export class PlayerEngine {
       // MEDIA_ERR_ABORTED is the fetch cancelled because the source changed,
       // which is what moving to the next line does.
       if (this.disposed || !e || e.code === 1 || !audio.getAttribute("src")) return;
-      console.warn(`opennotebook: audio failed (code ${e.code}) for`, audio.src);
+      console.warn(`notabit: audio failed (code ${e.code}) for`, audio.src);
       this.v.err = say.cannotPlay;
       this.v.playing = false;
       this.emit();
@@ -353,7 +353,7 @@ export class PlayerEngine {
     this.v.clock = `00:00 / ${hhmmss(totalMs(this.v.flat))}`;
     this.v.fills = this.v.parts.map(() => 0);
     this.v.episode = s.audio ? episodeUrl(this.src) : "";
-    document.title = s.title ? `${s.title} · OpenNotebook` : "OpenNotebook";
+    document.title = s.title ? `${s.title} · Notabit` : "Notabit";
   }
 
   private becameReady(): void {
@@ -518,7 +518,7 @@ export class PlayerEngine {
       if (name === "AbortError") return;
       if (name === "NotAllowedError") this.v.err = say.blocked;
       else {
-        console.warn(`opennotebook: cannot play ${c.line.line_id}:`, e);
+        console.warn(`notabit: cannot play ${c.line.line_id}:`, e);
         this.v.err = say.cannotPlay;
       }
       this.v.playing = false;
@@ -830,7 +830,7 @@ export class PlayerEngine {
 
   /** Said on screen, once a page, not only in a console nobody has open. */
   private vadDegraded(why: string): void {
-    console.warn("opennotebook: the voice detector is unavailable, listening for loudness instead:", why);
+    console.warn("notabit: the voice detector is unavailable, listening for loudness instead:", why);
     if (this.vadWarned) return;
     this.vadWarned = true;
     this.appendMsg({ who: "Studio", cls: "err", text: say.degraded });
@@ -906,7 +906,7 @@ export class PlayerEngine {
     } catch (e) {
       this.v.turnBusy = false;
       this.micButtons("idle");
-      console.warn("opennotebook: microphone:", e);
+      console.warn("notabit: microphone:", e);
       this.v.micState = say.mic(e instanceof Error ? e.name : undefined);
       this.emit();
       return;

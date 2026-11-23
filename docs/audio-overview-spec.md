@@ -1,4 +1,4 @@
-# OpenNotebook, audio overview specification
+# Notabit, audio overview specification
 
 An audio overview of a collection's sources: a spoken conversation about them, to listen to anywhere and to join with a spoken question at any moment. On the collection page the person adds sources, picks the Audio overview tile, a format, a length and an optional focus, and presses Generate. A collection holds as many audio overviews as are made from it, each its own session.
 
@@ -36,14 +36,14 @@ It is modelled on NotebookLM's Audio Overview. Where this spec copies NotebookLM
 
 ## 3. Where it lives
 
-- `server/opennotebook/domain/sessions.py`: `AudioSpec` and `audio_spec()`, with each format's voices (`format_speakers`), lengths (`format_lengths`), minutes and chapters.
-- `server/opennotebook/api/sessions.py`: `audio_format`, `audio_length` and `focus` on `BuildReq`; `audio` on `SessionDetail`; `kind`, `audio_format` and `duration_ms` on `SessionSummary`. A chapter's `title` is on each stored part (`Part` in `domain/sessions.py`). The JSON-RPC wire keeps `SessionBuildReq` and `SessionPrepareReq` with the same three fields, in `server/opennotebook/api/rpc_methods.py`.
-- `server/opennotebook/script/generate.py`: the `audio` field of `ScriptSpec`, `ScriptSpec.adapt`, `format_rules`, `outline_shape`, the format-specific host roles in `dialogue`, and the per-format closing (`_AUDIO_CLOSE`).
-- `server/opennotebook/build/pipeline.py`: an audio overview is narrated and validated with no deck written.
-- `server/opennotebook/build/wav.py`: `join` and `episode_plan`, the episode as one WAV.
-- `server/opennotebook/api/media.py`: `GET /api/sessions/{sid}/episode`.
+- `server/notabit/domain/sessions.py`: `AudioSpec` and `audio_spec()`, with each format's voices (`format_speakers`), lengths (`format_lengths`), minutes and chapters.
+- `server/notabit/api/sessions.py`: `audio_format`, `audio_length` and `focus` on `BuildReq`; `audio` on `SessionDetail`; `kind`, `audio_format` and `duration_ms` on `SessionSummary`. A chapter's `title` is on each stored part (`Part` in `domain/sessions.py`). The JSON-RPC wire keeps `SessionBuildReq` and `SessionPrepareReq` with the same three fields, in `server/notabit/api/rpc_methods.py`.
+- `server/notabit/script/generate.py`: the `audio` field of `ScriptSpec`, `ScriptSpec.adapt`, `format_rules`, `outline_shape`, the format-specific host roles in `dialogue`, and the per-format closing (`_AUDIO_CLOSE`).
+- `server/notabit/build/pipeline.py`: an audio overview is narrated and validated with no deck written.
+- `server/notabit/build/wav.py`: `join` and `episode_plan`, the episode as one WAV.
+- `server/notabit/api/media.py`: `GET /api/sessions/{sid}/episode`.
 - `web/src/ui/player.tsx`: the audio stage, speed and download.
-- `server/opennotebook/domain/voice.py`: `context_for` says "listening" and "chapter" in the answer prompt for an audio overview.
+- `server/notabit/domain/voice.py`: `context_for` says "listening" and "chapter" in the answer prompt for an audio overview.
 - `web/src/ui/collection/Studio.tsx`: the format cards, length and focus. `web/src/ui/routes.ts` still reads the old `/ui/new-audio-overview` address, `web/src/ui/share.tsx` has the Audio overviews filter, and `web/src/ui/outputs.tsx` draws the output's row with the soundwave icon.
 
 ## 4. Measured

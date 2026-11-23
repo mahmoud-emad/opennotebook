@@ -1,8 +1,8 @@
-"""Ported from opennotebook_script/src/grounding.rs (excerpt_tests) and the
+"""Ported from notabit_script/src/grounding.rs (excerpt_tests) and the
 `fit` tests of budget.rs."""
 
-from opennotebook.script.budget import TITLE, fit
-from opennotebook.script.grounding import excerpts, excerpts_from, passages, terms
+from notabit.script.budget import TITLE, fit
+from notabit.script.grounding import excerpts, excerpts_from, passages, terms
 
 
 def test_a_menu_is_not_material() -> None:

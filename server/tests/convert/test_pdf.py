@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from opennotebook.convert.pdf import join_hyphenated, paragraphs
+from notabit.convert.pdf import join_hyphenated, paragraphs
 
 
 def test_hyphens_go_only_with_evidence() -> None:

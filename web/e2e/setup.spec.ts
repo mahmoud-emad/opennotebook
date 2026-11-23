@@ -19,7 +19,7 @@ async function freshStudio(page: Page) {
 test("a fresh studio shows the setup tour, not the studio", async ({ page }) => {
   await freshStudio(page);
   await page.goto("");
-  await expect(page.getByRole("heading", { name: "Welcome to OpenNotebook" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Welcome to Notabit" })).toBeVisible();
   await expect(page.getByRole("navigation", { name: "Main" })).toHaveCount(0);
 });
 

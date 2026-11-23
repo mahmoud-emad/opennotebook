@@ -6,8 +6,8 @@
     <path d="M32 24.5c5-4 12.5-5 20-4V45c-7.5-1-15 0-20 4z" fill="#dbe6fd"/>
     <path d="M38.5 29.2v11.6c0 .8.9 1.3 1.6.8l8.3-5.8c.6-.4.6-1.2 0-1.6l-8.3-5.8c-.7-.5-1.6 0-1.6.8z" fill="#2563eb"/>
   </g>
-  <text x="96" y="340" font-family="Helvetica, Arial, sans-serif" font-size="96" font-weight="700" fill="#fff">OpenNotebook</text>
+  <text x="96" y="340" font-family="Helvetica, Arial, sans-serif" font-size="96" font-weight="700" fill="#fff">Notabit</text>
   <text x="96" y="415" font-family="Helvetica, Arial, sans-serif" font-size="40" fill="#cbd5e1">The open-source, self-hosted NotebookLM alternative</text>
   <text x="96" y="490" font-family="Helvetica, Arial, sans-serif" font-size="30" fill="#93c5fd">Decks · video and audio overviews · mind maps · cited answers</text>
-  <text x="96" y="560" font-family="Helvetica, Arial, sans-serif" font-size="28" fill="#64748b">github.com/mahmoud-emad/opennotebook</text>
+  <text x="96" y="560" font-family="Helvetica, Arial, sans-serif" font-size="28" fill="#64748b">github.com/mahmoud-emad/notabit</text>
 </svg>

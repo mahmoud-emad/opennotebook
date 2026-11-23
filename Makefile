@@ -2,7 +2,7 @@
 
 # FastAPI in server/, the React app in web/. Database settings come from
 # DATABASE_URL and TEST_DATABASE_URL, read from this file when it exists.
-ENV_FILE ?= $(HOME)/.config/opennotebook/db.env
+ENV_FILE ?= $(HOME)/.config/notabit/db.env
 -include $(ENV_FILE)
 export DATABASE_URL TEST_DATABASE_URL
 UV ?= uv
@@ -11,8 +11,8 @@ PNPM ?= pnpm
 ## dev: the api on :8000, the worker, and the web app on :5173; the api and web reload on change
 dev: migrate
 	@trap 'kill 0' EXIT; \
-	(cd server && $(UV) run opennotebook serve --reload) & \
-	(cd server && $(UV) run opennotebook worker) & \
+	(cd server && $(UV) run notabit serve --reload) & \
+	(cd server && $(UV) run notabit worker) & \
 	(cd web && $(PNPM) dev) & \
 	wait
 
@@ -31,7 +31,7 @@ check-server:
 	cd server && $(UV) run ruff format --check . && $(UV) run ruff check .
 	cd server && $(UV) run pyright
 	cd server && test "$$($(UV) run alembic heads | wc -l)" -eq 1 && $(UV) run alembic check
-	cd server && $(UV) run opennotebook openapi | diff -q ../web/openapi.json - >/dev/null || \
+	cd server && $(UV) run notabit openapi | diff -q ../web/openapi.json - >/dev/null || \
 		{ echo "web/openapi.json is out of date: run make api-client"; exit 1; }
 	cd server && $(UV) run pytest -q
 

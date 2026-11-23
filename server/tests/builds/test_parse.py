@@ -1,9 +1,9 @@
 """Parsing the script model's output, ported from
-`opennotebook_script/src/parse.rs`."""
+`notabit_script/src/parse.rs`."""
 
 import pytest
 
-from opennotebook.script.parse import (
+from notabit.script.parse import (
     UnknownSpeaker,
     layout_of,
     parse_lines,

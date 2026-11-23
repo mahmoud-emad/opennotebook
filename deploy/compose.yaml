@@ -1,8 +1,8 @@
-# OpenNotebook in production: Caddy in front, the api and the worker behind
+# Notabit in production: Caddy in front, the api and the worker behind
 # it, Postgres 18 with pgvector, and Speaches when the `speech` profile is on.
 # Voices are Microsoft's by default and need no server here; Speaches turns
 # spoken questions into text, and reads aloud too when
-# OPENNOTEBOOK_TTS_PROVIDER is openai. docs/stack-migration-plan.md section 2
+# NOTABIT_TTS_PROVIDER is openai. docs/stack-migration-plan.md section 2
 # draws it.
 #
 #   cp deploy/.env.example deploy/.env    # then fill it in
@@ -13,12 +13,12 @@
 #
 # Every setting is in deploy/.env; .env.example says what each one does.
 
-name: opennotebook
+name: notabit
 
 # What the api, the worker and the migrate step share: the one server image,
 # the operator's settings, and where the database and the files are.
 x-server: &server
-  image: ghcr.io/mahmoud-emad/opennotebook-server:${OPENNOTEBOOK_VERSION:-latest}
+  image: ghcr.io/mahmoud-emad/notabit-server:${NOTABIT_VERSION:-latest}
   build:
     context: ..
     dockerfile: deploy/server.Dockerfile
@@ -27,13 +27,15 @@ x-server: &server
     - path: .env
       required: false
   environment:
-    DATABASE_URL: ${DATABASE_URL:-postgresql://opennotebook:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in deploy/.env}@postgres:5432/opennotebook}
-    OPENNOTEBOOK_FILES_DIR: /data/files
+    DATABASE_URL: ${DATABASE_URL:-postgresql://notabit@postgres:5432/notabit}
+    # libpq reads the password from here, so none is written into the URL.
+    PGPASSWORD: ${POSTGRES_PASSWORD}
+    NOTABIT_FILES_DIR: /data/files
     # The studio is served from one address, so the dev server's CORS origin
     # is the public one here.
-    OPENNOTEBOOK_WEB_ORIGIN: ${PUBLIC_URL:-http://localhost}
+    NOTABIT_WEB_ORIGIN: ${PUBLIC_URL:-http://localhost}
     # Speaches, when the speech profile runs it. A value in .env wins.
-    OPENNOTEBOOK_TTS_BASE_URL: ${OPENNOTEBOOK_TTS_BASE_URL:-http://speech:8000/v1}
+    NOTABIT_TTS_BASE_URL: ${NOTABIT_TTS_BASE_URL:-http://speech:8000/v1}
   volumes:
     - files:/data/files
   # So a model server on this machine, such as Ollama, is reachable at
@@ -43,7 +45,7 @@ x-server: &server
 
 services:
   caddy:
-    image: ghcr.io/mahmoud-emad/opennotebook-web:${OPENNOTEBOOK_VERSION:-latest}
+    image: ghcr.io/mahmoud-emad/notabit-web:${NOTABIT_VERSION:-latest}
     build:
       context: ..
       dockerfile: deploy/web.Dockerfile
@@ -65,9 +67,9 @@ services:
 
   api:
     <<: *server
-    command: ["opennotebook", "serve", "--host", "0.0.0.0", "--port", "8000"]
+    command: ["notabit", "serve", "--host", "0.0.0.0", "--port", "8000"]
     # Two seconds for open connections, eight for running work, then the rest
-    # of the clean-up (opennotebook/shutdown.py).
+    # of the clean-up (notabit/shutdown.py).
     stop_grace_period: 15s
     healthcheck:
       test:
@@ -85,7 +87,7 @@ services:
 
   worker:
     <<: *server
-    command: ["opennotebook", "worker"]
+    command: ["notabit", "worker"]
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -104,14 +106,14 @@ services:
     image: pgvector/pgvector:0.8.7-pg18-trixie
     restart: unless-stopped
     environment:
-      POSTGRES_USER: opennotebook
-      POSTGRES_DB: opennotebook
+      POSTGRES_USER: notabit
+      POSTGRES_DB: notabit
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in deploy/.env}
     volumes:
       # Postgres 18 images keep their data under /var/lib/postgresql/18.
       - postgres:/var/lib/postgresql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U opennotebook -d opennotebook"]
+      test: ["CMD-SHELL", "pg_isready -U notabit -d notabit"]
       interval: 5s
       timeout: 5s
       retries: 10

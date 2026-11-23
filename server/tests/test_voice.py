@@ -1,5 +1,5 @@
 """Asking aloud: the voice turn. Ported from the tests of
-`opennotebook_server/src/ask.rs`, with the route's own: the silence gate in
+`notabit_server/src/ask.rs`, with the route's own: the silence gate in
 front of the model, the events the player reads, and who may ask."""
 
 import asyncio
@@ -15,17 +15,17 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy import text
 
-from opennotebook import speech, storage
-from opennotebook.ai import client as ai_client
-from opennotebook.ai.client import Ai
-from opennotebook.db.models import Collection, Session
-from opennotebook.db.session import engine, sessionmaker
-from opennotebook.domain import settings as st
-from opennotebook.domain import voice
-from opennotebook.domain.sessions import Line, Part, Speaker
-from opennotebook.domain.voice import At, Narration
-from opennotebook.speech import banter
-from opennotebook.speech.wav import ramp_wav
+from notabit import speech, storage
+from notabit.ai import client as ai_client
+from notabit.ai.client import Ai
+from notabit.db.models import Collection, Session
+from notabit.db.session import engine, sessionmaker
+from notabit.domain import settings as st
+from notabit.domain import voice
+from notabit.domain.sessions import Line, Part, Speaker
+from notabit.domain.voice import At, Narration
+from notabit.speech import banter
+from notabit.speech.wav import ramp_wav
 from tests.conftest import other_person
 from tests.test_vad import silence, voiced, wav16
 

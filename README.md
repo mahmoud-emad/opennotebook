@@ -1,23 +1,23 @@
 <div align="center">
 
-# OpenNotebook
+# Notabit
 
 **The open-source, self-hosted NotebookLM alternative.**<br>
 Turn PDFs, web pages, YouTube videos and recordings into narrated slide decks, video and audio overviews, mind maps and study notes. Every claim links back to its source.
 
-[![CI](https://github.com/mahmoud-emad/opennotebook/actions/workflows/ci.yml/badge.svg)](https://github.com/mahmoud-emad/opennotebook/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/mahmoud-emad/opennotebook)](https://github.com/mahmoud-emad/opennotebook/releases)
+[![CI](https://github.com/mahmoud-emad/notabit/actions/workflows/ci.yml/badge.svg)](https://github.com/mahmoud-emad/notabit/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/mahmoud-emad/notabit)](https://github.com/mahmoud-emad/notabit/releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Docker](https://img.shields.io/badge/run%20with-docker%20compose-2496ED?logo=docker&logoColor=white)](#try-it)
 [![Sponsor](https://img.shields.io/badge/sponsor-GitHub-ea4aaa?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/mahmoud-emad)
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 [![XERJ Corpus Hub](https://hub.xerj.org/contributors/mahmoud-emad/badge.svg)](https://hub.xerj.org/contributors/mahmoud-emad)
 
-[Website](https://mahmoud-emad.github.io/opennotebook/) · [Try it](#try-it) · [What it makes](#what-it-makes) · [Why it exists](#why-opennotebook) · [Roadmap](#roadmap) · [Contributing](CONTRIBUTING.md) · [Discussions](https://github.com/mahmoud-emad/opennotebook/discussions)
+[Website](https://mahmoud-emad.github.io/notabit/) · [Try it](#try-it) · [What it makes](#what-it-makes) · [Why it exists](#why-notabit) · [Roadmap](#roadmap) · [Contributing](CONTRIBUTING.md) · [Discussions](https://github.com/mahmoud-emad/notabit/discussions)
 
-<a href="https://mahmoud-emad.github.io/opennotebook/"><img src="docs/img/demo.gif" alt="A collection with its sources and outputs, a narrated deck playing, and a mind map topic asked and answered with citations" width="1000"></a>
+<a href="https://mahmoud-emad.github.io/notabit/"><img src="docs/img/demo.gif" alt="A collection with its sources and outputs, a narrated deck playing, and a mind map topic asked and answered with citations" width="1000"></a>
 
-<sub>A collection, a narrated deck, and a cited answer. The <a href="https://mahmoud-emad.github.io/opennotebook/">full-quality video</a> is on the website.</sub>
+<sub>A collection, a narrated deck, and a cited answer. The <a href="https://mahmoud-emad.github.io/notabit/">full-quality video</a> is on the website.</sub>
 
 </div>
 
@@ -38,7 +38,7 @@ You stay in control of what is read: search the sources, or switch any one off s
 
 When a collection is good, share it on **Discover**. Others can read it as it is, or copy it, make it their own, and share it again, with the author's say on whether copies can be edited.
 
-## Why OpenNotebook
+## Why Notabit
 
 - **Yours.** It runs on your machine or server with Docker Compose. Your sources stay in your own Postgres.
 - **Any model.** Bring your own key for OpenRouter, OpenAI, Anthropic, Gemini, Azure OpenAI, Mistral, Groq, DeepSeek and more, or run a local Ollama or LM Studio. Mix providers per task.
@@ -52,8 +52,8 @@ When a collection is good, share it on **Discover**. Others can read it as it is
 You need Docker and an AI provider: [OpenRouter](https://openrouter.ai), OpenAI, Azure OpenAI, Anthropic, Google Gemini, Mistral, Groq, DeepSeek, Cohere, Qwen, Fireworks, Cerebras, Together, xAI, a local [Ollama](https://ollama.com) or LM Studio, or any OpenAI-compatible server.
 
 ```sh
-git clone https://github.com/mahmoud-emad/opennotebook.git
-cd opennotebook
+git clone https://github.com/mahmoud-emad/notabit.git
+cd notabit
 cp deploy/.env.example deploy/.env   # set POSTGRES_PASSWORD
 make up
 ```
@@ -74,7 +74,7 @@ If you get stuck during setup, see [first-run troubleshooting](docs/troubleshoot
 ## Models and voices
 
 - **Models.** Connect one or more providers, in the setup tour, in Settings › AI providers, or with environment variables. Each kind of work uses a model your providers offer, and you can change it in Settings › Models. OpenRouter covers every feature with one key. Direct providers cover most of them; the tour shows which features have no model yet.
-- **Voices.** By default it uses Microsoft's neural voices through Edge's free Read Aloud service, so you don't need a key. For heavier use, switch to Azure Speech (`OPENNOTEBOOK_TTS_PROVIDER=azure`), or to an OpenAI-compatible speech server such as [Speaches](https://speaches.ai) (`openai`). Spoken questions are transcribed by that same server.
+- **Voices.** By default it uses Microsoft's neural voices through Edge's free Read Aloud service, so you don't need a key. For heavier use, switch to Azure Speech (`NOTABIT_TTS_PROVIDER=azure`), or to an OpenAI-compatible speech server such as [Speaches](https://speaches.ai) (`openai`). Spoken questions are transcribed by that same server.
 
 Everything else (styles, voices, language, a spending limit) can be changed in the app's Settings.
 
@@ -92,7 +92,7 @@ The code is split into three folders:
 | `web/` | A React and TypeScript app. It talks to the server only through its REST API. |
 | `deploy/` | Docker Compose with Caddy, Postgres, and an optional speech server. |
 
-You'll need Python 3.14 with [uv](https://docs.astral.sh/uv/), Node 24 with pnpm, and Postgres 18 with pgvector. Put `DATABASE_URL` and `TEST_DATABASE_URL` in `~/.config/opennotebook/db.env` (the Makefile reads it from there), then run:
+You'll need Python 3.14 with [uv](https://docs.astral.sh/uv/), Node 24 with pnpm, and Postgres 18 with pgvector. Put `DATABASE_URL` and `TEST_DATABASE_URL` in `~/.config/notabit/db.env` (the Makefile reads it from there), then run:
 
 ```sh
 make dev     # the api on :8000, the job worker, and the web app on :5173/ui/
@@ -118,14 +118,14 @@ Releases and what changed in each are in the [changelog](CHANGELOG.md).
 
 ## Get involved
 
-If OpenNotebook is useful to you, a ⭐ helps other people find it.
+If Notabit is useful to you, a ⭐ helps other people find it.
 
-- **Try it and tell us what broke or felt rough.** [Open an issue](https://github.com/mahmoud-emad/opennotebook/issues/new/choose).
-- **Ask or show off** in [Discussions](https://github.com/mahmoud-emad/opennotebook/discussions).
-- **Sponsor my open-source work.** OpenNotebook is free and MIT licensed. If it helps you, [sponsoring](https://github.com/sponsors/mahmoud-emad) is a kind way to say thanks. It's never expected.
-- **Send a fix.** Start with an issue labelled [good first issue](https://github.com/mahmoud-emad/opennotebook/labels/good%20first%20issue) and read [CONTRIBUTING.md](CONTRIBUTING.md).
+- **Try it and tell us what broke or felt rough.** [Open an issue](https://github.com/mahmoud-emad/notabit/issues/new/choose).
+- **Ask or show off** in [Discussions](https://github.com/mahmoud-emad/notabit/discussions).
+- **Sponsor my open-source work.** Notabit is free and MIT licensed. If it helps you, [sponsoring](https://github.com/sponsors/mahmoud-emad) is a kind way to say thanks. It's never expected.
+- **Send a fix.** Start with an issue labelled [good first issue](https://github.com/mahmoud-emad/notabit/labels/good%20first%20issue) and read [CONTRIBUTING.md](CONTRIBUTING.md).
 
-[![Star History Chart](https://api.star-history.com/svg?repos=mahmoud-emad/opennotebook&type=Date)](https://star-history.com/#mahmoud-emad/opennotebook&Date)
+[![Star History Chart](https://api.star-history.com/svg?repos=mahmoud-emad/notabit&type=Date)](https://star-history.com/#mahmoud-emad/notabit&Date)
 
 ## License
 

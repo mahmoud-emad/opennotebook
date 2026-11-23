@@ -34,14 +34,14 @@ FROM python:3.14.10-slim-trixie
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ffmpeg libegl1 libgl1 \
     && rm -rf /var/lib/apt/lists/*
-RUN useradd --system --uid 10001 --home-dir /app opennotebook \
+RUN useradd --system --uid 10001 --home-dir /app notabit \
     && mkdir -p /data/files \
-    && chown opennotebook /data/files
-COPY --from=build --chown=opennotebook /app /app
+    && chown notabit /data/files
+COPY --from=build --chown=notabit /app /app
 WORKDIR /app
 ENV PATH=/app/.venv/bin:$PATH \
     PYTHONUNBUFFERED=1 \
-    OPENNOTEBOOK_FILES_DIR=/data/files
-USER opennotebook
+    NOTABIT_FILES_DIR=/data/files
+USER notabit
 EXPOSE 8000
-CMD ["opennotebook", "serve", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["notabit", "serve", "--host", "0.0.0.0", "--port", "8000"]

@@ -1,4 +1,4 @@
-# OpenNotebook in front of the world: the web app under /ui/, the api under
+# Notabit in front of the world: the web app under /ui/, the api under
 # /api/. With DOMAIN set (in deploy/.env) Caddy gets a certificate for it and
 # serves HTTPS on 443, sending 80 there; without it the studio is plain HTTP
 # on :80, for a machine on a private network. compose.yaml turns DOMAIN into

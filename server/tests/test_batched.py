@@ -8,7 +8,7 @@ from typing import Any
 from httpx import AsyncClient
 from sqlalchemy import text
 
-from opennotebook.db.session import engine
+from notabit.db.session import engine
 from tests.conftest import other_person
 from tests.queries import recorded
 
@@ -107,7 +107,7 @@ async def test_an_output_whose_job_died_is_still_marked_failed_in_a_list(
 async def test_the_event_stream_sees_the_progress_of_every_output_being_made(
     client: AsyncClient,
 ) -> None:
-    from opennotebook.api.collections import _read  # pyright: ignore[reportPrivateUsage]
+    from notabit.api.collections import _read  # pyright: ignore[reportPrivateUsage]
 
     me = await _me(client)
     cid = (await client.post("/api/collections", json={"title": "Busy"})).json()["id"]

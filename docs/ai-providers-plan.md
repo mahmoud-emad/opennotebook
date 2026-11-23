@@ -4,7 +4,7 @@ Status: phases 1–3 built 2026-10-08 (server, web, docs); phase 4 is later work
 
 ## 1. Goal
 
-OpenNotebook must run on any AI provider that can do the work, not only OpenRouter:
+Notabit must run on any AI provider that can do the work, not only OpenRouter:
 
 - Keys can be given as environment variables or entered in the web app.
 - Every key is tested before it is saved: that it is accepted, and that the account has credit.
@@ -12,9 +12,9 @@ OpenNotebook must run on any AI provider that can do the work, not only OpenRout
 
 ## 2. Where things stand
 
-- **One client.** Every model call goes through one `Ai` client (`server/opennotebook/ai/client.py`).
+- **One client.** Every model call goes through one `Ai` client (`server/notabit/ai/client.py`).
   - It speaks the OpenAI chat-completions protocol.
-  - It is built once from `OPENNOTEBOOK_AI_BASE_URL` and `OPENNOTEBOOK_AI_KEY`.
+  - It is built once from `NOTABIT_AI_BASE_URL` and `NOTABIT_AI_KEY`.
   - About 20 call sites use `client.ai()`: `.complete`, `.stream`, `.embed`, `.catalogue`, `.has_key`.
 - **OpenRouter is assumed in several places:**
   - `usage.include` and `usage.cost`;
@@ -69,8 +69,8 @@ The presets are in a registry, `ai/providers.py`. For each kind it holds:
 
 Connections come from two places:
 
-- **Environment.** The vars above. The legacy `OPENNOTEBOOK_AI_BASE_URL` and `OPENNOTEBOOK_AI_KEY` become the `default` connection: its kind is `openrouter` when the URL is OpenRouter's, `custom` otherwise. Env connections are shown in the UI as "Set in the server's environment". They can be tested but not edited.
-- **The web app.** Stored in a new `ai_providers` table (migration 0009). The key is encrypted with Fernet (`cryptography`, Apache/BSD). The encryption key comes from `OPENNOTEBOOK_SECRET_KEY`; if that is unset, one is generated once into `<files_dir>/.secret.key` with mode 600.
+- **Environment.** The vars above. The legacy `NOTABIT_AI_BASE_URL` and `NOTABIT_AI_KEY` become the `default` connection: its kind is `openrouter` when the URL is OpenRouter's, `custom` otherwise. Env connections are shown in the UI as "Set in the server's environment". They can be tested but not edited.
+- **The web app.** Stored in a new `ai_providers` table (migration 0009). The key is encrypted with Fernet (`cryptography`, Apache/BSD). The encryption key comes from `NOTABIT_SECRET_KEY`; if that is unset, one is generated once into `<files_dir>/.secret.key` with mode 600.
 
 **Who may change connections:** whoever may change instance settings, the same rule as `may_change` (the local owner in `local` mode).
 
@@ -124,7 +124,7 @@ Each connection's `Ai` adapts the request to its provider:
 ### 4.6 Web: the setup tour and Settings › AI providers
 
 - **At start**, the app reads `/api/setup` before it draws anything. While the studio is not ready it shows only the setup tour, with these steps:
-  1. **Welcome**: what OpenNotebook needs.
+  1. **Welcome**: what Notabit needs.
   2. **Choose a provider**: the presets, OpenRouter first as the one-key option for every feature.
   3. **Key**: paste it (or a URL for Ollama or a custom server), then press **Test**. The tour shows whether the key works and the balance, or the sentence for the failure. Only a passing key is saved.
   4. **Models**: the suggested model for each role, taken from the provider's list. Each can be changed, and roles the provider cannot serve are flagged. Another provider can be added here.
@@ -135,7 +135,7 @@ Each connection's `Ai` adapts the request to its provider:
 
 ### 4.7 Readable errors
 
-- The no-key sentences no longer name `OPENNOTEBOOK_AI_KEY`. They point to Settings › AI providers, or to the person who runs the studio.
+- The no-key sentences no longer name `NOTABIT_AI_KEY`. They point to Settings › AI providers, or to the person who runs the studio.
 - `credit_sentence` names the provider of the connection that failed.
 
 ## 5. Phases

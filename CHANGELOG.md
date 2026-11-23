@@ -1,8 +1,12 @@
 # Changelog
 
-All notable changes to OpenNotebook. The format follows [Keep a Changelog](https://keepachangelog.com), and versions follow [Semantic Versioning](https://semver.org).
+All notable changes to Notabit. The format follows [Keep a Changelog](https://keepachangelog.com), and versions follow [Semantic Versioning](https://semver.org).
 
 ## [Unreleased]
+
+### Changed
+
+- The project is now called Notabit. The Python package, the `notabit` command, the images (`notabit-*`) and the repository links use the new name. Environment variables start with `NOTABIT_` instead of `OPENNOTEBOOK_`, and the default database name and user are `notabit`, so rename them in your `.env` and database when you upgrade.
 
 ## [0.3.0] - 2026-11-18
 
@@ -14,7 +18,7 @@ All notable changes to OpenNotebook. The format follows [Keep a Changelog](https
 - Transformations: run a summary, key claims, flashcards, a timeline, or an instruction of your own with `/transform`, and manage them in Settings.
 - A live log of what each job is doing, and a loading state for every request.
 - Collection covers drawn as Aura and Relief.
-- A project website at <https://mahmoud-emad.github.io/opennotebook/>, a demo, a changelog, and a sponsor button.
+- A project website at <https://mahmoud-emad.github.io/notabit/>, a demo, a changelog, and a sponsor button.
 
 ### Fixed
 
@@ -41,7 +45,7 @@ All notable changes to OpenNotebook. The format follows [Keep a Changelog](https
 
 The first public release: narrated slide decks, video overviews, audio overviews, mind maps and study notes, with every claim linked to its source.
 
-[Unreleased]: https://github.com/mahmoud-emad/opennotebook/compare/v0.3.0...HEAD
-[0.3.0]: https://github.com/mahmoud-emad/opennotebook/compare/v0.2.0...v0.3.0
-[0.2.0]: https://github.com/mahmoud-emad/opennotebook/compare/v0.1.0...v0.2.0
-[0.1.0]: https://github.com/mahmoud-emad/opennotebook/releases/tag/v0.1.0
+[Unreleased]: https://github.com/mahmoud-emad/notabit/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/mahmoud-emad/notabit/compare/v0.2.0...v0.3.0
+[0.2.0]: https://github.com/mahmoud-emad/notabit/compare/v0.1.0...v0.2.0
+[0.1.0]: https://github.com/mahmoud-emad/notabit/releases/tag/v0.1.0

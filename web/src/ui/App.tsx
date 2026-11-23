@@ -1,4 +1,4 @@
-// opennotebook, the end-user app: the shell, Discover and My collections. A
+// notabit, the end-user app: the shell, Discover and My collections. A
 // port of the old app's `main.rs` `App`, screen for screen.
 
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -293,11 +293,11 @@ export function App() {
         <button
           className="brand"
           title="Discover"
-          aria-label="OpenNotebook: Discover"
+          aria-label="Notabit: Discover"
           onClick={() => setView({ kind: "discover" })}
         >
           <Logo />
-          <h1 className="hide-sm">OpenNotebook</h1>
+          <h1 className="hide-sm">Notabit</h1>
           {/* A collection is where things are made: the studio. */}
           {(view.kind === "collection" || view.kind === "shared") && (
             <span className="brand-tag hide-sm">Studio</span>

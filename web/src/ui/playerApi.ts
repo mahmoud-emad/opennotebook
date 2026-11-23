@@ -51,7 +51,7 @@ export function headsFor(src: Source): Heads {
       },
     };
   }
-  const key = `opennotebook.playhead.${src.share}.${src.sid}`;
+  const key = `notabit.playhead.${src.share}.${src.sid}`;
   return {
     get: async () => {
       try {

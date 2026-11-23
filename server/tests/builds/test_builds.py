@@ -15,10 +15,10 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy import text
 
-from opennotebook.db.session import engine
-from opennotebook.domain import sessions_estimate as est
-from opennotebook.domain import sessions_events, sources
-from opennotebook.jobs import Progress
+from notabit.db.session import engine
+from notabit.domain import sessions_estimate as est
+from notabit.domain import sessions_events, sources
+from notabit.jobs import Progress
 from tests.builds.conftest import drain
 from tests.builds.fake import install
 from tests.conftest import other_person
@@ -156,7 +156,7 @@ async def test_a_build_over_the_limit_is_refused_and_leaves_nothing(
     owner = (await client.get("/api/me")).json()["id"]
     await _rows(
         "INSERT INTO user_settings (owner_id, key, value) "
-        "VALUES (:o, 'OPENNOTEBOOK_MAX_BUILD_USD', '0.01') RETURNING key",
+        "VALUES (:o, 'NOTABIT_MAX_BUILD_USD', '0.01') RETURNING key",
         o=owner,
     )
     e = (
@@ -414,7 +414,7 @@ async def test_an_output_deleted_while_it_is_made_stays_deleted(
     sid = (await client.post(f"/api/collections/{cid}/outputs", json={"kind": "slides"})).json()[
         "id"
     ]
-    from opennotebook.build import pipeline
+    from notabit.build import pipeline
 
     real = pipeline.ingest
 
@@ -523,8 +523,8 @@ async def test_a_build_with_no_ai_key_is_refused_at_once(
     client: AsyncClient, monkeypatch: pytest.MonkeyPatch, files: Path
 ) -> None:
     install(monkeypatch, files)
-    from opennotebook.ai import client as ai_client
-    from opennotebook.ai.client import Ai
+    from notabit.ai import client as ai_client
+    from notabit.ai.client import Ai
 
     keyless = Ai("http://ai.test/v1", "")
     monkeypatch.setattr(ai_client, "ai", lambda: keyless)

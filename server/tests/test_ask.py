@@ -1,4 +1,4 @@
-"""Ask with citations: ported from opennotebook_script/src/cite.rs, and the
+"""Ask with citations: ported from notabit_script/src/cite.rs, and the
 route (`source_ask` in the Rust server) against a mocked model."""
 
 import uuid
@@ -6,8 +6,8 @@ import uuid
 import pytest
 from httpx import AsyncClient
 
-from opennotebook.script.cite import renumber, user_prompt
-from opennotebook.script.mindmap import NamedDoc
+from notabit.script.cite import renumber, user_prompt
+from notabit.script.mindmap import NamedDoc
 from tests.conftest import other_person
 from tests.model import add_note, fails, install, says, spent
 
@@ -129,7 +129,7 @@ async def test_a_language_other_than_english_is_asked_for(
     model = install(monkeypatch)
     cid = await _collection(client)
     await add_note(client, cid, REEFS)
-    r = await client.patch("/api/settings/OPENNOTEBOOK_LANGUAGE", json={"value": "French"})
+    r = await client.patch("/api/settings/NOTABIT_LANGUAGE", json={"value": "French"})
     assert r.status_code == 200, r.text
     model.answers(says("Les récifs [1]."))
     r = await client.post(f"/api/collections/{cid}/ask", json={"question": "Reefs?"})

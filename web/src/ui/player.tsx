@@ -100,7 +100,7 @@ export function PlayerPage({ sid, share }: { sid: string; share: string | null }
               Here it asks first, because leaving drops the place. */}
           <button id="leave" className="brand" title="Back to the collection" onClick={() => engine.leave()}>
             <Logo />
-            <span>OpenNotebook</span>
+            <span>Notabit</span>
             <span className="brand-tag">Studio</span>
           </button>
           <div id="titlebox">

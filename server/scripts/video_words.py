@@ -26,13 +26,13 @@ from typing import Any
 
 from sqlalchemy import select
 
-from opennotebook import speech, storage
-from opennotebook.build import timeline as tl
-from opennotebook.build import video, wav
-from opennotebook.db.models import Session
-from opennotebook.db.session import sessionmaker
-from opennotebook.domain.sessions import Line
-from opennotebook.script.budget import speakable
+from notabit import speech, storage
+from notabit.build import timeline as tl
+from notabit.build import video, wav
+from notabit.db.models import Session
+from notabit.db.session import sessionmaker
+from notabit.domain.sessions import Line
+from notabit.script.budget import speakable
 
 # The style whose scripts are backfilled: whiteboards only.
 STYLE = "whiteboard"

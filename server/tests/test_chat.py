@@ -14,10 +14,10 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy import text
 
-from opennotebook.agent import commands, loop
-from opennotebook.ai import client as client_module
-from opennotebook.ai.client import Ai
-from opennotebook.db.session import engine
+from notabit.agent import commands, loop
+from notabit.ai import client as client_module
+from notabit.ai.client import Ai
+from notabit.db.session import engine
 from tests.conftest import other_person
 from tests.model import Model, Reply, add_note, fails, install, says, spent
 from tests.web import fake_web

@@ -6,9 +6,9 @@ from typing import Any
 from httpx import AsyncClient
 from sqlalchemy import text
 
-from opennotebook.api.collections import events_of
-from opennotebook.db.session import engine
-from opennotebook.jobs.events import hub
+from notabit.api.collections import events_of
+from notabit.db.session import engine
+from notabit.jobs.events import hub
 from tests.conftest import other_person
 from tests.model import add_note
 
@@ -124,7 +124,7 @@ async def test_a_collection_says_its_name_and_whether_it_is_still_being_made(
     got = (await client.patch(f"/api/collections/{c['id']}", json={"title": "Reefs"})).json()
     assert (got["display_title"], got["auto_named"], got["name_note"]) == ("Reefs", False, None)
     # Handed back, with naming off in Settings: still the person's to name.
-    r = await client.patch("/api/settings/OPENNOTEBOOK_AUTO_NAME", json={"value": "off"})
+    r = await client.patch("/api/settings/NOTABIT_AUTO_NAME", json={"value": "off"})
     assert r.status_code == 200, r.text
     got = (await client.patch(f"/api/collections/{c['id']}", json={"title": ""})).json()
     assert got["title_auto"] and not got["auto_named"] and got["name_note"] is None

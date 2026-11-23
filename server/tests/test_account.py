@@ -3,8 +3,8 @@ import os
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-from opennotebook.config import settings
-from opennotebook.main import create_app
+from notabit.config import settings
+from notabit.main import create_app
 
 
 async def test_health_and_the_local_owner(client: AsyncClient) -> None:
@@ -33,7 +33,7 @@ async def test_a_key_acts_as_its_owner_until_revoked(client: AsyncClient) -> Non
 
 
 async def test_keys_mode_asks_for_a_key() -> None:
-    os.environ["OPENNOTEBOOK_AUTH"] = "keys"
+    os.environ["NOTABIT_AUTH"] = "keys"
     settings.cache_clear()
     try:
         app = create_app()
@@ -41,18 +41,18 @@ async def test_keys_mode_asks_for_a_key() -> None:
             r = await c.get("/api/me")
         assert r.status_code == 401 and r.json()["detail"].startswith("Sign in with an API key")
     finally:
-        os.environ["OPENNOTEBOOK_AUTH"] = "local"
+        os.environ["NOTABIT_AUTH"] = "local"
         settings.cache_clear()
 
 
 def test_the_ai_key_is_read_under_the_old_names_too(monkeypatch: pytest.MonkeyPatch) -> None:
-    from opennotebook.config import Settings
+    from notabit.config import Settings
 
-    for name in ("OPENNOTEBOOK_AI_API_KEY", "OPENNOTEBOOK_AI_KEY", "OPENROUTER_API_KEY"):
+    for name in ("NOTABIT_AI_API_KEY", "NOTABIT_AI_KEY", "OPENROUTER_API_KEY"):
         monkeypatch.delenv(name, raising=False)
     monkeypatch.setenv("OPENROUTER_API_KEY", "or-key")
     assert Settings().ai_key.get_secret_value() == "or-key"  # pyright: ignore[reportCallIssue]
-    monkeypatch.setenv("OPENNOTEBOOK_AI_KEY", "new-key")
+    monkeypatch.setenv("NOTABIT_AI_KEY", "new-key")
     assert Settings().ai_key.get_secret_value() == "new-key"  # pyright: ignore[reportCallIssue]
-    monkeypatch.setenv("OPENNOTEBOOK_AI_API_KEY", "old-key")
+    monkeypatch.setenv("NOTABIT_AI_API_KEY", "old-key")
     assert Settings().ai_key.get_secret_value() == "old-key"  # pyright: ignore[reportCallIssue]

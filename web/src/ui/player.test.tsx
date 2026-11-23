@@ -130,7 +130,7 @@ describe("the play page", () => {
     act(() => void fireEvent.keyDown(window, { key: "c", code: "KeyC" }));
     expect(container.querySelector("#app")!.classList.contains("no-cap")).toBe(true);
     expect(container.querySelector("#cc")!.getAttribute("aria-pressed")).toBe("false");
-    expect(localStorage.getItem("opennotebook_cc")).toBe("0");
+    expect(localStorage.getItem("notabit_cc")).toBe("0");
   });
 
   it("wears an audio overview's words and offers its download", async () => {
@@ -249,7 +249,7 @@ describe("what the old page's tests kept", () => {
     expect(voiceSrc).toContain("src.connect(node)");
     expect(voiceSrc).not.toMatch(/\bnode\.connect\(/);
     expect(CAPTURE_WORKLET_SRC).not.toContain("`");
-    expect(CAPTURE_WORKLET_SRC).toContain('registerProcessor("opennotebook-mic"');
+    expect(CAPTURE_WORKLET_SRC).toContain('registerProcessor("notabit-mic"');
   });
 
   it("opens the microphone exactly once a turn, and releases it in one place", () => {

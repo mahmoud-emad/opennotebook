@@ -10,7 +10,7 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy import text
 
-from opennotebook.db.session import engine
+from notabit.db.session import engine
 from tests.builds.fake import install
 from tests.conftest import other_person
 from tests.model import add_note
@@ -116,7 +116,7 @@ async def test_a_refused_retry_keeps_the_failed_output_and_its_reason(
     first = (await client.post(f"/api/collections/{cid}/outputs", json={"kind": "slides"})).json()
     await _fail(first["id"])
     # Over the spending limit: refused, with nothing written.
-    monkeypatch.setenv("OPENNOTEBOOK_MAX_BUILD_USD", "0.0000001")
+    monkeypatch.setenv("NOTABIT_MAX_BUILD_USD", "0.0000001")
     r = await client.post(f"/api/sessions/{first['id']}/retry")
     assert r.status_code == 422
     assert "over your $0.00 limit" in r.json()["detail"]

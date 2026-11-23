@@ -1,4 +1,4 @@
-"""The server's silence gate. Ported from `opennotebook_vad` (`lib.rs`,
+"""The server's silence gate. Ported from `notabit_vad` (`lib.rs`,
 `wav.rs`, `resample.rs`), with the detector now Silero v5 at the page's
 32 ms frames."""
 
@@ -9,8 +9,8 @@ import struct
 import numpy as np
 import pytest
 
-from opennotebook.speech import vad
-from opennotebook.speech.vad import DEFAULT, Gate, Samples
+from notabit.speech import vad
+from notabit.speech.vad import DEFAULT, Gate, Samples
 
 
 def wav16(samples: Samples, rate: int, channels: int = 1) -> bytes:

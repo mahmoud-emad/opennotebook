@@ -10,9 +10,9 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy import text
 
-from opennotebook.ai import client
-from opennotebook.ai.client import Ai
-from opennotebook.db.session import engine
+from notabit.ai import client
+from notabit.ai.client import Ai
+from notabit.db.session import engine
 
 Reply = Callable[[httpx2.Request], httpx2.Response]
 
@@ -97,7 +97,7 @@ async def add_note(c: AsyncClient, cid: str, note: str, title: str = "") -> str:
 async def run_work() -> None:
     """Run every job waiting on the work queue, as the worker would: maps,
     notes and research the test started."""
-    from opennotebook.jobs.app import WORK_QUEUE, app
+    from notabit.jobs.app import WORK_QUEUE, app
 
     async with app.open_async():
         await app.run_worker_async(

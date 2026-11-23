@@ -10,8 +10,8 @@ from typing import Any
 from httpx import AsyncClient
 from sqlalchemy import text
 
-from opennotebook.db.session import engine, sessionmaker
-from opennotebook.domain import covers, reading
+from notabit.db.session import engine, sessionmaker
+from notabit.domain import covers, reading
 from tests.model import add_note
 from tests.queries import recorded
 

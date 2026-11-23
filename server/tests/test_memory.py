@@ -1,4 +1,4 @@
-"""Retrieval, ported from opennotebook_memory's tests."""
+"""Retrieval, ported from notabit_memory's tests."""
 
 import uuid
 
@@ -6,9 +6,9 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy import select
 
-from opennotebook import memory
-from opennotebook.db.models import User
-from opennotebook.db.session import sessionmaker
+from notabit import memory
+from notabit.db.models import User
+from notabit.db.session import sessionmaker
 
 KERNEL = (
     "# Scheduling\n\nThe scheduler picks the next process to run from the run queue "

@@ -7,8 +7,8 @@ from typing import Any
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-from opennotebook.config import settings as config
-from opennotebook.main import create_app
+from notabit.config import settings as config
+from notabit.main import create_app
 from tests.conftest import other_person
 
 HEADERS = {
