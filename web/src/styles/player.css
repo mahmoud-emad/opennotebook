@@ -16,7 +16,7 @@
      the same place, one press, and Space does the same.
    Everything is one viewport tall on a desktop; on a phone the stage and the
    controls come first and the panel follows.
-   The palette is the studio's own tokens (opennotebook_sdk/assets/theme.css,
+   The palette is the studio's own tokens (notabit_sdk/assets/theme.css,
    put in the page above by the server), light or dark as the viewer chose
    in the gallery, so going from the gallery into a session does not change
    world. The names below are this page's shorthand for those tokens.

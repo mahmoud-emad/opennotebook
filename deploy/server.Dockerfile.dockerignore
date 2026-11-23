@@ -5,5 +5,5 @@
 !server/uv.lock
 !server/README.md
 !server/alembic.ini
-!server/opennotebook
+!server/notabit
 **/__pycache__

@@ -1,6 +1,6 @@
 // The studio's first run and its AI providers. Until a provider is connected
 // the app shows the setup tour instead of anything else (`SetupGate`): what
-// OpenNotebook needs, a provider and its key (tested before it is kept), then
+// Notabit needs, a provider and its key (tested before it is kept), then
 // the model each kind of work will use. Settings › AI providers draws the
 // same pieces (`ProvidersPanel`).
 
@@ -65,7 +65,7 @@ export function SetupGate({ children }: { children: ReactNode }) {
       return (
         <main className="setup-page">
           <div className="set-note" role="status">
-            <span className="mini-spin" /> Starting OpenNotebook…
+            <span className="mini-spin" /> Starting Notabit…
           </div>
         </main>
       );
@@ -110,7 +110,7 @@ export function SetupTour({ setup, onDone }: { setup: Setup; onDone: () => void 
       <div className="setup-card" role="dialog" aria-modal="false" aria-labelledby="setup-title">
         <div className="setup-brand">
           <Logo />
-          <span>OpenNotebook</span>
+          <span>Notabit</span>
         </div>
         {!setup.can_setup ? (
           <>
@@ -129,9 +129,9 @@ export function SetupTour({ setup, onDone }: { setup: Setup; onDone: () => void 
             </ol>
             {step === "welcome" && (
               <>
-                <h1 id="setup-title">Welcome to OpenNotebook</h1>
+                <h1 id="setup-title">Welcome to Notabit</h1>
                 <p className="setup-lead">
-                  OpenNotebook reads your sources and makes decks, audio overviews, videos, mind maps and study notes
+                  Notabit reads your sources and makes decks, audio overviews, videos, mind maps and study notes
                   from them with the AI models you choose. Connect an AI provider to start.
                 </p>
                 <ul className="setup-points">

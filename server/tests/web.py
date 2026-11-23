@@ -7,7 +7,7 @@ from collections.abc import Callable
 import httpx
 import pytest
 
-from opennotebook.domain import sources
+from notabit.domain import sources
 
 # Where every outside name resolves to in a test: a documentation address.
 OUTSIDE = "203.0.113.7"

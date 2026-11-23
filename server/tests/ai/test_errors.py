@@ -1,8 +1,8 @@
-"""Ported from opennotebook_ai/src/error.rs."""
+"""Ported from notabit_ai/src/error.rs."""
 
 import json
 
-from opennotebook.ai.errors import AiError, Kind, message_of
+from notabit.ai.errors import AiError, Kind, message_of
 
 
 def test_a_relayed_upstream_body_is_unwrapped_to_its_message() -> None:
@@ -58,7 +58,7 @@ def test_each_kind_reads_as_a_sentence() -> None:
 
 
 def test_a_price_reads_as_the_settings_page_shows_it() -> None:
-    from opennotebook.ai.prices import Price, hint
+    from notabit.ai.prices import Price, hint
 
     assert hint(Price(0.000001, 0.000005)) == "$1 / $5 per M tokens"
     assert hint(Price(0.0000001, 0.0000004)) == "$0.1 / $0.4 per M tokens"

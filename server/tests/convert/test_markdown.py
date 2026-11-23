@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from opennotebook.convert.markdown import Item, Span, inline, render, table
+from notabit.convert.markdown import Item, Span, inline, render, table
 
 
 def test_emphasis_keeps_spaces_outside_the_markers() -> None:

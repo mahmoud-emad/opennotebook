@@ -1,5 +1,5 @@
 // When does a question end? The frame-level decision from the old
-// `opennotebook_vad` crate (`Gate`), ported as it was, with its thresholds,
+// `notabit_vad` crate (`Gate`), ported as it was, with its thresholds,
 // now fed by Silero v5's per-frame speech probability instead of earshot's.
 // Silero reads 512 samples at 16 kHz, so a frame is 32 ms here, not 16.
 //
@@ -28,7 +28,7 @@ export type GateConfig = {
   minSpeechMs: number;
 };
 
-/** The shipped thresholds, `opennotebook_vad::Config::DEFAULT`. */
+/** The shipped thresholds, `notabit_vad::Config::DEFAULT`. */
 export const DEFAULT_GATE: GateConfig = {
   smoothing: 0.4,
   attack: 0.6,

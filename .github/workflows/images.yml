@@ -49,7 +49,7 @@ jobs:
       - id: meta
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
-          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/opennotebook-${{ matrix.image }}
+          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/notabit-${{ matrix.image }}
       - id: build
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
@@ -57,7 +57,7 @@ jobs:
           file: deploy/${{ matrix.image }}.Dockerfile
           platforms: ${{ matrix.platform }}
           labels: ${{ steps.meta.outputs.labels }}
-          outputs: type=image,name=${{ env.REGISTRY }}/${{ github.repository_owner }}/opennotebook-${{ matrix.image }},push-by-digest=true,name-canonical=true,push=true
+          outputs: type=image,name=${{ env.REGISTRY }}/${{ github.repository_owner }}/notabit-${{ matrix.image }},push-by-digest=true,name-canonical=true,push=true
           cache-from: type=gha,scope=${{ matrix.image }}-${{ matrix.arch }}
           cache-to: type=gha,mode=max,scope=${{ matrix.image }}-${{ matrix.arch }}
       - name: Keep the digest
@@ -94,7 +94,7 @@ jobs:
       - id: meta
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
-          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/opennotebook-${{ matrix.image }}
+          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/notabit-${{ matrix.image }}
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
             type=semver,pattern={{version}}
@@ -105,6 +105,6 @@ jobs:
         run: |
           docker buildx imagetools create \
             $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
-            $(printf '${{ env.REGISTRY }}/${{ github.repository_owner }}/opennotebook-${{ matrix.image }}@sha256:%s ' *)
+            $(printf '${{ env.REGISTRY }}/${{ github.repository_owner }}/notabit-${{ matrix.image }}@sha256:%s ' *)
       - name: Show the result
-        run: docker buildx imagetools inspect "${{ env.REGISTRY }}/${{ github.repository_owner }}/opennotebook-${{ matrix.image }}:${{ steps.meta.outputs.version }}"
+        run: docker buildx imagetools inspect "${{ env.REGISTRY }}/${{ github.repository_owner }}/notabit-${{ matrix.image }}:${{ steps.meta.outputs.version }}"

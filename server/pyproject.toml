@@ -1,7 +1,7 @@
 [project]
-name = "opennotebook"
+name = "notabit"
 version = "0.3.0"
-description = "OpenNotebook server: collections, sources, studio outputs and the chat agent"
+description = "Notabit server: collections, sources, studio outputs and the chat agent"
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
@@ -52,7 +52,7 @@ dev = [
 ]
 
 [project.scripts]
-opennotebook = "opennotebook.cli:main"
+notabit = "notabit.cli:main"
 
 [build-system]
 requires = ["hatchling"]
@@ -67,7 +67,7 @@ select = ["E", "F", "I", "B", "UP", "SIM", "RUF", "ASYNC"]
 ignore = ["RUF001", "RUF002", "RUF003"]
 
 [tool.pyright]
-include = ["opennotebook", "tests"]
+include = ["notabit", "tests"]
 pythonVersion = "3.14"
 typeCheckingMode = "strict"
 reportMissingTypeStubs = false

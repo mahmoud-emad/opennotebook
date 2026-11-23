@@ -13,13 +13,13 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy import text
 
-from opennotebook import storage
-from opennotebook.config import settings
-from opennotebook.db.models import Collection, Share
-from opennotebook.db.session import engine, sessionmaker
-from opennotebook.domain import collections, shares
-from opennotebook.domain.shares import NOTE_MAX, Holdings, Key, Live, Out, Plan
-from opennotebook.errors import Problem
+from notabit import storage
+from notabit.config import settings
+from notabit.db.models import Collection, Share
+from notabit.db.session import engine, sessionmaker
+from notabit.domain import collections, shares
+from notabit.domain.shares import NOTE_MAX, Holdings, Key, Live, Out, Plan
+from notabit.errors import Problem
 from tests.conftest import other_person
 from tests.model import install, says
 
@@ -174,7 +174,7 @@ async def test_the_feed_sorts_newest_or_most_reused_and_searches_every_field(
         await c.execute(
             text(
                 "INSERT INTO user_settings (owner_id, key, value) SELECT owner_id,"
-                " 'OPENNOTEBOOK_COVERS', 'off' FROM collections WHERE id = :c"
+                " 'NOTABIT_COVERS', 'off' FROM collections WHERE id = :c"
             ),
             {"c": made["Rust"]},
         )
@@ -240,7 +240,7 @@ def test_a_card_counts_what_is_included_and_still_there() -> None:
             updated_at=T0,
         )
 
-    from opennotebook.cover import CoverSpec
+    from notabit.cover import CoverSpec
 
     spec = CoverSpec(topic="Kernels", terms=["Scheduling"])
     sh = share(False, [f"session:{DECK}", f"session:{AUDIO}", f"notes:{uuid.uuid4()}"])

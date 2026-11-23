@@ -19,15 +19,15 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy import text
 
-from opennotebook import storage
-from opennotebook.build import encode, narrate, stills, video, wav
-from opennotebook.build import timeline as tl
-from opennotebook.db.models import Session
-from opennotebook.db.session import engine
-from opennotebook.domain import shares
-from opennotebook.domain.sessions import Line, Part
-from opennotebook.speech import words_of
-from opennotebook.speech.wav import ramp_wav
+from notabit import storage
+from notabit.build import encode, narrate, stills, video, wav
+from notabit.build import timeline as tl
+from notabit.db.models import Session
+from notabit.db.session import engine
+from notabit.domain import shares
+from notabit.domain.sessions import Line, Part
+from notabit.speech import words_of
+from notabit.speech.wav import ramp_wav
 from tests.builds.conftest import drain
 from tests.builds.fake import install, tools_found
 from tests.model import add_note

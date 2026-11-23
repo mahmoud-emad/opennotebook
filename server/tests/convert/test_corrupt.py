@@ -7,7 +7,7 @@ import zipfile
 
 import pytest
 
-from opennotebook.convert import ConvertError, InputKind, Problem, to_markdown
+from notabit.convert import ConvertError, InputKind, Problem, to_markdown
 
 from .common import package, rels
 

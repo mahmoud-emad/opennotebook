@@ -20,11 +20,11 @@ import pytest
 from httpx import AsyncClient
 from pydantic import ValidationError
 
-from opennotebook.ai import client as ai_client
-from opennotebook.ai.client import Ai
-from opennotebook.api import video as video_api
-from opennotebook.api.video import lines_of_vtt
-from opennotebook.build.whiteboard import (
+from notabit.ai import client as ai_client
+from notabit.ai.client import Ai
+from notabit.api import video as video_api
+from notabit.api.video import lines_of_vtt
+from notabit.build.whiteboard import (
     check,
     draw,
     geometry,
@@ -34,10 +34,10 @@ from opennotebook.build.whiteboard import (
     presenter,
     write,
 )
-from opennotebook.build.whiteboard.compile import SAFE, SETTLE_MS, Drawing, compile_scene
-from opennotebook.build.whiteboard.scene import Beat, Element, Plan, PlannedScene, Scene
-from opennotebook.domain.sessions import Line, Part
-from opennotebook.script import explain
+from notabit.build.whiteboard.compile import SAFE, SETTLE_MS, Drawing, compile_scene
+from notabit.build.whiteboard.scene import Beat, Element, Plan, PlannedScene, Scene
+from notabit.domain.sessions import Line, Part
+from notabit.script import explain
 from tests.builds.conftest import drain
 from tests.builds.fake import install, tools_found
 from tests.model import add_note
@@ -481,9 +481,7 @@ def test_a_segment_is_drawn_in_pieces_that_join_to_every_frame(tmp_path: Path, t
     seg = dataclasses.replace(_segment(tmp_path, frames=150), theme=theme)
     spec = tmp_path / "seg.json"
     spec.write_text(draw.to_json(seg))
-    subprocess.run(
-        [sys.executable, "-m", "opennotebook.build.whiteboard.draw", str(spec)], check=True
-    )
+    subprocess.run([sys.executable, "-m", "notabit.build.whiteboard.draw", str(spec)], check=True)
     parts = json.loads((tmp_path / "seg.parts.json").read_text())
     assert len(parts) >= 2, "a long hold is a piece of its own"
     listing = tmp_path / "all.txt"

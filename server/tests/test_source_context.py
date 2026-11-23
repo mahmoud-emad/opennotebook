@@ -6,9 +6,9 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy import select
 
-from opennotebook import memory
-from opennotebook.db.models import User
-from opennotebook.db.session import sessionmaker
+from notabit import memory
+from notabit.db.models import User
+from notabit.db.session import sessionmaker
 from tests.conftest import other_person
 from tests.model import add_note, install, says
 

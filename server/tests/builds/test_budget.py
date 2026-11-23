@@ -1,9 +1,9 @@
-"""The narration budgets, ported from `opennotebook_script/src/budget.rs`.
+"""The narration budgets, ported from `notabit_script/src/budget.rs`.
 Plan §9: title 60, line 320, slide narration 650, 17 characters a second,
 lines cut at whole sentences."""
 
-from opennotebook.script import budget
-from opennotebook.script.budget import (
+from notabit.script import budget
+from notabit.script.budget import (
     BOOKEND_NARRATION,
     CHARS_PER_SECOND,
     LINE,

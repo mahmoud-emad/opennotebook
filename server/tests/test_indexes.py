@@ -5,8 +5,8 @@ from typing import Any
 
 from sqlalchemy import text
 
-from opennotebook.db.models import Base
-from opennotebook.db.session import engine
+from notabit.db.models import Base
+from notabit.db.session import engine
 
 WANTED = {
     "jobs": {"ix_jobs_session_created", "ix_jobs_procrastinate_job_id", "ix_jobs_finished"},

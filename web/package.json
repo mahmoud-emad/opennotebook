@@ -1,5 +1,5 @@
 {
-  "name": "opennotebook-web",
+  "name": "notabit-web",
   "private": true,
   "version": "0.3.0",
   "type": "module",
@@ -10,7 +10,7 @@
     "typecheck": "tsc -b",
     "lint": "eslint .",
     "test": "vitest run",
-    "api": "cd ../server && uv run opennotebook openapi > ../web/openapi.json && cd ../web && openapi-ts",
+    "api": "cd ../server && uv run notabit openapi > ../web/openapi.json && cd ../web && openapi-ts",
     "e2e": "playwright test"
   },
   "dependencies": {

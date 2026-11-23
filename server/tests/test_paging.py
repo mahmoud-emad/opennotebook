@@ -7,7 +7,7 @@ from typing import Any
 from httpx import AsyncClient
 from sqlalchemy import text
 
-from opennotebook.db.session import engine
+from notabit.db.session import engine
 from tests.model import add_note
 
 T0 = datetime(2026, 9, 1, tzinfo=UTC)

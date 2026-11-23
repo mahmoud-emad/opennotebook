@@ -37,11 +37,11 @@ Previews of each drawn theme, rendered by the real renderer, are in [plans/img](
    - `build/whiteboard/geometry.py`: `_font()` loads `assets/Caveat-Bold.ttf`, and `wobble`'s amplitude.
    - `build/whiteboard/check.py`: `still()` clears with `BOARD`.
    - `build/whiteboard/frame.py`: the opening and closing slides' CSS (paper, ink, accent, the hand font).
-3. **The theme travels with the segment.** Scenes are drawn in child processes (`python -m opennotebook.build.whiteboard.draw <segment.json>`), so `draw.Segment` gains `theme: str` and the child looks the theme up by id. A theme never travels as a pickled object.
+3. **The theme travels with the segment.** Scenes are drawn in child processes (`python -m notabit.build.whiteboard.draw <segment.json>`), so `draw.Segment` gains `theme: str` and the child looks the theme up by id. A theme never travels as a pickled object.
 4. **The model's prompts do not change with a drawn theme.** Tones stay `ink | blue | red | amber | green`; the theme maps each tone to its own colour. A scene written once can be drawn in any theme, and the checks (grounding, lint, the vision check) run as they do now. The vision check should be shown the scene in the theme it will be drawn in (`check.still` takes the theme).
 5. **Readable first.** Every theme's five inks and its highlighted ink must reach a contrast of at least 4.5:1 against its paper (WCAG AA for text). A test enforces it (section 7).
 6. **Fonts are bundled, open-licensed TTFs**, drawn as outlines like Caveat today, with the same fallback for missing glyphs (`geometry._needs_shaping` / fallback fonts). Candidates, each to be checked for its licence (OFL or Apache 2.0) and its Latin and extended coverage before it is added: Kalam or Patrick Hand (Notebook), Gochi Hand or Caveat (Chalkboard), Architects Daughter (Blueprint), Special Elite or a slab serif (Retro Print), Caveat or Patrick Hand (Paper-craft). Add each to `assets/LICENSES.md`.
-7. **Defaults.** Whiteboard is the default and stays exactly as it is: phase 0 changes no pixel of it (enforced by a golden test). A Settings default (`OPENNOTEBOOK_VIDEO_THEME`) can come later; it is not needed.
+7. **Defaults.** Whiteboard is the default and stays exactly as it is: phase 0 changes no pixel of it (enforced by a golden test). A Settings default (`NOTABIT_VIDEO_THEME`) can come later; it is not needed.
 
 ## 3. Phase 0: the plumbing (no visible change)
 

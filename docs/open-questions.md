@@ -1,4 +1,4 @@
-# OpenNotebook, open questions
+# Notabit, open questions
 
 Decisions the owner has not made yet, kept in one place so they are not lost while the [stack migration](stack-migration-plan.md) is built. Each says what it blocks, when it has to be answered, and what the work assumes until then, so nothing waits on it unless it has to.
 

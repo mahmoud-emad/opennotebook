@@ -6,9 +6,9 @@ from collections.abc import AsyncIterator
 import pytest
 from sqlalchemy import text
 
-from opennotebook.db.session import engine
-from opennotebook.jobs.app import app
-from opennotebook.jobs.events import hub
+from notabit.db.session import engine
+from notabit.jobs.app import app
+from notabit.jobs.events import hub
 
 
 @pytest.fixture(autouse=True)

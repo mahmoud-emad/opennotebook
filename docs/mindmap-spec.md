@@ -1,4 +1,4 @@
-# OpenNotebook, mind map specification
+# Notabit, mind map specification
 
 A mind map of a collection's sources, on its collection page. The person clicks the Mind map tile, gets a tree of the topics their sources cover, and clicks any topic to ask the chat what the sources say about it, with citations back to the sources.
 
@@ -25,11 +25,11 @@ All six steps of section 11 are built, and section 8 holds what was measured. Th
 | What the model writes | An indented `- ` outline, parsed into a tree | Decided by the owner. NotebookLM asks for JSON and repairs trailing commas on the way in, which is a sign its model breaks JSON. The small models this studio runs break it more often, and `parse_plan` already shows a decorated outline parses reliably. |
 | What is stored | NotebookLM's shape: `{name, children}` | Observed. Keeping its shape costs nothing and makes an import or export of one trivially compatible. |
 | How it is generated | One model call over the selected sources' full text | Decided. The largest real draft on this box is 189,870 bytes (measured), about 50k tokens, which fits whole in the agent model's context. A map-then-merge pass is only needed for drafts far bigger than any seen. |
-| The model | A new setting, `OPENNOTEBOOK_MINDMAP_MODEL`, defaulting to the chat agent's model, `google/gemini-2.5-flash-lite` | Decided. The script model's default, `amazon/nova-micro-v1`, has too small a window for a whole draft. |
+| The model | A new setting, `NOTABIT_MINDMAP_MODEL`, defaulting to the chat agent's model, `google/gemini-2.5-flash-lite` | Decided. The script model's default, `amazon/nova-micro-v1`, has too small a window for a whole draft. |
 | Are nodes grounded | Yes, checked: a node whose words appear nowhere in the sources is dropped and counted | Decided, and a departure. NotebookLM enforces nothing; its nodes carry no citations and grounding rests on the prompt alone. |
 | What a click asks | NotebookLM's exact sentence (section 1) | Observed. |
 | How the answer is grounded | Excerpts from the staged files, numbered, cited as `[n]` | Decided by the owner: citations are in v1. A draft has no retrieval index until it is built, so `session_ask` cannot serve it. |
-| Where maps are stored | `<data dir>/mindmaps/<cid>/<id>.json` | Decided, forced. The Rust server's `read_resources` ingested every file in the staging directory, so a map stored there would have become a source of the build. The new server keeps maps in the `mindmaps` table (`MindMap` in `server/opennotebook/db/models.py`). |
+| Where maps are stored | `<data dir>/mindmaps/<cid>/<id>.json` | Decided, forced. The Rust server's `read_resources` ingested every file in the staging directory, so a map stored there would have become a source of the build. The new server keeps maps in the `mindmaps` table (`MindMap` in `server/notabit/db/models.py`). |
 | Rendering | Plain SVG from React, laid out by a pure TypeScript function (`layout` in `web/src/ui/mindmapLayout.ts`). No D3, no markmap. | Decided. The UI is offline first and takes no drawing library. The layout NotebookLM uses is small enough to write and test in TypeScript. |
 | Editing | Not in v1 | Decided. NotebookLM has none either. See section 9. |
 
@@ -75,14 +75,14 @@ Only the direct parent is named, not the path. Clicking the label always asks, a
 - **The id.** The draft's sid is the session's sid after the build, so a map stored under it still belongs to the session later.
 - **Retrieval without a build.** `grounding.excerpts()` cuts documents into paragraph pieces, drops navigation, and keeps the pieces sharing the most words with a query. It returns text only; section 5 needs it to say which document a piece came from.
 - **Word matching.** `grounding.terms()` lowercases a query, keeps words of three letters or more and drops common ones. Section 3's grounding check reuses it.
-- **A tolerant outline parser.** `parse_plan` in `server/opennotebook/script/generate.py` already reads a model's decorated outline. Section 3's parser follows its approach.
+- **A tolerant outline parser.** `parse_plan` in `server/notabit/script/generate.py` already reads a model's decorated outline. Section 3's parser follows its approach.
 - **The language rule.** `settings.language_rule()` is what every other prompt appends.
 
 What is missing: nothing on the Create page answers a question from the sources. The chat agent has `web_search`, `deep_research`, `add_sources` and `start_build`, and none of them reads what was gathered.
 
 ## 3. Generation
 
-A new module, `server/opennotebook/script/mindmap.py`, with one public function:
+A new module, `server/notabit/script/mindmap.py`, with one public function:
 
 ```python
 async def generate_map(
@@ -127,7 +127,7 @@ A reply cut off at the model's token ceiling is kept up to the cut, because a ma
 
 ## 4. Storage and API
 
-A new JSON-RPC domain, the `mindmap` methods in `server/opennotebook/api/rpc_methods.py`, served at `/api/mindmap/rpc`. The chat agent and any JSON-RPC client call the same methods, so the comments are written for an agent.
+A new JSON-RPC domain, the `mindmap` methods in `server/notabit/api/rpc_methods.py`, served at `/api/mindmap/rpc`. The chat agent and any JSON-RPC client call the same methods, so the comments are written for an agent.
 
 ```
 MindNode = {
@@ -333,7 +333,7 @@ Each of these is a test, written before the code it guards.
 
 ## 11. Sequence, for building
 
-1. `server/opennotebook/script/mindmap.py`: prompt, parser, clean up, grounding check, and the section 10 parser tests.
+1. `server/notabit/script/mindmap.py`: prompt, parser, clean up, grounding check, and the section 10 parser tests.
 2. Find out whether the oschema macro takes a recursive `MindNode`. Then the `mindmap` domain, the on-disk store, and the staging directory test.
 3. `excerpts_from()`, `source_ask`, citation parsing and renumbering, their tests, and the `ask_sources` agent tool.
 4. The layout function and its tests.
@@ -349,7 +349,7 @@ Each of these is a test, written before the code it guards.
 
 ### 2026-10-02, step 1 built
 
-`server/opennotebook/script/mindmap.py`: the prompt, the parser, the clean up and the grounding check. Its tests are in `server/tests/test_mindmap.py`. The model call goes through `generate.send()` in `server/opennotebook/script/generate.py`, so the map can use its own model setting, `OPENNOTEBOOK_MINDMAP_MODEL`, which is on the Models tab. Building it settled three things section 3 had not: an organising label over real topics is kept, the check is skipped for a map that is not in English, and a reply cut at the token ceiling is kept. Section 3 now says so. Nothing has called a real model yet; that is step 6.
+`server/notabit/script/mindmap.py`: the prompt, the parser, the clean up and the grounding check. Its tests are in `server/tests/test_mindmap.py`. The model call goes through `generate.send()` in `server/notabit/script/generate.py`, so the map can use its own model setting, `NOTABIT_MINDMAP_MODEL`, which is on the Models tab. Building it settled three things section 3 had not: an organising label over real topics is kept, the check is skipped for a map that is not in English, and a reply cut at the token ceiling is kept. Section 3 now says so. Nothing has called a real model yet; that is step 6.
 
 
 ### 2026-10-02, step 2 built
@@ -358,9 +358,9 @@ The `mindmap` domain is served at `/api/mindmap/rpc` with all four methods, and 
 
 ### 2026-10-02, step 3 built
 
-`source_ask` is on the sources domain and `ask_sources` is a tool of the chat agent. The prompt and the citation parser are `server/opennotebook/script/cite.py`, tested in `server/tests/test_ask.py`. Retrieval is `grounding.excerpts_from()`, which is `excerpts()` plus the index of the source each passage came from. Reading a collection's sources is `read_docs()` in `server/opennotebook/domain/reading.py`, shared by ask, mind maps and study notes.
+`source_ask` is on the sources domain and `ask_sources` is a tool of the chat agent. The prompt and the citation parser are `server/notabit/script/cite.py`, tested in `server/tests/test_ask.py`. Retrieval is `grounding.excerpts_from()`, which is `excerpts()` plus the index of the source each passage came from. Reading a collection's sources is `read_docs()` in `server/notabit/domain/reading.py`, shared by ask, mind maps and study notes.
 
-The answer uses the agent's model, the `CHAT_MODEL_KEY` setting in `server/opennotebook/domain/settings.py`, whose default is `AGENT_MODEL_DEFAULT`, rather than the script model, too small to follow the citation rule.
+The answer uses the agent's model, the `CHAT_MODEL_KEY` setting in `server/notabit/domain/settings.py`, whose default is `AGENT_MODEL_DEFAULT`, rather than the script model, too small to follow the citation rule.
 
 `ask_sources` ends the agent's turn. Its answer goes to the person as the reply, with a `citations` field on the `reply` event, instead of going back to the model. Handed back, it would come out paraphrased, and a paraphrase drops the markers.
 

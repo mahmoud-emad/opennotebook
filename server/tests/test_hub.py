@@ -12,12 +12,12 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy import text
 
-from opennotebook.api.collections import events_of
-from opennotebook.db.session import engine
-from opennotebook.domain.sessions_events import stream
-from opennotebook.jobs import CHANNEL, COLLECTION_CHANNEL
-from opennotebook.jobs import events as ev
-from opennotebook.jobs.events import JOB, SESSION, SESSION_CHANNEL, Hub, Wake, hub
+from notabit.api.collections import events_of
+from notabit.db.session import engine
+from notabit.domain.sessions_events import stream
+from notabit.jobs import CHANNEL, COLLECTION_CHANNEL
+from notabit.jobs import events as ev
+from notabit.jobs.events import JOB, SESSION, SESSION_CHANNEL, Hub, Wake, hub
 from tests.queries import recorded
 
 

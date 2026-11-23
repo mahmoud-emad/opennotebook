@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from opennotebook.convert import ConvertError, InputKind, to_markdown
+from notabit.convert import ConvertError, InputKind, to_markdown
 
 from .common import package, rels
 

@@ -1,9 +1,9 @@
 """Question-and-answer extraction, ported from
-`opennotebook_memory/src/qa.rs`."""
+`notabit_memory/src/qa.rs`."""
 
 import pytest
 
-from opennotebook.memory.qa import (
+from notabit.memory.qa import (
     MAX_WINDOW_BYTES,
     MAX_WINDOWS_PER_DOC,
     WINDOW_BYTES,

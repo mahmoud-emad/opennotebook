@@ -1,4 +1,4 @@
-"""Study notes: ported from opennotebook_script/src/notes.rs and the Rust
+"""Study notes: ported from notabit_script/src/notes.rs and the Rust
 server's notes_impl.rs, and the routes against a mocked model."""
 
 import uuid
@@ -7,10 +7,10 @@ from datetime import UTC, datetime
 import pytest
 from httpx import AsyncClient
 
-from opennotebook.api.notes import OUTPUT_TOKENS, NotesSummary, tokens_in
-from opennotebook.db.models import StudyNotes as Row
-from opennotebook.script.mindmap import NamedDoc
-from opennotebook.script.notes import (
+from notabit.api.notes import OUTPUT_TOKENS, NotesSummary, tokens_in
+from notabit.db.models import StudyNotes as Row
+from notabit.script.mindmap import NamedDoc
+from notabit.script.notes import (
     WHOLE_TEXT_CHARS,
     check_citations,
     numbered,
@@ -397,13 +397,13 @@ async def test_the_spending_limit_is_checked_before_any_model_call(
     cid = await _collection(client)
     await add_note(client, cid, MOSHI)
     # Every tool is checked against the limit, not only builds.
-    monkeypatch.setenv("OPENNOTEBOOK_MAX_BUILD_USD", "0.0000001")
+    monkeypatch.setenv("NOTABIT_MAX_BUILD_USD", "0.0000001")
     e = (await client.get(f"/api/collections/{cid}/notes/estimate")).json()
     assert e["limit_usd"] == pytest.approx(0.0000001) and e["over_limit"]
     r = await client.post(f"/api/collections/{cid}/notes", json={})
     assert r.status_code == 422
     assert r.json()["detail"].startswith("Study notes of these sources could cost up to $")
     assert "Settings › Costs & limits" in r.json()["detail"]
-    monkeypatch.setenv("OPENNOTEBOOK_MAX_BUILD_USD", "5")
+    monkeypatch.setenv("NOTABIT_MAX_BUILD_USD", "5")
     e = (await client.get(f"/api/collections/{cid}/notes/estimate")).json()
     assert e["limit_usd"] == 5 and not e["over_limit"]

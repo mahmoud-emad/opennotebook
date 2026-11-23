@@ -1,10 +1,10 @@
-/* opennotebook — the design tokens, for the app and the player alike.
+/* notabit — the design tokens, for the app and the player alike.
  *
  * Names are Bootstrap 5.3's own (--bs-body-bg, --bs-secondary-bg, --bs-primary,
  * --bs-border-radius-lg …) and the theme switch is Bootstrap's own mechanism,
  * `data-bs-theme` on <html>, so this sheet is the same contract ui_components
  * renders against. The few things Bootstrap has no token for carry an --st-
- * prefix. KEEP product:opennotebook — a creative studio's surfaces: a backdrop
+ * prefix. KEEP product:notabit — a creative studio's surfaces: a backdrop
  * under media, a hover and a pressed layer, a voice colour per speaker, the
  * mind map's depth colours, motion.
  *

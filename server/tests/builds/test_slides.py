@@ -1,6 +1,6 @@
 # ruff: noqa: E501
 """The deck: kits, the cleaner, the slide writer and the check. Ported from
-`opennotebook_build/src/{kits,clean,slides,validate}.rs`. Plan §9: kit
+`notabit_build/src/{kits,clean,slides,validate}.rs`. Plan §9: kit
 palettes pass WCAG AA; `clean` strips colour, gradients, background shapes,
 emoji and scripts; a missing slide is drawn plain from its copy."""
 
@@ -8,12 +8,12 @@ from pathlib import Path
 
 import pytest
 
-from opennotebook import storage
-from opennotebook.build import kits, slides, validate
-from opennotebook.build.clean import clean
-from opennotebook.build.errors import EmptyAudio, SlideMissing
-from opennotebook.domain import styles
-from opennotebook.domain.sessions import Line, Part
+from notabit import storage
+from notabit.build import kits, slides, validate
+from notabit.build.clean import clean
+from notabit.build.errors import EmptyAudio, SlideMissing
+from notabit.domain import styles
+from notabit.domain.sessions import Line, Part
 from tests.builds.fake import install
 
 FIXTURE = Path(__file__).parent / "fixtures" / "dark_backdrop_slide.html"

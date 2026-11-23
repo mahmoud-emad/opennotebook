@@ -1,7 +1,7 @@
 # ruff: noqa: E501
 """Background work: queueing, progress over NOTIFY, stopping, one build at a
 time, the read-time reconcile and stalled-job recovery. Ported from
-`opennotebook_build/src/job.rs` and the lifecycle tests of
+`notabit_build/src/job.rs` and the lifecycle tests of
 `session_impl.rs`. Plan §9: one prep at a time; reconcile at read time."""
 
 import asyncio
@@ -15,12 +15,12 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy import text
 
-from opennotebook import jobs
-from opennotebook.build import pipeline
-from opennotebook.db.models import Job
-from opennotebook.db.session import engine, sessionmaker
-from opennotebook.jobs import Progress, logs, tasks, worker
-from opennotebook.jobs.app import app, conninfo
+from notabit import jobs
+from notabit.build import pipeline
+from notabit.db.models import Job
+from notabit.db.session import engine, sessionmaker
+from notabit.jobs import Progress, logs, tasks, worker
+from notabit.jobs.app import app, conninfo
 from tests.builds.conftest import drain
 from tests.builds.fake import install
 from tests.model import add_note

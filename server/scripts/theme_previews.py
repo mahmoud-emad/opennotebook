@@ -14,10 +14,10 @@ from pathlib import Path
 
 import skia
 
-from opennotebook.build.whiteboard import draw
-from opennotebook.build.whiteboard import theme as th
-from opennotebook.build.whiteboard.compile import Drawing, H, W, compile_illustrated, compile_scene
-from opennotebook.build.whiteboard.scene import Beat, Scene
+from notabit.build.whiteboard import draw
+from notabit.build.whiteboard import theme as th
+from notabit.build.whiteboard.compile import Drawing, H, W, compile_illustrated, compile_scene
+from notabit.build.whiteboard.scene import Beat, Scene
 
 OUT = Path(__file__).resolve().parents[2] / "web" / "public" / "themes"
 SIZE = (384, 216)

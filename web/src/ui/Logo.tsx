@@ -1,4 +1,4 @@
-// OpenNotebook's mark: an open notebook on the brand blue, a play mark on its
+// Notabit's mark: an open notebook on the brand blue, a play mark on its
 // right page for what is made from it, and a spark above. The same drawing
 // as public/favicon.svg.
 

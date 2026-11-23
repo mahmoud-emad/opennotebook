@@ -12,14 +12,14 @@ from httpx import ASGITransport, AsyncClient
 if not os.environ.get("TEST_DATABASE_URL"):
     pytest.exit("Set TEST_DATABASE_URL to an empty Postgres database (make check does).", 2)
 os.environ["DATABASE_URL"] = os.environ["TEST_DATABASE_URL"]
-os.environ["OPENNOTEBOOK_AUTH"] = "local"
+os.environ["NOTABIT_AUTH"] = "local"
 # No test reaches a real AI endpoint; one that tries fails at once. No
 # provider is connected from the environment of whoever runs them, either:
 # a test that wants one sets it.
-os.environ["OPENNOTEBOOK_AI_BASE_URL"] = "http://ai.invalid/v1"
-os.environ.pop("OPENNOTEBOOK_AI_API_KEY", None)
-os.environ.pop("OPENNOTEBOOK_AI_KEY", None)
-os.environ.pop("OPENNOTEBOOK_AI_PRIMARY", None)
+os.environ["NOTABIT_AI_BASE_URL"] = "http://ai.invalid/v1"
+os.environ.pop("NOTABIT_AI_API_KEY", None)
+os.environ.pop("NOTABIT_AI_KEY", None)
+os.environ.pop("NOTABIT_AI_PRIMARY", None)
 os.environ.pop("OPENROUTER_API_KEY", None)
 os.environ.pop("OPENAI_API_KEY", None)
 os.environ.pop("ANTHROPIC_API_KEY", None)
@@ -40,19 +40,19 @@ os.environ.pop("DASHSCOPE_API_KEY", None)
 os.environ.pop("LMSTUDIO_BASE_URL", None)
 os.environ.pop("OLLAMA_API_KEY", None)
 os.environ.pop("OLLAMA_BASE_URL", None)
-os.environ["OPENNOTEBOOK_SECRET_KEY"] = "tests"
+os.environ["NOTABIT_SECRET_KEY"] = "tests"
 # Lines are read aloud by the OpenAI-compatible client, which the tests fake;
 # the Microsoft voices' own tests choose them where they need them.
-os.environ["OPENNOTEBOOK_TTS_PROVIDER"] = "openai"
+os.environ["NOTABIT_TTS_PROVIDER"] = "openai"
 
 from alembic import command
 from alembic.config import Config
 from sqlalchemy import text
 
-from opennotebook.config import settings
-from opennotebook.db.models import Base
-from opennotebook.db.session import engine
-from opennotebook.main import create_app
+from notabit.config import settings
+from notabit.db.models import Base
+from notabit.db.session import engine
+from notabit.main import create_app
 
 HERE = os.path.dirname(__file__)
 
@@ -74,8 +74,8 @@ async def model_down(monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[None]:
     kept, without a wait."""
     import httpx2
 
-    from opennotebook.ai.client import Ai
-    from opennotebook.domain import covers, naming
+    from notabit.ai.client import Ai
+    from notabit.domain import covers, naming
 
     http = httpx2.AsyncClient(
         transport=httpx2.MockTransport(
@@ -95,8 +95,8 @@ def no_internet_voices(monkeypatch: pytest.MonkeyPatch) -> None:
     for them without a fake of its own fails at once instead of calling out."""
     import httpx
 
-    from opennotebook import speech
-    from opennotebook.speech import microsoft
+    from notabit import speech
+    from notabit.speech import microsoft
 
     async def offline(text: str, voice: str) -> AsyncIterator[Mapping[str, Any]]:
         raise OSError("tests do not reach Microsoft's voice service")
@@ -119,7 +119,7 @@ def settings_read_fresh(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     """Tests write settings straight into their tables, so unless a test says
     otherwise every read goes to the database, as the worker's would after
     `CACHE_SECONDS`; the tests of the cache turn it on."""
-    from opennotebook.domain import settings as st
+    from notabit.domain import settings as st
 
     monkeypatch.setattr(st, "CACHE_SECONDS", 0.0)
     st.forget()
@@ -131,7 +131,7 @@ def settings_read_fresh(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
 def connections_read_fresh() -> Iterator[None]:
     """Every test starts from the connections its environment and tables
     hold, with no model lists remembered from another."""
-    from opennotebook.ai import connections
+    from notabit.ai import connections
 
     connections.forget()
     connections.remember_offered({})
@@ -144,7 +144,7 @@ def connections_read_fresh() -> Iterator[None]:
 async def empty_tables(model_down: None) -> AsyncIterator[None]:
     yield
     # Background work a test started finishes before its rows go.
-    from opennotebook.domain import refresh
+    from notabit.domain import refresh
 
     await refresh.settle()
     # The queue too: a job left waiting would run against the next test's rows.
@@ -162,7 +162,7 @@ async def client() -> AsyncIterator[AsyncClient]:
 
 async def other_person(client: AsyncClient, email: str) -> dict[str, str]:
     """Headers that act as a second person, through an API key of theirs."""
-    from opennotebook.auth import key_hash, new_key
+    from notabit.auth import key_hash, new_key
 
     key = new_key()
     async with engine().begin() as c:

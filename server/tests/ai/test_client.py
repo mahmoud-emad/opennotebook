@@ -1,4 +1,4 @@
-"""Ported from opennotebook_ai/src/tests.rs, against a mock endpoint."""
+"""Ported from notabit_ai/src/tests.rs, against a mock endpoint."""
 
 import json
 import uuid
@@ -9,10 +9,10 @@ import httpx2
 import pytest
 from sqlalchemy import text
 
-from opennotebook.ai import ledger
-from opennotebook.ai.client import Ai, Done, TextDelta
-from opennotebook.ai.errors import AiError, Kind
-from opennotebook.db.session import engine
+from notabit.ai import ledger
+from notabit.ai.client import Ai, Done, TextDelta
+from notabit.ai.errors import AiError, Kind
+from notabit.db.session import engine
 
 Reply = Callable[[httpx2.Request], httpx2.Response]
 
@@ -166,7 +166,7 @@ async def test_the_pauses_between_tries_grow_and_a_rate_limit_waits_twice_as_lon
     async def record(s: float) -> None:
         slept.append(s)
 
-    monkeypatch.setattr("opennotebook.ai.client.asyncio.sleep", record)
+    monkeypatch.setattr("notabit.ai.client.asyncio.sleep", record)
     http = httpx2.AsyncClient(
         transport=httpx2.MockTransport(
             Mock(*[status(429, {"error": {"message": "Rate limited"}})] * 5)

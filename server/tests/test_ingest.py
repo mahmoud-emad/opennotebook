@@ -9,7 +9,7 @@ import httpx
 import pytest
 from httpx import AsyncClient
 
-from opennotebook.domain import sources
+from notabit.domain import sources
 from tests.web import fake_web
 
 FIXTURES = Path(__file__).parent / "convert" / "fixtures"
@@ -26,8 +26,8 @@ async def _collection(client: AsyncClient) -> str:
 async def test_files_are_read_verbatim_and_refusals_are_sentences(
     client: AsyncClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setenv("OPENNOTEBOOK_FILES_DIR", str(tmp_path))
-    from opennotebook.config import settings
+    monkeypatch.setenv("NOTABIT_FILES_DIR", str(tmp_path))
+    from notabit.config import settings
 
     settings.cache_clear()
     cid = await _collection(client)
@@ -261,7 +261,7 @@ def test_pages_are_asked_for_the_way_a_browser_asks() -> None:
     """Sites that screen out scripts (Medium, behind Cloudflare) answer a
     challenge page to Title-Case header names and the article to lowercase
     ones, and to a request with no browser metadata at all."""
-    from opennotebook.domain import sources
+    from notabit.domain import sources
 
     h = sources.PAGE_HEADERS
     assert all(k == k.lower() for k in h)

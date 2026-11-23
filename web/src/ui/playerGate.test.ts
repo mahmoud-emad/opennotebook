@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_GATE, FRAME_MS, Gate, HANG_MS, PeakGate, Resampler } from "./playerGate";
 
-// Ported from opennotebook_vad's frame-level tests: the same decisions on a
+// Ported from notabit_vad's frame-level tests: the same decisions on a
 // probability track, at Silero's 32 ms frames.
 const run = (g: Gate, p: number, frames: number) => {
   let ev = 0;

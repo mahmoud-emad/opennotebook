@@ -1,8 +1,8 @@
-# OpenNotebook, phase 1 specification
+# Notabit, phase 1 specification
 
 Static session: resources in, narrated deck out, plays start to finish. No interruption, no live mic, no streaming.
 
-> **Written against an earlier service stack.** This spec dates from September 2026, when the studio was one service among several: an external slide renderer, a retrieval service with two separate stores, a local Kokoro TTS server, an embedding service, a job supervisor that also held secrets, and a key-value store. The decisions and the measurements stand; the plumbing does not. Today the studio is one binary, `opennotebook_server`: retrieval is `opennotebook_memory` (one SQLite store), sessions, collections and prep jobs are SQLite rows, a prep runs as a child process of the server, model calls go through `opennotebook_ai` to any OpenAI-compatible endpoint, speech goes through `opennotebook_speech` to any OpenAI-compatible speech server, and the studio writes its own slides. Below, a component of that time is named by its role. The phase 0 verification record and the stack survey this spec cites were not carried into this repository.
+> **Written against an earlier service stack.** This spec dates from September 2026, when the studio was one service among several: an external slide renderer, a retrieval service with two separate stores, a local Kokoro TTS server, an embedding service, a job supervisor that also held secrets, and a key-value store. The decisions and the measurements stand; the plumbing does not. Today the studio is one binary, `notabit_server`: retrieval is `notabit_memory` (one SQLite store), sessions, collections and prep jobs are SQLite rows, a prep runs as a child process of the server, model calls go through `notabit_ai` to any OpenAI-compatible endpoint, speech goes through `notabit_speech` to any OpenAI-compatible speech server, and the studio writes its own slides. Below, a component of that time is named by its role. The phase 0 verification record and the stack survey this spec cites were not carried into this repository.
 
 Everything here rests on the phase 0 verification run and on the slices built since. Where this spec states a number or a behaviour, it was measured or called, not read from a schema. It has been amended several times as building revealed things the draft had wrong; [Amendments](#amendments) is the dated list, newest first, and is the place to look before trusting a number.
 
@@ -14,7 +14,7 @@ These are settled for phase 1. Changing one is a spec change, not a judgement ca
 |---|---|---|
 | Audience | One listener, one browser page | Every verified path is single-listener plumbing. A room needs LiveKit plus a synthetic publisher that exists nowhere in the fleet. |
 | Audio engine | Local Kokoro, through a local TTS server | **The lock stands; the stated basis does not.** 0.20x to 0.24x realtime was measured on other hardware. On `dev3omda` it is 1.09x to 1.22x. See the 2026-09-14 amendment on the stale basis. |
-| LLM for outline and script | An in-process LLM client, linked directly (today `opennotebook_ai`) | The client the slide renderer and the voice service already used. Admitting a separate AI broker service for two calls would buy streaming phase 1 does not use and metering nobody wants. |
+| LLM for outline and script | An in-process LLM client, linked directly (today `notabit_ai`) | The client the slide renderer and the voice service already used. Admitting a separate AI broker service for two calls would buy streaming phase 1 does not use and metering nobody wants. |
 | Narration delivery | Pre-rendered to files before playback | Removes the only live-audio-out dependency, the AI broker's SSE, from phases 1 to 3. |
 | Playhead owner | The studio | `slide_html_get` returns self-contained HTML, verified with all network blocked and no base URL. The slide renderer never learns a session exists. |
 | Narration storage | Studio-side, keyed by `SlideRef` | The slide renderer has no field for spoken text and no duration. Leave it untouched; revisit only if a second consumer appears. |
@@ -38,7 +38,7 @@ The retrieval service shipped seventeen, and reading all seventeen descriptions 
 
 A listener in a narrated session asks what this is, how it works, and why it matters. That is the third family. The set is `architecture`, `technology`, `product`, plus `business` carried up from the second family, because a user who drops in a pitch deck or a strategy memo has material the other three cannot see. `api` is dropped: signatures and call patterns are reference-doc territory, too fine-grained to narrate.
 
-**The honest caveat.** None of the seventeen is a general "explanatory content" dimension. They were written for one corpus and a learning studio ingests arbitrary material, so these four are the best available fit rather than a designed one. If retrieval feels thin in phase 2, the answer is more likely a new dimension than a different pick from these. (`server/opennotebook/memory/qa.py` carries the four over as `DIMENSIONS`, and a dimension is now a name and a description, `dimension_description()`.)
+**The honest caveat.** None of the seventeen is a general "explanatory content" dimension. They were written for one corpus and a learning studio ingests arbitrary material, so these four are the best available fit rather than a designed one. If retrieval feels thin in phase 2, the answer is more likely a new dimension than a different pick from these. (`server/notabit/memory/qa.py` carries the four over as `DIMENSIONS`, and a dimension is now a name and a description, `dimension_description()`.)
 
 **Cost.** Measured 8.6 s for two small fixtures at two dimensions, and 23.8 s for three files at two dimensions in phase 0, so roughly linear in files times dimensions at about 4 s each. Going from two dimensions to four doubles it. Ten source documents at four dimensions is therefore around 2 to 3 minutes, which is why `qa_extract` now appears in section 3's prep budget.
 
@@ -48,7 +48,7 @@ A listener in a narrated session asks what this is, how it works, and why it mat
 
 The parameter stays required with no default. The studio passes the fixed set; it is not baked into the function, so changing it is a change to a caller and not a code change in the ingest path.
 
-Phase 1 therefore depended on four services, and all four were exercised in the phase 0 run: the slide renderer, the retrieval service, the local Kokoro TTS server and the embedding service. Plus a job supervisor for jobs and secrets, and a key-value store underneath the retrieval service. Today none of these is a separate process: OpenNotebook needs an OpenAI-compatible LLM endpoint and, for audio, an OpenAI-compatible speech server.
+Phase 1 therefore depended on four services, and all four were exercised in the phase 0 run: the slide renderer, the retrieval service, the local Kokoro TTS server and the embedding service. Plus a job supervisor for jobs and secrets, and a key-value store underneath the retrieval service. Today none of these is a separate process: Notabit needs an OpenAI-compatible LLM endpoint and, for audio, an OpenAI-compatible speech server.
 
 ## 1. Ingest, one function, two writes
 
@@ -64,7 +64,7 @@ ingest_resources(session_sid, files[]) -> IngestResult
 
 ### The sequence
 
-1. **Convert, verbatim only.** Each file through `server/opennotebook/convert` (`pdf.py`, `docx.py`, `pptx.py`, `xlsx.py`) to Markdown. Bytes in, model out, no network.
+1. **Convert, verbatim only.** Each file through `server/notabit/convert` (`pdf.py`, `docx.py`, `pptx.py`, `xlsx.py`) to Markdown. Bytes in, model out, no network.
 2. **Refuse what cannot be extracted.** A PDF whose pages fall under the 80 byte selectable-text threshold has no text layer. Refuse it with a clear message. Do not OCR and do not flag-and-continue: nothing downstream in phase 1 reads the flag, and OCR in the grounding store will be quoted back as if it were the document.
 3. **Write to the session directory.** Materialise the Markdown into the session's directory with a `.collection` marker.
 4. **`collection_import`** that directory.
@@ -149,7 +149,7 @@ NarrationLine
 
 Section 0 names a key-value store as a phase 1 dependency and this section says the store is studio owned, but neither said where it lives or in what shape. Decided here.
 
-**One JSON document per session.** At the time that was a key in the key-value store; today it is one row of the `docs (kind, id, body)` table in `opennotebook.db`, the SQLite database in the data directory, with kind `session` and the session sid as id. The sid is the same value that names the session directory and the retrieval collection.
+**One JSON document per session.** At the time that was a key in the key-value store; today it is one row of the `docs (kind, id, body)` table in `notabit.db`, the SQLite database in the data directory, with kind `session` and the session sid as id. The sid is the same value that names the session directory and the retrieval collection.
 
 Why not the alternatives. Files in the session directory were rejected because the session directory is derived state that teardown deletes. A graph or vector store models relationships and similarity, and a session is neither.
 
@@ -171,7 +171,7 @@ When something does need sub-line timing, the likely answer is to make the sente
 
 ## 3. Session build, a job not a request
 
-Submitted as a job, following the precedent the slide renderer used for its own renders. Emits progress. The user watches a prep screen. Today the job is a row in the SQLite `jobs` table and the work runs in a child process, `opennotebook_server prep --spec <file> --job <id>`, one prep at a time; it survives a server restart.
+Submitted as a job, following the precedent the slide renderer used for its own renders. Emits progress. The user watches a prep screen. Today the job is a row in the SQLite `jobs` table and the work runs in a child process, `notabit_server prep --spec <file> --job <id>`, one prep at a time; it survives a server restart.
 
 ```
 1. ingest_resources()                        seconds
@@ -232,7 +232,7 @@ The studio holds the playhead. It plays `NarrationLine` audio in order, advances
 
 ### Where the bytes come from
 
-**Bytes ride `/api/`, beside the JSON-RPC routes, on the one address the server listens on.** The studio serves narration audio from `/api/session/audio`, slide HTML from `/api/session/slide`, and section 4's event stream from `/api/session/events`. When this was written the studio sat behind a router on a Unix socket, and the survey had claimed that bytes and long-lived streams needed a socket of their own; executed on 2026-09-09, that was wrong, and byte routes and SSE served correctly next to JSON-RPC. Today the question does not arise: the FastAPI app in `server/opennotebook/main.py` serves the API and the byte routes (`server/opennotebook/api/media.py`) on one address, `:8000` in development, and the Vite dev server passes `/api` through to it (`web/vite.config.ts`).
+**Bytes ride `/api/`, beside the JSON-RPC routes, on the one address the server listens on.** The studio serves narration audio from `/api/session/audio`, slide HTML from `/api/session/slide`, and section 4's event stream from `/api/session/events`. When this was written the studio sat behind a router on a Unix socket, and the survey had claimed that bytes and long-lived streams needed a socket of their own; executed on 2026-09-09, that was wrong, and byte routes and SSE served correctly next to JSON-RPC. Today the question does not arise: the FastAPI app in `server/notabit/main.py` serves the API and the byte routes (`server/notabit/api/media.py`) on one address, `:8000` in development, and the Vite dev server passes `/api` through to it (`web/vite.config.ts`).
 
 ### The change source, decided
 
@@ -296,7 +296,7 @@ A successful ingest leaves a collection behind in both retrieval stores and a di
 
 Phase 1 does not solve it. It is named here so phase 1 does not end believing it is handled. Whoever picks up teardown should know the two writes need two deletes. (Since solved: deleting an output or a collection removes its rows, its files and its retrieval index; see the README's Collections section.)
 
-**One thing phase 1 had to do at once, because later would have been a migration.** The retrieval service's `collection_delete` was keyed on a registry id returned only by `collection_import`, not on the collection name, so `IngestResult` persisted it as `collection_sid`. `opennotebook_memory` deletes a collection by name, so that id is no longer needed.
+**One thing phase 1 had to do at once, because later would have been a migration.** The retrieval service's `collection_delete` was keyed on a registry id returned only by `collection_import`, not on the collection name, so `IngestResult` persisted it as `collection_sid`. `notabit_memory` deletes a collection by name, so that id is no longer needed.
 
 ### One correction to carry forward
 
@@ -319,8 +319,8 @@ Each of these is a silent failure. Each gets a test that fails loudly.
 | `ok: true` on a broken slide | Character budgets upstream; no field emitted that becomes a placeholder |
 | Non-deterministic TTS | `duration_ms` read from the WAV that will be played, never carried across a re-render |
 | Cue granularity is a property of the input | `transcribe_cues` documents VAD segmentation but falls back to fixed windows on TTS input, which has no pauses to segment on. The 11.6 s granularity is not a tuning problem and will not improve with a better cue method. Do not design sub-line sync around it. |
-| A directory that becomes a collection is named by the directory | `deck_create` with `collection: "tbld1788953767880"` and `collection_path: "/tmp/opennotebook_build_decks"` registered a collection called `opennotebook_build_decks`, with one theme, `opennotebook_build_decks_default`. The `collection` field named nothing. Same shape as the retrieval service's `collection_import` in section 1, so it is a rule across two services rather than a quirk of one. This one is loud: `deck_create` refused the theme and listed what really existed. Give each collection its own directory named after it. |
-| The response's content type is the audio discriminator, and a convenience wrapper can drop it | The speech client of the time base64 decoded the audio and returned bytes, discarding `content_type`. `response_format` accepts `"pcm"`, which has no header, so the two are reachable through one call and only that field tells them apart. Read the content type, or the RIFF header, before decoding; `opennotebook_speech` checks the WAV header and normalises every clip to 24 kHz mono 16-bit. Sixth instance of the silent-empty pattern. |
+| A directory that becomes a collection is named by the directory | `deck_create` with `collection: "tbld1788953767880"` and `collection_path: "/tmp/notabit_build_decks"` registered a collection called `notabit_build_decks`, with one theme, `notabit_build_decks_default`. The `collection` field named nothing. Same shape as the retrieval service's `collection_import` in section 1, so it is a rule across two services rather than a quirk of one. This one is loud: `deck_create` refused the theme and listed what really existed. Give each collection its own directory named after it. |
+| The response's content type is the audio discriminator, and a convenience wrapper can drop it | The speech client of the time base64 decoded the audio and returned bytes, discarding `content_type`. `response_format` accepts `"pcm"`, which has no header, so the two are reachable through one call and only that field tells them apart. Read the content type, or the RIFF header, before decoding; `notabit_speech` checks the WAV header and normalises every clip to 24 kHz mono 16-bit. Sixth instance of the silent-empty pattern. |
 | `steps_total: 0` means "does not report", not "no phases" | The job row's field contract, kept in the SQLite `jobs` table. A prep job that leaves it at zero is indistinguishable from one that reports no progress at all, and a client can only render a spinner. Set it when the job is created. Reaching `steps_total` does not imply success either: read `status`. |
 | `bg_file_upload` is collection-scoped | One collection per session, or sessions leak resources into each other |
 | Paraphrasing extractor | Grounding store fed only by `convert2md`. Never by `bg_pdf_extract_async`. |
@@ -357,7 +357,7 @@ Newest first. Each entry says what changed and what forced it, so a correction i
 
 **Three more the first real prep found, once it got far enough to find them.**
 
-*A prep submitted after an install could not start at all.* `dispatch::exe` takes the child's path from `current_exe`, which on Linux reads `/proc/self/exe` — and the kernel renders that as `/home/…/opennotebook_server (deleted)` once the file at that path has been replaced, which reinstalling the binary under a running server does every time. At the time the path went unquoted into a shell script, and bash answered `` syntax error near unexpected token `deleted' ``. The suffix is stripped now. The dispatched child is therefore the binary now at that path, which after an install is the new build rather than this process's own — the better of the two, since a prep should run the code that is installed.
+*A prep submitted after an install could not start at all.* `dispatch::exe` takes the child's path from `current_exe`, which on Linux reads `/proc/self/exe` — and the kernel renders that as `/home/…/notabit_server (deleted)` once the file at that path has been replaced, which reinstalling the binary under a running server does every time. At the time the path went unquoted into a shell script, and bash answered `` syntax error near unexpected token `deleted' ``. The suffix is stripped now. The dispatched child is therefore the binary now at that path, which after an install is the new build rather than this process's own — the better of the two, since a prep should run the code that is installed.
 
 *The bookend had no budget.* `script_one` spends the slide's 650 characters and then `generate_script` prepends up to two intro lines of up to `LINE` each, counted by nothing: a first slide could carry 1,290 characters, twice the thirty seconds of audio section 3 budgets. It went unseen because the bookend was being dropped for the `host_id` reason above — a limit nobody enforces is discovered by whatever stops hiding it. `budget.BOOKEND_NARRATION` is 320, enforced on the way out like every other budget here, and a bookend is now the only thing a first or last slide may carry beyond its own.
 
@@ -383,7 +383,7 @@ Nothing was rebuilt between the two runs, and the 4x to 5x gap is consistent acr
 
 - **A cloud TTS route** through an AI broker could not be used: the only key available was `OPENROUTER_API_KEY`, and OpenRouter serves no `/audio/speech` model (`openai/tts-1` returns `Model openai/tts-1 does not exist`).
 - **An audio-output chat model is reachable and fast.** OpenRouter carries `openai/gpt-audio` and `openai/gpt-audio-mini`, which take text in and return speech in the same streamed call. Measured: `gpt-audio-mini` puts the first audio byte on the wire at **846 to 916 ms** and delivers a 10 to 11 second answer in 1.8 s, which is 0.19x realtime and therefore never underruns; cost is **$0.0007 per question**, less than the text-only answer call it would replace. `gpt-audio` is 563 to 629 ms and $0.014. This is the same LLM path section 0 already locked for the script. What it costs is sovereignty for that one call, and the answer arriving in a provider voice rather than the session's own.
-- **A GPU** would change the arithmetic and there was no path to one. The TTS server's `sherpa-onnx` v1.13.3 build bundled a CPU-only onnxruntime, and no GPU node was available. (Today the speech server is whatever `OPENNOTEBOOK_TTS_BASE_URL` points at, so a GPU-backed Speaches or Kokoro-FastAPI is a configuration change.)
+- **A GPU** would change the arithmetic and there was no path to one. The TTS server's `sherpa-onnx` v1.13.3 build bundled a CPU-only onnxruntime, and no GPU node was available. (Today the speech server is whatever `NOTABIT_TTS_BASE_URL` points at, so a GPU-backed Speaches or Kokoro-FastAPI is a configuration change.)
 
 So the lock is now held by sovereignty rather than by adequacy, which is a weaker and more honest thing to hold it by. It is still the right call for narration. It is an open question for phase 2's answer path, and the measurements that decide it are in the phase 2 investigation rather than here. What would reopen the narration half is a GPU node or the four-thread ceiling being lifted upstream.
 
@@ -413,7 +413,7 @@ So the lock is now held by sovereignty rather than by adequacy, which is a weake
 
 ### 2026-09-10, the seams slice
 
-**Section 3's prep job is one row, created by the server and adopted by the child, never two.** The service slice had left two: one the studio made itself, and one the job supervisor actually executed, so a player reading `Session.prep_job_sid` for progress could read the row nobody was running. The supervisor of the time imposed several undocumented rules on how a job could be created and how per-run data reached the child; that plumbing is gone. Today the server writes one row to the Postgres `jobs` table with `jobs.create` and queues the `prep` task for it with `jobs.defer` (`server/opennotebook/jobs/__init__.py`), in the same transaction. The worker runs `prep` in `server/opennotebook/jobs/tasks.py` with that row's `job_id` in its arguments, and the task makes no row of its own.
+**Section 3's prep job is one row, created by the server and adopted by the child, never two.** The service slice had left two: one the studio made itself, and one the job supervisor actually executed, so a player reading `Session.prep_job_sid` for progress could read the row nobody was running. The supervisor of the time imposed several undocumented rules on how a job could be created and how per-run data reached the child; that plumbing is gone. Today the server writes one row to the Postgres `jobs` table with `jobs.create` and queues the `prep` task for it with `jobs.defer` (`server/notabit/jobs/__init__.py`), in the same transaction. The worker runs `prep` in `server/notabit/jobs/tasks.py` with that row's `job_id` in its arguments, and the task makes no row of its own.
 
 **Section 4 gains "Where the bytes come from".** The survey's claim that bytes and streams need a socket of their own was read, never executed, and is wrong. Recorded in the spec rather than in a slice report because section 4 builds on it.
 
@@ -421,9 +421,9 @@ So the lock is now held by sovereignty rather than by adequacy, which is a weake
 
 **SSE was not declared until there was a route to serve it.** A declared protocol nothing answers is the same class of claim as `ok: true` on a broken slide. It was not added with a minimal route because there was nothing yet to stream from: a session's state changes inside the prep child process, not the process serving the API, so the server could only learn of a change by polling the store. Choosing the interval, the per-client fan-out and whether to introduce an in-process bus is section 4's design, and emitting anything at all would mean naming events, which section 4 owns. Section 4 adds the declaration back together with the route.
 
-**One thing the wired pipeline found immediately.** Nothing created the retrieval workspace, and the refusal arrived at step 5 of section 1, *after* the first store had been written, so ingest's rollback had to undo a write that need never have happened. In `opennotebook_memory` a workspace is only a namespace and nothing has to be created before it is written.
+**One thing the wired pipeline found immediately.** Nothing created the retrieval workspace, and the refusal arrived at step 5 of section 1, *after* the first store had been written, so ingest's rollback had to undo a write that need never have happened. In `notabit_memory` a workspace is only a namespace and nothing has to be created before it is written.
 
-**Two decisions flagged, not buried.** The retrieval workspace is one shared `opennotebook` rather than one per session, because collections are already namespaced by a sid the spec requires to be unique per workspace; a per-session workspace becomes right the moment two users share an instance. And progress reporting still covers only `build_session`'s four phases, so `steps_total` stays 0 through ingest and script generation — section 3 asks progress to be honest about which stage is running, and for the first two stages it is not yet.
+**Two decisions flagged, not buried.** The retrieval workspace is one shared `notabit` rather than one per session, because collections are already namespaced by a sid the spec requires to be unique per workspace; a per-session workspace becomes right the moment two users share an instance. And progress reporting still covers only `build_session`'s four phases, so `steps_total` stays 0 through ingest and script generation — section 3 asks progress to be honest about which stage is running, and for the first two stages it is not yet.
 
 ### 2026-09-09, the deck and synthesis slice
 
@@ -483,7 +483,7 @@ Section 1 gave an external file store a role holding the durable copy of the ori
 
 **Two dependencies the draft needed and did not name.**
 
-Section 3 steps 2 and 3 require LLM calls while section 0 excluded the AI broker service, and nothing said what makes them. Looked up: the slide renderer did not use the broker either. It linked an LLM client library directly and read `OPENROUTER_API_KEY` from the secret store; the voice service did the same. Now a locked row in section 0. (Today that client is `opennotebook_ai`, and the key comes from the environment or `settings.toml`.)
+Section 3 steps 2 and 3 require LLM calls while section 0 excluded the AI broker service, and nothing said what makes them. Looked up: the slide renderer did not use the broker either. It linked an LLM client library directly and read `OPENROUTER_API_KEY` from the secret store; the voice service did the same. Now a locked row in section 0. (Today that client is `notabit_ai`, and the key comes from the environment or `settings.toml`.)
 
 Section 2's `cues[]` said "derived per render" with no producer in the locked dependency set. The speech server's `stt_transcribe` returns `{text, language}` and no timestamps. The producer would be the voice service's `transcribe_cues`, which was not in the dependency list.
 

@@ -8,7 +8,7 @@ from typing import Any
 
 from sqlalchemy import event
 
-from opennotebook.db.session import engine
+from notabit.db.session import engine
 
 
 class Recorded(list[str]):

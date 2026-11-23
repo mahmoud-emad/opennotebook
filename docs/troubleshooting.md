@@ -1,6 +1,6 @@
 # First-run troubleshooting
 
-Run the commands below from the OpenNotebook checkout. The Docker deployment reads its settings from [`deploy/.env`](../deploy/.env.example).
+Run the commands below from the Notabit checkout. The Docker deployment reads its settings from [`deploy/.env`](../deploy/.env.example).
 
 ## Compose asks for `POSTGRES_PASSWORD`
 
@@ -30,7 +30,7 @@ The setup tour or **Settings → AI providers** can report that it accepted the 
 
 ## Ollama or another local provider does not answer
 
-In Docker, `localhost` in a provider address refers to the OpenNotebook API container. For Ollama on the Docker host, enter `http://host.docker.internal:11434/v1` in the setup tour or set `OLLAMA_BASE_URL` to that value in `deploy/.env` and rerun `make up`. The supplied Compose file maps that hostname on Linux as well.
+In Docker, `localhost` in a provider address refers to the Notabit API container. For Ollama on the Docker host, enter `http://host.docker.internal:11434/v1` in the setup tour or set `OLLAMA_BASE_URL` to that value in `deploy/.env` and rerun `make up`. The supplied Compose file maps that hostname on Linux as well.
 
 Confirm Ollama is running and has a model installed with `ollama list`. On Linux, ensure Ollama listens on an address reachable from the Docker bridge. Restrict access to the host and its containers. If you get an API compatibility error instead of a connection error, check that the address includes `/v1`.
 

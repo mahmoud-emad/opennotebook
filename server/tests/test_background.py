@@ -13,11 +13,11 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy import text
 
-from opennotebook.api.collections import events_of
-from opennotebook.db.session import engine
-from opennotebook.jobs import background
-from opennotebook.jobs.app import app
-from opennotebook.jobs.events import hub
+from notabit.api.collections import events_of
+from notabit.db.session import engine
+from notabit.jobs import background
+from notabit.jobs.app import app
+from notabit.jobs.events import hub
 from tests.model import add_note, fails, install, run_work, says
 from tests.test_mindmap import OUTLINE, REEFS
 

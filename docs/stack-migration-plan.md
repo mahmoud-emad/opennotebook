@@ -1,6 +1,6 @@
-# OpenNotebook, stack migration plan
+# Notabit, stack migration plan
 
-Moving OpenNotebook off Rust: a **TypeScript web app**, a **FastAPI server**, and **Postgres** for everything it keeps. This is the plan. Nothing in it is built yet.
+Moving Notabit off Rust: a **TypeScript web app**, a **FastAPI server**, and **Postgres** for everything it keeps. This is the plan. Nothing in it is built yet.
 
 It rests on two pieces of research done on 2026-10-04: an inventory of the system as it stands (the Rust repo at `c497c4a` plus the uncommitted work after it), and a survey of the target stack with every version and licence checked against the registries. Facts from the inventory carry a file reference; facts from the survey carry a link in [section 13](#13-sources).
 
@@ -26,7 +26,7 @@ The owner answered the first round of questions on 2026-10-04; [section 0.1](#01
 | Search | `tsvector` + GIN for keywords, pgvector HNSW for vectors, fused with RRF in SQL | pg_textsearch (BM25) later | No extension licence questions. ParadeDB is AGPL and is ruled out |
 | Background jobs | **Procrastinate** workers, our own `jobs` table for progress, `LISTEN/NOTIFY` to SSE | Hand-rolled `SKIP LOCKED` queue | No Redis; cancel, retry and stalled-job recovery come with it |
 | Model calls | **openai Python SDK** pointed at OpenRouter, our own agent loop | pydantic-ai | The grounding and citation rules are ours and must stay readable in one place |
-| Documents to Markdown | **Port `opennotebook_convert` to Python** on python-docx-level XML, python-pptx, openpyxl and pypdfium2/pdfplumber; markitdown measured against it in phase 0 | markitdown | The verbatim guarantee is the product. markitdown's DOCX path goes through markdownify, which escapes `_` and `*`, and that breaks byte-for-byte quoting |
+| Documents to Markdown | **Port `notabit_convert` to Python** on python-docx-level XML, python-pptx, openpyxl and pypdfium2/pdfplumber; markitdown measured against it in phase 0 | markitdown | The verbatim guarantee is the product. markitdown's DOCX path goes through markdownify, which escapes `_` and `*`, and that breaks byte-for-byte quoting |
 | Voice detection | **Silero** on both sides: `@ricky0123/vad-web` in the browser, the same ONNX model in Python on the server | Keep the Rust/wasm detector | Today one detector runs in both places so they cannot drift (`vad/src/lib.rs`). Silero keeps that property with no Rust left |
 | Speech | Unchanged: any OpenAI-compatible TTS/STT server (Speaches by default) | — | It is a separate service already |
 | Web fetch | **httpx** + **trafilatura** (≥ 1.8, Apache-2.0) | readability-lxml | Markdown output and metadata in one call |
@@ -54,7 +54,7 @@ The owner answered the first round of questions on 2026-10-04; [section 0.1](#01
 | Rust | 54.6k lines in 13 crates; the server alone is 17.5k |
 | Web app | Dioxus 0.7 compiled to wasm: 9.4k lines, 33 components, 13 files |
 | Player | `server/src/player.html`, 2,400 lines of plain JS (117 KB) |
-| API | 5 domains, 47 JSON-RPC methods, 71 types (`opennotebook_api/oschema/`) plus 22 non-RPC routes (bytes, SSE, uploads) |
+| API | 5 domains, 47 JSON-RPC methods, 71 types (`notabit_api/oschema/`) plus 22 non-RPC routes (bytes, SSE, uploads) |
 | Model call sites | 16 (`agent.rs`, `research.rs`, `script/generate.rs`, `build/slides.rs`, `ask.rs`, …) |
 | Tests | 522, none of which need running services |
 | Build output on disk | 52 GB (48 GB server workspace, 4.5 GB web app) |
@@ -90,7 +90,7 @@ The web app is where Rust costs most and gives least: a niche framework, a wasm 
 
 ```
 web/        Vite + React + TS app (player included, as a route)
-server/     Python package `opennotebook` (api, worker, domain, migrations)
+server/     Python package `notabit` (api, worker, domain, migrations)
 deploy/     compose.yaml, Caddyfile, .env.example
 docs/
 ```
@@ -122,7 +122,7 @@ The Rust system that was in `crates/` was deleted on 2026-10-06 (phase 5).
 |---|---|
 | Starts a build when the agent's stream says `build` (`ui/src/collection.rs`, `chat.rs`): the agent asks, the page acts | The agent's `start_build` tool starts the job itself on the server, and the stream reports it as a step |
 | Runs the slash commands `/slides`, `/audio`, `/mindmap` and `/notes` by calling the generate actions | `POST /api/collections/{cid}/chat/commands`: the server runs the command, and returns the same events a chat turn does. The menu's list comes from the server too (`GET /api/commands`), so the web app and any other client see the same commands |
-| Keeps the Ask conversation in `localStorage` (`opennotebook.chat.<cid>`) | `chat_messages` on the server, read with the collection |
+| Keeps the Ask conversation in `localStorage` (`notabit.chat.<cid>`) | `chat_messages` on the server, read with the collection |
 | Writes the `/help` text from its own list | The server's command list |
 | Rewords server errors (`ui/src/errors.rs`) | The server sends the readable sentence; the client shows it as it is |
 | Queues a second build while one is starting (`queued_build`) | The job queue |
@@ -156,12 +156,12 @@ What stays in the browser is drawing: layout (the mind map's geometry), playback
 ### Package layout
 
 ```
-server/opennotebook/
+server/notabit/
   api/          FastAPI routers, one per domain; SSE endpoints
   domain/       collections, sources, sessions, mindmaps, notes, settings
   agent/        the chat agent loop and its tools
   ai/           OpenAI-SDK client, spend ledger, model catalogue and prices
-  convert/      documents to Markdown, verbatim (port of opennotebook_convert)
+  convert/      documents to Markdown, verbatim (port of notabit_convert)
   memory/       chunking, tsvector + vector search, RRF, Q&A extraction
   script/       outline, script, budgets, citations, mind map, notes
   build/        slides, kits, clean, validate, narration, WAV
@@ -203,8 +203,8 @@ Errors become HTTP status codes with a `{"detail": "<a sentence a person can act
 
 ### Model calls
 
-- `openai.AsyncOpenAI(base_url=OPENNOTEBOOK_AI_BASE_URL, api_key=…)` on Chat Completions only: tools, streaming and `response_format: json_schema` where the model supports it. OpenRouter fields go in `extra_body`.
-- A 402 maps to `QuotaExceeded`, as `opennotebook_ai` does now, including the nested-provider-message unwrapping fixed in `b3193ec`.
+- `openai.AsyncOpenAI(base_url=NOTABIT_AI_BASE_URL, api_key=…)` on Chat Completions only: tools, streaming and `response_format: json_schema` where the model supports it. OpenRouter fields go in `extra_body`.
+- A 402 maps to `QuotaExceeded`, as `notabit_ai` does now, including the nested-provider-message unwrapping fixed in `b3193ec`.
 - **The spend ledger** becomes a `contextvars` scope around each job, so every call inside it adds to `sessions.spent_usd`, as the task-local ledger does today (`session/src/spend.rs:152-160`). Prices come from OpenRouter's `/models`, cached for 600 s (`estimate_live.rs`).
 - **The agent loop** (8 rounds, 4 fetches a call, replacing pages that fail, relaying `ask_sources` answers whole) is ported as it is. Its rules are in `agent.rs`, and its tests come with it.
 
@@ -243,7 +243,7 @@ The hybrid query is one SQL statement:
 - one CTE ranks by `ts_rank_cd` over the GIN index, another by cosine distance over HNSW;
 - each takes `RANK() OVER`, and a `FULL OUTER JOIN` sums `1/(60 + rank)`.
 
-That is the RRF with k = 60 that `memory/src/rank.rs` computes in memory today. Vectors stay optional (`OPENNOTEBOOK_EMBED_MODEL`), as now.
+That is the RRF with k = 60 that `memory/src/rank.rs` computes in memory today. Vectors stay optional (`NOTABIT_EMBED_MODEL`), as now.
 
 **Decided:** `ts_rank_cd`, not BM25. The upgrade is `pg_textsearch` (PostgreSQL licence), which some managed Postgres services do not offer. ParadeDB's `pg_search` is AGPL and is out.
 
@@ -272,7 +272,7 @@ That is the RRF with k = 60 that `memory/src/rank.rs` computes in memory today. 
 
 The rule from `convert/src/lib.rs`: no model, no network, never reword. It may drop layout, never wording.
 
-**Plan:** port `opennotebook_convert` (Rust, 3.2k lines, written in this repo, 36 tests) to `server/opennotebook/convert`, on:
+**Plan:** port `notabit_convert` (Rust, 3.2k lines, written in this repo, 36 tests) to `server/notabit/convert`, on:
 
 | Format | Library | Licence |
 |---|---|---|
@@ -401,7 +401,7 @@ Built against Postgres 18.6 + pgvector 0.8.6. `make check` runs the whole gate.
 
 ### Phase 0, converter spike: markitdown is out, the port stays
 
-The converter was ported to `server/opennotebook/convert/`, with all 36 Rust tests and one more; its 52 test cases pass. The PDF path now reads PDFium's text layer (pypdfium2) instead of `pdf_oxide`. PPTX is read as raw XML with lxml, because python-pptx hides placeholder types and SmartArt text. Every error is a full sentence that says what to do.
+The converter was ported to `server/notabit/convert/`, with all 36 Rust tests and one more; its 52 test cases pass. The PDF path now reads PDFium's text layer (pypdfium2) instead of `pdf_oxide`. PPTX is read as raw XML with lxml, because python-pptx hides placeholder types and SmartArt text. Every error is a full sentence that says what to do.
 
 markitdown 0.1.8 was run on the same fixtures and fails the verbatim rule:
 - **Escaping:** `_` and `*` are escaped (`af\_bella`, `5 \* 3`).
@@ -436,7 +436,7 @@ It passed the PDF verbatim test, the scan, tracked changes, text boxes, lists an
 
 ### 2026-10-05: the web app ported as it was, Discover and sharing included
 
-- **The web app is a straight port, not a redesign.** It uses the old `style.css` and `theme.css` verbatim, the same markup, class names, wording and icons, and the screens are ported file by file from `crates/opennotebook_ui`. Tailwind and TanStack Router are gone.
+- **The web app is a straight port, not a redesign.** It uses the old `style.css` and `theme.css` verbatim, the same markup, class names, wording and icons, and the screens are ported file by file from `crates/notabit_ui`. Tailwind and TanStack Router are gone.
 - **The old UI comes from two lines of history:** `development`, plus commit `fa51e90` on `origin/main`. That commit adds Discover as the home page, My collections, sharing, Reuse and the read-only share page.
 - **Server ports:**
   - ask with citations, mind maps and study notes;

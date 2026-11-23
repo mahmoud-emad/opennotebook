@@ -72,7 +72,7 @@ async def test_a_note_that_opens_with_its_title_is_not_headed_twice(client: Asyn
 
 
 def test_a_source_is_described_by_where_it_came_from_and_its_length() -> None:
-    from opennotebook.domain.sources import described
+    from notabit.domain.sources import described
 
     assert described("p.md", "https://www.example.org/a/b", 1200) == (
         200,

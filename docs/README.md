@@ -1,6 +1,6 @@
 # Documentation
 
-How OpenNotebook is built and why. Start with the [design](design.md) for the look and feel of the app, and [stack-migration-plan.md](stack-migration-plan.md) for how the server, web app and database fit together.
+How Notabit is built and why. Start with the [design](design.md) for the look and feel of the app, and [stack-migration-plan.md](stack-migration-plan.md) for how the server, web app and database fit together.
 
 ## Features
 

@@ -13,13 +13,13 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy import text
 
-from opennotebook import speech
-from opennotebook.ai import prices
-from opennotebook.ai.prices import Catalogue
-from opennotebook.db.session import engine, sessionmaker
-from opennotebook.domain import settings as st
-from opennotebook.speech import microsoft
-from opennotebook.speech import provider as providers
+from notabit import speech
+from notabit.ai import prices
+from notabit.ai.prices import Catalogue
+from notabit.db.session import engine, sessionmaker
+from notabit.domain import settings as st
+from notabit.speech import microsoft
+from notabit.speech import provider as providers
 from tests.queries import recorded
 
 
@@ -195,7 +195,7 @@ async def test_an_azure_line_reuses_the_kept_client(monkeypatch: pytest.MonkeyPa
 
     def azure(r: httpx.Request) -> httpx.Response:
         asked.append(str(r.url))
-        from opennotebook.speech.wav import ramp_wav
+        from notabit.speech.wav import ramp_wav
 
         return httpx.Response(200, content=ramp_wav(24_000, 1, 120))
 

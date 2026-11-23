@@ -13,10 +13,10 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy import text
 
-from opennotebook import storage
-from opennotebook.api import media
-from opennotebook.config import settings
-from opennotebook.db.session import engine
+from notabit import storage
+from notabit.api import media
+from notabit.config import settings
+from notabit.db.session import engine
 from tests.conftest import other_person
 
 

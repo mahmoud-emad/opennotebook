@@ -19,10 +19,10 @@ import httpx
 import httpx2
 import pytest
 
-from opennotebook import speech, storage
-from opennotebook.ai import client
-from opennotebook.ai.client import Ai
-from opennotebook.speech.wav import ramp_wav
+from notabit import speech, storage
+from notabit.ai import client
+from notabit.ai.client import Ai
+from notabit.speech.wav import ramp_wav
 
 # Every model the build defaults to, priced, so a build's spend is known.
 PRICED = [
@@ -493,7 +493,7 @@ def install(monkeypatch: pytest.MonkeyPatch, files: Path) -> tuple[Studio, Voice
 def tools_found(monkeypatch: pytest.MonkeyPatch) -> None:
     """Take ffmpeg and ffprobe as installed, for a render that is asked for
     but never run."""
-    from opennotebook.build import video
+    from notabit.build import video
 
     def found(key: str, name: str) -> str:
         return name

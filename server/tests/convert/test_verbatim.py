@@ -3,7 +3,7 @@ byte. The fixtures are a Word document and a PDF made from the same text."""
 
 from __future__ import annotations
 
-from opennotebook.convert import InputKind, to_markdown
+from notabit.convert import InputKind, to_markdown
 
 from .common import FIXTURES
 

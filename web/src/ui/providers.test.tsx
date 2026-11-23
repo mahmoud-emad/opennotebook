@@ -96,7 +96,7 @@ describe("the setup gate", () => {
         <div>the studio</div>
       </SetupGate>,
     );
-    expect(await screen.findByText("Welcome to OpenNotebook")).toBeTruthy();
+    expect(await screen.findByText("Welcome to Notabit")).toBeTruthy();
     expect(screen.queryByText("the studio")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: /Connect a provider/ }));
     const key = await screen.findByPlaceholderText("Paste your key");
@@ -122,7 +122,7 @@ describe("the setup gate", () => {
           tabs: [{ id: "models", label: "Models", note: "", advanced: true }],
           settings: [
             {
-              key: "OPENNOTEBOOK_CHAT_MODEL",
+              key: "NOTABIT_CHAT_MODEL",
               tab: "Models",
               group: "Chat & answers",
               label: "Chat & Ask model",

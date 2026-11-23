@@ -32,20 +32,20 @@ jobs:
       postgres:
         image: pgvector/pgvector:0.8.7-pg18-trixie
         env:
-          POSTGRES_USER: opennotebook
-          POSTGRES_PASSWORD: opennotebook
-          POSTGRES_DB: opennotebook_test
+          POSTGRES_USER: notabit
+          POSTGRES_HOST_AUTH_METHOD: trust
+          POSTGRES_DB: notabit_test
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U opennotebook -d opennotebook_test"
+          --health-cmd "pg_isready -U notabit -d notabit_test"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
     env:
-      TEST_DATABASE_URL: postgresql://opennotebook:opennotebook@localhost:5432/opennotebook_test
+      TEST_DATABASE_URL: postgresql://notabit@localhost:5432/notabit_test
       # What the migration and contract checks connect to: the same database.
-      DATABASE_URL: postgresql://opennotebook:opennotebook@localhost:5432/opennotebook_test
+      DATABASE_URL: postgresql://notabit@localhost:5432/notabit_test
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
@@ -80,7 +80,7 @@ jobs:
       # change that was not carried over fails here, not in a browser.
       - name: API contract
         run: |
-          uv run opennotebook openapi > /tmp/openapi.json
+          uv run notabit openapi > /tmp/openapi.json
           diff -u ../web/openapi.json /tmp/openapi.json || {
             echo "web/openapi.json is out of date: run make api-client and commit the result."; exit 1; }
       - name: Tests
@@ -147,7 +147,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Compose file
-        run: POSTGRES_PASSWORD=check docker compose -f deploy/compose.yaml config -q
+        run: POSTGRES_PASSWORD="$(openssl rand -hex 8)" docker compose -f deploy/compose.yaml config -q
 
   # The main path in a real browser: the api, the worker and the web app's dev
   # server against an empty Postgres, as `make dev` runs them. The suite asks
@@ -159,22 +159,22 @@ jobs:
       postgres:
         image: pgvector/pgvector:0.8.7-pg18-trixie
         env:
-          POSTGRES_USER: opennotebook
-          POSTGRES_PASSWORD: opennotebook
-          POSTGRES_DB: opennotebook
+          POSTGRES_USER: notabit
+          POSTGRES_HOST_AUTH_METHOD: trust
+          POSTGRES_DB: notabit
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U opennotebook -d opennotebook"
+          --health-cmd "pg_isready -U notabit -d notabit"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
     env:
-      DATABASE_URL: postgresql://opennotebook:opennotebook@localhost:5432/opennotebook
-      OPENNOTEBOOK_AI_BASE_URL: http://ai.invalid/v1
+      DATABASE_URL: postgresql://notabit@localhost:5432/notabit
+      NOTABIT_AI_BASE_URL: http://ai.invalid/v1
       # A provider set in the environment, so the studio skips its setup
       # tour. Nothing the suite does calls it.
-      OPENNOTEBOOK_AI_KEY: e2e-unused
+      NOTABIT_AI_KEY: e2e-unused
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
@@ -199,8 +199,8 @@ jobs:
         run: uv run alembic upgrade heads
       - name: Start the studio
         run: |
-          (cd server && nohup uv run opennotebook serve > ../api.log 2>&1 &)
-          (cd server && nohup uv run opennotebook worker > ../worker.log 2>&1 &)
+          (cd server && nohup uv run notabit serve > ../api.log 2>&1 &)
+          (cd server && nohup uv run notabit worker > ../worker.log 2>&1 &)
           (cd web && nohup pnpm dev > ../web.log 2>&1 &)
           for i in $(seq 1 60); do
             curl -sf http://localhost:5173/api/ready > /dev/null && curl -sf http://localhost:5173/ui/ > /dev/null && exit 0

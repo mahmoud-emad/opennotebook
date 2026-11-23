@@ -13,12 +13,12 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy import text as sql
 
-from opennotebook import media, youtube
-from opennotebook.ai import client as ai_client
-from opennotebook.ai.client import Ai
-from opennotebook.ai.providers import BY_KIND
-from opennotebook.db.session import engine
-from opennotebook.domain import sources
+from notabit import media, youtube
+from notabit.ai import client as ai_client
+from notabit.ai.client import Ai
+from notabit.ai.providers import BY_KIND
+from notabit.db.session import engine
+from notabit.domain import sources
 
 needs_ffmpeg = pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="ffmpeg is not installed")
 
@@ -289,7 +289,7 @@ def test_youtube_not_answering_is_a_sentence(monkeypatch: pytest.MonkeyPatch) ->
 async def test_a_recording_that_takes_too_long_to_read_is_a_sentence(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from opennotebook.build import encode
+    from notabit.build import encode
 
     async def slow(args: list[str], timeout_s: float) -> tuple[int, bytes, bytes]:
         raise TimeoutError

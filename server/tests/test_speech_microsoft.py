@@ -16,14 +16,14 @@ import pytest
 from multidict import CIMultiDict, CIMultiDictProxy
 from yarl import URL
 
-from opennotebook import speech, storage
-from opennotebook.build import wav as build_wav
-from opennotebook.domain import sessions
-from opennotebook.domain import settings as st
-from opennotebook.speech import banter, microsoft
-from opennotebook.speech import provider as providers
-from opennotebook.speech import voices_microsoft as ms
-from opennotebook.speech.wav import parse, ramp_wav
+from notabit import speech, storage
+from notabit.build import wav as build_wav
+from notabit.domain import sessions
+from notabit.domain import settings as st
+from notabit.speech import banter, microsoft
+from notabit.speech import provider as providers
+from notabit.speech import voices_microsoft as ms
+from notabit.speech.wav import parse, ramp_wav
 
 AVA, ANDREW = ms.HOST_DEFAULT, ms.SECOND_DEFAULT
 
@@ -205,7 +205,7 @@ async def test_an_edge_that_never_answers_says_what_to_do() -> None:
     assert len(fake.calls) == 3
     assert e.value.sentence == (
         "Microsoft's voice service did not answer. Try again in a minute, or set "
-        "OPENNOTEBOOK_TTS_PROVIDER to azure or openai."
+        "NOTABIT_TTS_PROVIDER to azure or openai."
     )
     assert "blocked" in str(e.value)
 
@@ -222,7 +222,7 @@ async def test_an_edge_that_refuses_is_not_tried_again_and_says_what_to_set() ->
         await edge(fake).synthesize("Hello", AVA)
     assert len(fake.calls) == 1, "a refusal is refused again"
     assert "Microsoft refused" in e.value.sentence
-    assert "OPENNOTEBOOK_TTS_PROVIDER to azure" in e.value.sentence
+    assert "NOTABIT_TTS_PROVIDER to azure" in e.value.sentence
     assert "403" in str(e.value)
 
 
@@ -305,8 +305,8 @@ async def test_azure_refusing_the_key_says_which_settings_to_check() -> None:
         await azure(fake).synthesize("Hi.", AVA)
     assert len(fake.seen) == 1, "a wrong key is not tried again"
     assert e.value.sentence == (
-        "Azure Speech refused the key. Check OPENNOTEBOOK_AZURE_SPEECH_KEY, and that "
-        "OPENNOTEBOOK_AZURE_SPEECH_REGION is the region the key was made in, then try again."
+        "Azure Speech refused the key. Check NOTABIT_AZURE_SPEECH_KEY, and that "
+        "NOTABIT_AZURE_SPEECH_REGION is the region the key was made in, then try again."
     )
 
 
@@ -334,7 +334,7 @@ async def test_an_unreachable_azure_names_its_region() -> None:
     with pytest.raises(speech.SpeechError) as e:
         await azure(fake).synthesize("Hi.", AVA)
     assert len(fake.seen) == 3
-    assert "“westeurope”" in e.value.sentence and "OPENNOTEBOOK_AZURE_SPEECH_REGION" in (
+    assert "“westeurope”" in e.value.sentence and "NOTABIT_AZURE_SPEECH_REGION" in (
         e.value.sentence
     )
 
@@ -349,8 +349,8 @@ async def test_azure_without_a_key_or_region_says_what_to_set() -> None:
             await azure(fake, key, region).synthesize("Hi.", AVA)
         assert fake.seen == [] and missing in str(e.value)
         assert e.value.sentence == (
-            "Azure voices need a key and a region. Set OPENNOTEBOOK_AZURE_SPEECH_KEY and "
-            "OPENNOTEBOOK_AZURE_SPEECH_REGION, or set OPENNOTEBOOK_TTS_PROVIDER to edge for the "
+            "Azure voices need a key and a region. Set NOTABIT_AZURE_SPEECH_KEY and "
+            "NOTABIT_AZURE_SPEECH_REGION, or set NOTABIT_TTS_PROVIDER to edge for the "
             "free voices."
         )
 

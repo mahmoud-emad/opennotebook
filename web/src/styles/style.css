@@ -1,9 +1,9 @@
-/* opennotebook_ui — the app's stylesheet.
+/* notabit_ui — the app's stylesheet.
  *
- * KEEP product:opennotebook. The studio is a creative tool, not an admin pane,
+ * KEEP product:notabit. The studio is a creative tool, not an admin pane,
  * so it keeps its own composition (decks as fanned slides, the mind map, the
  * agent's work log, the player). Every colour, radius and duration comes from
- * the tokens in opennotebook_sdk/assets/theme.css, which are Bootstrap 5.3's
+ * the tokens in notabit_sdk/assets/theme.css, which are Bootstrap 5.3's
  * names; nothing here is a raw colour except pure black/white veils over
  * media. The design rules this follows are in docs/design.md.
  */
@@ -93,7 +93,7 @@ header {
   color: var(--bs-primary); background: rgba(var(--bs-primary-rgb), .12);
 }
 h1 { font-size: 14px; margin: 0; font-weight: 600; letter-spacing: -.005em; }
-/* Where you are, after the brand: "OpenNotebook / <the collection's name>". */
+/* Where you are, after the brand: "Notabit / <the collection's name>". */
 .crumb { display: flex; align-items: center; gap: 8px; color: var(--bs-secondary-color); font-size: 13px; font-weight: 500; min-width: 0; }
 .crumb .sep { color: var(--bs-tertiary-color); }
 .crumb .here { color: var(--bs-body-color); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

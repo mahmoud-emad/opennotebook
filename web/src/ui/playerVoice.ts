@@ -14,7 +14,7 @@ import { FRAME_SIZE, Gate, PeakGate, Resampler, SAMPLE_RATE, type GateEvent } fr
  * that the browser's echo canceller takes its reference from. Kept to plain
  * quotes inside: this is a template literal, and a backtick would end it. */
 export const CAPTURE_WORKLET_SRC = `
-class OpenNotebookMic extends AudioWorkletProcessor {
+class NotabitMic extends AudioWorkletProcessor {
   constructor() {
     super();
     // Batched: one message per 128 samples would be hundreds a second on the
@@ -38,7 +38,7 @@ class OpenNotebookMic extends AudioWorkletProcessor {
     return true;
   }
 }
-registerProcessor("opennotebook-mic", OpenNotebookMic);
+registerProcessor("notabit-mic", NotabitMic);
 `;
 
 type Model = { process: (frame: Float32Array) => Promise<{ isSpeech: number }>; reset_state: () => void };
@@ -169,7 +169,7 @@ export class Mic {
     }
     if (gen !== this.gen) return;
 
-    const node = new AudioWorkletNode(ctx, "opennotebook-mic", {
+    const node = new AudioWorkletNode(ctx, "notabit-mic", {
       numberOfInputs: 1,
       numberOfOutputs: 0,
       channelCount: 1,

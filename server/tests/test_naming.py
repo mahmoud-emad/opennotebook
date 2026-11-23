@@ -8,9 +8,9 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy import text
 
-from opennotebook.db.session import engine
-from opennotebook.domain import covers, naming, refresh
-from opennotebook.domain import settings as st
+from notabit.db.session import engine
+from notabit.domain import covers, naming, refresh
+from notabit.domain import settings as st
 from tests.fake_ai import FakeModel
 
 

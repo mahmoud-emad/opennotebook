@@ -13,17 +13,17 @@ import pytest
 import skia
 from httpx import AsyncClient
 
-from opennotebook.api import video as video_api
-from opennotebook.build.whiteboard import check, draw, frame, illustrate
-from opennotebook.build.whiteboard import theme as th
-from opennotebook.build.whiteboard.compile import (
+from notabit.api import video as video_api
+from notabit.build.whiteboard import check, draw, frame, illustrate
+from notabit.build.whiteboard import theme as th
+from notabit.build.whiteboard.compile import (
     CARD_BAND,
     H,
     W,
     compile_illustrated,
     compile_scene,
 )
-from opennotebook.build.whiteboard.scene import TONES, PlannedScene
+from notabit.build.whiteboard.scene import TONES, PlannedScene
 from tests.builds.test_whiteboard import (
     _scene,  # pyright: ignore[reportPrivateUsage]
     _segment,  # pyright: ignore[reportPrivateUsage]

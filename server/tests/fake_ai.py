@@ -6,7 +6,7 @@ from typing import Any
 
 import httpx2
 
-from opennotebook.ai.client import Ai
+from notabit.ai.client import Ai
 
 
 class FakeModel:

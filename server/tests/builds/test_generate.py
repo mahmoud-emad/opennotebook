@@ -1,6 +1,6 @@
 # ruff: noqa: E501
-"""The script, ported from `opennotebook_script/src/generate.rs` and
-`opennotebook_script/tests/script.rs`, plus runs of the whole script against
+"""The script, ported from `notabit_script/src/generate.rs` and
+`notabit_script/tests/script.rs`, plus runs of the whole script against
 a stand-in model."""
 
 import uuid
@@ -9,11 +9,11 @@ from pathlib import Path
 import pytest
 from httpx import AsyncClient
 
-from opennotebook.domain.sessions import AudioSpec, Speaker
-from opennotebook.script import generate as g
-from opennotebook.script.errors import Empty, Truncated
-from opennotebook.script.parse import ScriptedLine, parse_lines, split_slide_reply
-from opennotebook.script.retrieval import Scope
+from notabit.domain.sessions import AudioSpec, Speaker
+from notabit.script import generate as g
+from notabit.script.errors import Empty, Truncated
+from notabit.script.parse import ScriptedLine, parse_lines, split_slide_reply
+from notabit.script.retrieval import Scope
 from tests import model as fake
 from tests.builds.fake import install as builds_fake_install
 from tests.model import add_note

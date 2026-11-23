@@ -249,7 +249,7 @@ describe("the Settings dialog", () => {
     expect(screen.getByRole("status").textContent).toBe("Saving…");
     await act(async () => {});
     const patch = calls.find((c) => c.method === "PATCH")!;
-    expect(patch.url).toMatch(/\/api\/settings\/OPENNOTEBOOK_SLIDE_COUNT$/);
+    expect(patch.url).toMatch(/\/api\/settings\/NOTABIT_SLIDE_COUNT$/);
     expect(JSON.parse(patch.body)).toEqual({ value: "8" });
     expect(screen.getByRole("status").textContent).toBe("Saved");
     expect(screen.getByText("Default: 5 slides")).toBeTruthy();

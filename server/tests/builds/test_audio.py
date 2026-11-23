@@ -1,7 +1,7 @@
 """Speech, WAVs, narration and the courtesy lines. Ported from
-`opennotebook_speech` (its stand-in server tests answer through httpx's
-MockTransport here), `opennotebook_build/src/{wav,narrate}.rs` and
-`opennotebook_server/src/banter.rs`. Plan §9: answers are 24 kHz PCM16; the
+`notabit_speech` (its stand-in server tests answer through httpx's
+MockTransport here), `notabit_build/src/{wav,narrate}.rs` and
+`notabit_server/src/banter.rs`. Plan §9: answers are 24 kHz PCM16; the
 episode gaps are 220 / 320 / 650 ms."""
 
 import json
@@ -10,13 +10,13 @@ from pathlib import Path
 import httpx
 import pytest
 
-from opennotebook import speech, storage
-from opennotebook.build import narrate, wav
-from opennotebook.build.errors import NotWav, UnknownSpeaker, Voice
-from opennotebook.domain.sessions import Line, Part, Speaker
-from opennotebook.speech import banter
-from opennotebook.speech.wav import EmptyAudio, normalize, parse, ramp_wav
-from opennotebook.speech.wav import NotWav as SpeechNotWav
+from notabit import speech, storage
+from notabit.build import narrate, wav
+from notabit.build.errors import NotWav, UnknownSpeaker, Voice
+from notabit.domain.sessions import Line, Part, Speaker
+from notabit.speech import banter
+from notabit.speech.wav import EmptyAudio, normalize, parse, ramp_wav
+from notabit.speech.wav import NotWav as SpeechNotWav
 from tests.builds.fake import install
 
 # ── the WAV contract ─────────────────────────────────────────────────────────

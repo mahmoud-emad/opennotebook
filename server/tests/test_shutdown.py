@@ -10,7 +10,7 @@ import time
 
 from httpx import AsyncClient, TransportError
 
-from opennotebook.shutdown import CONNECTIONS_SECONDS, DRAIN_SECONDS
+from notabit.shutdown import CONNECTIONS_SECONDS, DRAIN_SECONDS
 
 
 def _free_port() -> int:
@@ -25,7 +25,7 @@ async def test_the_api_stops_with_a_live_stream_open(client: AsyncClient) -> Non
     proc = await asyncio.create_subprocess_exec(
         sys.executable,
         "-c",
-        "from opennotebook.cli import main; main()",
+        "from notabit.cli import main; main()",
         "serve",
         "--port",
         str(port),

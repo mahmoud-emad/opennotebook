@@ -16,13 +16,13 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy import text
 
-from opennotebook import research, storage
-from opennotebook.api import rpc_methods
-from opennotebook.api.rpc_methods import METHODS
-from opennotebook.config import settings as config
-from opennotebook.db.session import engine
-from opennotebook.domain import settings as st
-from opennotebook.jobs.events import hub
+from notabit import research, storage
+from notabit.api import rpc_methods
+from notabit.api.rpc_methods import METHODS
+from notabit.config import settings as config
+from notabit.db.session import engine
+from notabit.domain import settings as st
+from notabit.jobs.events import hub
 from tests.builds.fake import install as install_build
 from tests.conftest import other_person
 from tests.model import add_note, fails, install, says
@@ -31,7 +31,7 @@ from tests.test_mindmap import OUTLINE, REEFS
 from tests.test_notes import MIMI, MOSHI, NOTES
 from tests.web import fake_web
 
-OSCHEMA = Path(__file__).parents[2] / "crates" / "opennotebook_api" / "oschema"
+OSCHEMA = Path(__file__).parents[2] / "crates" / "notabit_api" / "oschema"
 
 
 @pytest.fixture(autouse=True)
