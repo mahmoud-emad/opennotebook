@@ -4,8 +4,8 @@ title: "Notabit"
 abstract: "An open-source, self-hosted study studio in the spirit of NotebookLM."
 type: software
 license: MIT
-version: 0.3.0
-date-released: 2026-11-18
+version: 0.4.0
+date-released: 2026-11-23
 repository-code: "https://github.com/mahmoud-emad/notabit"
 authors:
   - name: "Notabit contributors"
